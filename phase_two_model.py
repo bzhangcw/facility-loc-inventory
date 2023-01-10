@@ -58,6 +58,8 @@ class PhaseTwo:
 
         inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)  # 库存量
         surplus_inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)
+        storage_gap = model.addVars(self.data.I, self.data.T_t, nameprefix="storage_gap", vtype=COPT.CONTINUOUS)
+
         tmp = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="tmp", vtype=COPT.CONTINUOUS)
         inv_gap = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="gap",
                                 vtype=COPT.CONTINUOUS)  # 需求缺口量
@@ -111,7 +113,7 @@ class PhaseTwo:
 
         # ====== 客户需求满足约束 =====
         model.addConstrs((x_c.sum('*', k, s, t) == self.data.cus_demand_periodly[(k, s, t)] for k, s, t in
-                          self.data.cus_demand_periodly.index),
+                          self.data.cus_demand_periodly),
                          nameprefix='cus_demand')
 
         # ====== 仓库库存约束 =====
@@ -160,7 +162,7 @@ class PhaseTwo:
                 model.addConstrs((inv.sum(i, '*', t_pre) + x_p.sum('*', i, '*', t) + x_w.sum('*', i, '*', t) -
                                   1 / 2 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
                                            self.data.wh_demand_periodly_gp.get((i, t), 0))
-                                  <= self.data.wh_storage_capacity_periodly_total[i, t]
+                                  <= self.data.wh_storage_capacity_periodly_total[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I), nameprefix='wh_storage')
 
         for i, t in enumerate(self.data.T_t):
@@ -169,7 +171,7 @@ class PhaseTwo:
                 model.addConstrs((quicksum([inv[i, s, t_pre] + x_p.sum('*', i, s, t) + x_w.sum('*', i, s, t) \
                                             - 1 / 2 * (x_w.sum(i, '*', s, t) + x_c.sum(i, '*', s, t)) for s in
                                             self.data.normal_S])
-                                  <= self.data.wh_storage_capacity_periodly_normal[i, t]
+                                  <= self.data.wh_storage_capacity_periodly_normal[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I),
                                  nameprefix='wh_storage')
 
@@ -193,6 +195,7 @@ class PhaseTwo:
             cost_inv_gap=quicksum(inv_gap[i, s, t] * 100000 for i, s, t in inv_gap),
             cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 100000 for i, s in end_inv_gap),
             cost_surplus=quicksum(surplus_inv[i, s, t] * 10 for i, s, t in surplus_inv),
+            cost_storage=quicksum(storage_gap[i, t] * 100 for i, t in storage_gap),
             cost_inv=quicksum(inv[i, s, t] for i, s, t in inv)
         )
         self.obj_expr = obj = sum(self.obj_expr_map.values())
@@ -271,9 +274,14 @@ class PhaseTwo:
         model = self.model
         z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, *_ = self.variables
 
-        model.write(self.model_dir + 'phase_two.mps.gz')
+        model.write(self.model_dir + "phase_two.mps.gz")
         model.solve()
-        self.obj_visualize()
+
+        # ================== 结果输出 =====================
+        if model.status == COPT.INFEASIBLE:
+            print("Phase Two Model Infeasible")
+            model.computeIIS()
+            model.writeIIS(self.model_dir + "iis_two.ilp")
 
         # if it is not the last iterate, no need to dump results.
         if not finalize:
@@ -284,6 +292,7 @@ class PhaseTwo:
         if DEFAULT_ALG_PARAMS.phase2_use_qty_heur:
             self.qty_fix_heuristic()
 
+        self.obj_visualize()
         # ================== 结果输出 =====================
         if model.status == COPT.INFEASIBLE:
             print("Phase Two Model Infeasible")

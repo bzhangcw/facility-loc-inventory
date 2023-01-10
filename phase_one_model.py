@@ -131,16 +131,41 @@ class PhaseOne:
             warehouse_to_customer.to_csv(self.model_dir + 'warehouse_to_customer.csv', index=False)
 
             total_transfer_qty = pd.concat([plant_to_warehouse, warehouse_to_warehouse, warehouse_to_customer])
+            group = self.data.level1_to_level1_outer_map.groupby(['start_id']).end_id.unique().reset_index()
+            group['group'] = group.apply(lambda x: list(set(x.end_id).union({x.start_id})), axis=1)
+            group['start_id'] = group['group']
+            group = group.explode('start_id')[['start_id', 'group']]
             available_routes = total_transfer_qty[(total_transfer_qty.end_id.apply(lambda x: x[0] == 'C')) &
                                                   (total_transfer_qty.qty > 0)]
+            # 非华南区补充所有仓到客户的运输路线
+            other_region_trad = available_routes[
+                available_routes.end_id == 'C00598623'][['end_id', 'sku']].drop_duplicates()  # todo hard code
+            other_region_trad = other_region_trad.merge(self.data.warehouse_df[self.data.warehouse_df.fac_type.apply(
+                lambda x: 'level_1' in x)][['fac_id']], how='cross')
+            other_region_ka = available_routes[
+                available_routes.end_id == 'C00598656'][['end_id', 'sku']].drop_duplicates()
+            other_region_ka = other_region_ka.merge(self.data.warehouse_df[self.data.warehouse_df.fac_type.apply(
+                lambda x: 'level_2' in x)][['fac_id']], how='cross')
+            other_region = pd.concat([other_region_trad, other_region_ka])
+            other_region.columns = ['end_id', 'sku', 'start_id']
+            available_routes = available_routes.merge(group, on='start_id', how='left')
+            available_routes = available_routes.explode('group')
+            available_routes.loc[available_routes['group'].notnull(), 'start_id'] = \
+                available_routes.loc[available_routes['group'].notnull(), 'group']
+            available_routes = pd.concat([available_routes, other_region])
+            available_routes = available_routes[['start_id', 'end_id', 'sku']].drop_duplicates()
+
             warehouse_routes = total_transfer_qty[(total_transfer_qty.start_id.apply(lambda x: x[0] == 'T')) &
                                                   (total_transfer_qty.end_id.apply(lambda x: x[0] == 'T')) &
                                                   (total_transfer_qty.qty > 0)]
+
             # 添加一段厂内仓之间的运输路线
             warehouse_routes = pd.concat([warehouse_routes, self.data.level1_to_level1_inner])[
                 ['start_id', 'end_id', 'sku']].drop_duplicates()
-            self.data.available_routes = available_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()
+            self.data.available_routes = list(set(available_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()) & \
+                                              set(self.data.warehouse_to_customer_cost.keys()))
             self.data.warehouse_routes = warehouse_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()
+
             pickle.dump(
                 (self.data.available_routes, self.data.warehouse_routes),
                 open(self.solution_dir, 'wb')

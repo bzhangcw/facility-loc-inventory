@@ -55,16 +55,16 @@ def data_construct(model_dir):
         'min_size'].to_dict()
 
     # 成本参数
-    data.plant_to_warehouse_cost = plant_to_warehouse_cost.set_index(['start_id', 'end_id', 'sku'])['total_cost']
+    data.plant_to_warehouse_cost = plant_to_warehouse_cost.set_index(['start_id', 'end_id', 'sku'])['total_cost'].to_dict()
     data.warehouse_transfer_cost = pd.concat([level1_to_level1_inner_cost, level1_to_level1_outer_cost,
-                                             level1_to_level2_cost]).set_index(['start_id', 'end_id', 'sku'])['total_cost']
+                                             level1_to_level2_cost]).set_index(['start_id', 'end_id', 'sku'])['total_cost'].to_dict()
     data.warehouse_to_customer_cost = warehouse_to_customer_cost.set_index(['start_id', 'end_id', 'sku'])[
-        'total_cost']
+        'total_cost'].to_dict()
     data.line_prod_cost = plant_info_monthly.set_index(['fac_id', 'line_id', 'sku'])[
         'unit_cost'].to_dict()
     data.plant_prod_cost = plant_info_monthly.groupby(['fac_id', 'sku']).unit_cost.min().reset_index().set_index(
-        ['fac_id', 'sku'])['unit_cost']
-    data.added_warehouse_cost = added_warehouse_cost.set_index(['fac_id'])['rental_cost']
+        ['fac_id', 'sku'])['unit_cost'].to_dict()
+    data.added_warehouse_cost = added_warehouse_cost.set_index(['fac_id'])['rental_cost'].to_dict()
     data.end_inventory = consider_end_inventory.set_index(['fac_id', 'sku'])['qty'].to_dict()
     consider_init_inventory = consider_init_inventory.groupby(['fac_id', 'sku']).qty.sum().reset_index()
     data.init_inventory = consider_init_inventory.set_index(['fac_id', 'sku'])['qty'].to_dict()
@@ -84,7 +84,7 @@ def data_construct(model_dir):
     data.wh_demand_periodly = warehouse_demand_periodly_tmp.set_index(['fac_id', 'sku', 'ds_id'])['qty']
     data.wh_demand_periodly_gp = warehouse_demand_periodly_tmp.groupby(['fac_id', 'ds_id']).qty.sum().reset_index(
     ).set_index(['fac_id', 'ds_id'])['qty']
-    data.cus_demand_periodly = cus_demand_periodly_tmp.set_index(['ka_id', 'sku', 'ds_id'])['qty']
+    data.cus_demand_periodly = cus_demand_periodly_tmp.set_index(['ka_id', 'sku', 'ds_id'])['qty'].to_dict()
     warehouse_capacity_periodly_tmp = warehouse_capacity_periodly.merge(ds_df, how='left', on='ds')
     data.wh_storage_capacity_periodly_total = warehouse_capacity_periodly_tmp.set_index(
         ['fac_id', 'ds_id'])['total_capacity']
@@ -122,5 +122,6 @@ def data_construct(model_dir):
     data.level1_to_level1_outer_map = level1_to_level1_outer_map
     data.plant_sku_df = plant_sku_df
     data.level1_to_level1_inner = level1_to_level1_inner
+    data.warehouse_df = warehouse_df
     print("Data construct end !")
     return data

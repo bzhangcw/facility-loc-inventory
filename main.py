@@ -3,7 +3,7 @@ from phase_one_model import PhaseOne
 from phase_two_model import PhaseTwo
 from utils import show_profiling, DEFAULT_ALG_PARAMS
 
-model_dir = '../模型数据/'
+model_dir = '../模型数据v1/'
 phase_one_dir = 'data/phase_one/'
 phase_two_dir = 'data/phase_two/'
 
