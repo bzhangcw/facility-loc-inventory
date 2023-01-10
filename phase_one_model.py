@@ -31,7 +31,9 @@ class PhaseOne:
         # y_c = model.addVars(self.data.X_C, nameprefix="y_c", vtype=ytype)  # 仓库->客户 线路是否开设
         x_p = model.addVars(self.data.X_P, nameprefix="x_p", vtype=COPT.CONTINUOUS)  # 工厂->仓库 线路运输量  
         x_w = model.addVars(self.data.X_W, nameprefix="x_w", vtype=COPT.CONTINUOUS)  # 仓库->仓库 线路运输量   
-        x_c = model.addVars(self.data.X_C, nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量       
+        x_c = model.addVars(self.data.X_C, nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
+        # 超过库容约束
+        overstorage = model.addVars(self.data.W, nameprefix="over", vtype=COPT.CONTINUOUS)
         M = self.data.warehouse_capacity_monthly.total_capacity.max() * 100  # 生成辅助变量
 
         # save to class
@@ -65,6 +67,8 @@ class PhaseOne:
             model.addConstr(x_c.sum('*', k, s) == self.data.cus_demand_monthly[(k, s)])
         # ==== 仓库出货量约束 =====
         model.addConstrs(
+
+
             quicksum([x_w[(i_s, j, t)] for i_s, j, t in x_w if i == i_s and (i_s, j, t) not in self.data.X_W_inner]) \
             + x_c.sum(i, '*', '*') + self.data.wh_demand_monthly_gp.get(i, 0) <= self.data.wh_outbound_cap_periodly[i]
             for i in self.data.I)
@@ -72,15 +76,18 @@ class PhaseOne:
         # 按库存天数计算
         model.addConstrs(quicksum((x_w.sum(i, '*', s) + x_c.sum(i, '*', s) + self.data.wh_demand_monthly.get((i, s), 0)) \
                                   * self.data.inventory_days.get((i, s), 5) / 10
-                                  for s in self.data.S) <= self.data.wh_storage_capacity_monthly_total[i] for i in
-                         self.data.I)
+                                  for s in self.data.S) <= self.data.wh_storage_capacity_monthly_total[i] + overstorage[i] for i
+                         in self.data.I)
+        # ==== 虚拟工厂生产约束 ===
+        model.addConstrs((x_p.sum('P000X', '*', s) == 0 for s in self.data.insourcing_sku), nameprefix='outsourcing')
 
         # ================== 添加目标函数 =====================
         obj = quicksum(x_p[p, i, s] * self.data.plant_to_warehouse_cost[p, i, s] for p, i, s in x_p) + \
               quicksum(x_w[i, j, s] * self.data.warehouse_transfer_cost[i, j, s] for i, j, s in x_w) + \
               quicksum(x_c[i, k, s] * self.data.warehouse_to_customer_cost[i, k, s] for i, k, s in x_c) + \
               quicksum(w[i] * self.data.added_warehouse_cost.get(i, 0) for i in w) + \
-              quicksum(x_p[p, i, s] * self.data.plant_prod_cost[p, s] for p, i, s in x_p)
+              quicksum(x_p[p, i, s] * self.data.plant_prod_cost[p, s] for p, i, s in x_p)+\
+              quicksum(overstorage[i] for i in w) # 库容约束惩罚
 
         model.setObjective(obj, sense=COPT.MINIMIZE)
         model.setParam(COPT.Param.TimeLimit, 1200.0)
@@ -129,12 +136,16 @@ class PhaseOne:
             warehouse_routes = total_transfer_qty[(total_transfer_qty.start_id.apply(lambda x: x[0] == 'T')) &
                                                   (total_transfer_qty.end_id.apply(lambda x: x[0] == 'T')) &
                                                   (total_transfer_qty.qty > 0)]
+            # 添加一段厂内仓之间的运输路线
+            warehouse_routes = pd.concat([warehouse_routes, self.data.level1_to_level1_inner])[
+                ['start_id', 'end_id', 'sku']].drop_duplicates()
             self.data.available_routes = available_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()
             self.data.warehouse_routes = warehouse_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()
             pickle.dump(
                 (self.data.available_routes, self.data.warehouse_routes),
                 open(self.solution_dir, 'wb')
             )
+            self.plant_to_warehouse = plant_to_warehouse
 
             print("Phase One Model End")
             self.model_metric()
@@ -145,3 +156,8 @@ class PhaseOne:
         print(f"model sparsity, x_w: {len(self.data.warehouse_routes)}/{len(self.data.X_W)}")
         print(f"model sparsity, x_c: {len(self.data.available_routes)}/{len(self.data.X_C)}")
         print(f"---------------------------------")
+        print(f"--- model product statistics ---")
+        fake_product = set(self.plant_to_warehouse[
+                (self.plant_to_warehouse.start_id == 'P000X') & (self.plant_to_warehouse.qty > 0)]) & \
+        set(self.data.plant_sku_df[self.data.plant_sku_df.fac_id != 'P000X'].sku)
+        print(f"model fake production, x_w: {len(fake_product)}")

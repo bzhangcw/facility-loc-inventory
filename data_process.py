@@ -66,6 +66,7 @@ def data_construct(model_dir):
         ['fac_id', 'sku'])['unit_cost']
     data.added_warehouse_cost = added_warehouse_cost.set_index(['fac_id'])['rental_cost']
     data.end_inventory = consider_end_inventory.set_index(['fac_id', 'sku'])['qty'].to_dict()
+    consider_init_inventory = consider_init_inventory.groupby(['fac_id', 'sku']).qty.sum().reset_index()
     data.init_inventory = consider_init_inventory.set_index(['fac_id', 'sku'])['qty'].to_dict()
     tmp = consider_init_inventory.groupby(['fac_id']).qty.sum().reset_index()
     data.init_inventory_wh = tmp.set_index(['fac_id'])['qty'].to_dict()
@@ -89,6 +90,9 @@ def data_construct(model_dir):
         ['fac_id', 'ds_id'])['total_capacity']
     data.wh_storage_capacity_periodly_normal = warehouse_capacity_periodly_tmp.set_index(
         ['fac_id', 'ds_id'])['normal_capacity']
+
+    tmp = plant_sku_df.groupby('sku').fac_id.unique().reset_index()
+    data.insourcing_sku = tmp[tmp.fac_id.apply(lambda x: len(x) > 1)].sku.tolist()
 
     # 集合数据
     data.P = plant_sku_df.fac_id.unique().tolist()
@@ -116,5 +120,7 @@ def data_construct(model_dir):
     data.warehouse_capacity_monthly = warehouse_capacity_monthly
     data.warehouse_demand_periodly_tmp = warehouse_demand_periodly_tmp
     data.level1_to_level1_outer_map = level1_to_level1_outer_map
+    data.plant_sku_df = plant_sku_df
+    data.level1_to_level1_inner = level1_to_level1_inner
     print("Data construct end !")
     return data

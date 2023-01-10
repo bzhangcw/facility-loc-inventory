@@ -180,9 +180,15 @@ class PhaseTwo:
 
         # ================== 添加目标函数 =====================
         self.obj_expr_map = dict(
-            cost_p2w=quicksum(x_p[p, i, s, t] * self.data.plant_to_warehouse_cost[p, i, s] for p, i, s, t in x_p),
-            cost_w2w=quicksum(x_w[i, j, s, t] * self.data.warehouse_transfer_cost[i, j, s] for i, j, s, t in x_w),
-            cost_w2c=quicksum(x_c[i, k, s, t] * self.data.warehouse_to_customer_cost[i, k, s] for i, k, s, t in x_c),
+            cost_p2w=quicksum(x_p[p, i, s, t] * (
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.plant_to_warehouse_cost[p, i, s]) for
+                              p, i, s, t in x_p),
+            cost_w2w=quicksum(x_w[i, j, s, t] * (
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]) for
+                              i, j, s, t in x_w),
+            cost_w2c=quicksum(x_c[i, k, s, t] * (
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost[i, k, s])
+                              for i, k, s, t in x_c),
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
             cost_inv_gap=quicksum(inv_gap[i, s, t] * 100000 for i, s, t in inv_gap),
             cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 100000 for i, s in end_inv_gap),
@@ -368,14 +374,18 @@ class PhaseTwo:
 
             # utility of warehouse
             tmp = tmp6_gp.merge(
-                self.data.wh_storage_capacity_periodly_total.reset_index().rename(columns={'fac_id': 'warehouse_id'}),
-                how='left', on=['warehouse_id'])
+                self.data.wh_storage_capacity_periodly_total.reset_index().rename(
+                    columns={'fac_id': 'warehouse_id', "ds_id": "period"}),
+                how='left', on=['warehouse_id', "period"])
 
             tmp = tmp.assign(
                 utility=lambda df: df.storage / df.total_capacity
             )
             tmp.to_csv(self.model_dir + 'warehouse_io_cap.csv', index=False)
-
+            tmp.groupby(['warehouse_id']).utility.mean().reset_index().to_csv(
+                self.model_dir + 'warehouse_perf.csv', index=False)
+            self.plant_to_warehouse = plant_to_warehouse
+            self.model_metric()
         print("Phase Two Model End")
         self.clear_integer_fixings(z_l)
 
@@ -401,3 +411,10 @@ class PhaseTwo:
                 bound_constr_w, bound_constr_c = self.state_constrs
                 model.setInfo(COPT.Info.UB, bound_constr_w, x_w_rhs)
                 model.setInfo(COPT.Info.UB, bound_constr_c, x_c_rhs)
+
+    def model_metric(self):
+        print(f"--- model product statistics ---")
+        fake_product = set(self.plant_to_warehouse[
+                               (self.plant_to_warehouse.start_id == 'P000X') & (self.plant_to_warehouse.qty > 0)]) & \
+                       set(self.data.plant_sku_df[self.data.plant_sku_df.fac_id != 'P000X'].sku)
+        print(f"model fake production, x_w: {len(fake_product)}")
