@@ -135,6 +135,7 @@ class PhaseOne:
             group['group'] = group.apply(lambda x: list(set(x.end_id).union({x.start_id})), axis=1)
             group['start_id'] = group['group']
             group = group.explode('start_id')[['start_id', 'group']]
+
             available_routes = total_transfer_qty[(total_transfer_qty.end_id.apply(lambda x: x[0] == 'C')) &
                                                   (total_transfer_qty.qty > 0)]
             # 非华南区补充所有仓到客户的运输路线
@@ -162,9 +163,17 @@ class PhaseOne:
             # 添加一段厂内仓之间的运输路线
             warehouse_routes = pd.concat([warehouse_routes, self.data.level1_to_level1_inner])[
                 ['start_id', 'end_id', 'sku']].drop_duplicates()
+            warehouse_routes = warehouse_routes.merge(group, on='start_id', how='left')
+            warehouse_routes = warehouse_routes.explode('group')
+            warehouse_routes.loc[warehouse_routes['group'].notnull(), 'start_id'] = \
+                warehouse_routes.loc[warehouse_routes['group'].notnull(), 'group']
+            warehouse_routes = warehouse_routes[['start_id', 'end_id', 'sku']].drop_duplicates()
+            warehouse_routes = warehouse_routes[warehouse_routes.start_id != warehouse_routes.end_id]
             self.data.available_routes = list(set(available_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()) & \
                                               set(self.data.warehouse_to_customer_cost.keys()))
-            self.data.warehouse_routes = warehouse_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()
+            self.data.warehouse_routes = list(set(warehouse_routes.set_index(['start_id', 'end_id', 'sku']).index.tolist()) & \
+                                              set(self.data.warehouse_transfer_cost.keys()))
+
 
             pickle.dump(
                 (self.data.available_routes, self.data.warehouse_routes),

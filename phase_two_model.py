@@ -112,9 +112,9 @@ class PhaseTwo:
         #     nameprefix='wh_outbound')
 
         # ====== 客户需求满足约束 =====
-        model.addConstrs((x_c.sum('*', k, s, t) == self.data.cus_demand_periodly[(k, s, t)] for k, s, t in
-                          self.data.cus_demand_periodly),
-                         nameprefix='cus_demand')
+        for k, s, t in self.data.KST:
+            model.addConstr((x_c.sum('*', k, s, t) == self.data.cus_demand_periodly.get((k, s, t), 0)),
+                            name='cus_demand')
 
         # ====== 仓库库存约束 =====
         # 第0期期末库存=期初库存参数
@@ -189,7 +189,9 @@ class PhaseTwo:
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]) for
                               i, j, s, t in x_w),
             cost_w2c=quicksum(x_c[i, k, s, t] * (
-                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost[i, k, s])
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost.get((i, k, s),
+                                                                                                              0))
+                              # todo, why
                               for i, k, s, t in x_c),
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
             cost_inv_gap=quicksum(inv_gap[i, s, t] * 100000 for i, s, t in inv_gap),
@@ -373,7 +375,6 @@ class PhaseTwo:
             tmp6 = tmp6.fillna(0)
             tmp6['storage'] = tmp6.inv.apply(lambda x: max(x, 0)) + tmp6.prod_in + tmp6.transfer_in - \
                               0.5 * (tmp6.transfer_out + tmp6.cus_out + tmp6.wh_out)
-            tmp6_gp = tmp6.groupby(['warehouse_id', 'period']).storage.sum().reset_index()
 
             plant_line_product.to_csv(self.model_dir + 'plant_line_product.csv', index=False)
             plant_to_warehouse.to_csv(self.model_dir + 'plant_to_warehouse.csv', index=False)
@@ -382,18 +383,35 @@ class PhaseTwo:
             tmp6.to_csv(self.model_dir + 'warehouse_inv_change.csv', index=False)
 
             # utility of warehouse
+            new_wh = set(self.data.warehouse_df.query("if_current == 0")['fac_id'].unique())
+            tmp6_gp = tmp6.groupby(['warehouse_id', 'period']).agg(
+                dict(
+                    storage=sum,
+                    prod_in=sum,
+                    transfer_in=sum,
+                    transfer_out=sum,
+                    cus_out=sum,
+                    transfer_out_cap=sum,
+                    wh_out=sum,
+                    inv_gap=sum,
+                )
+            ).reset_index()
             tmp = tmp6_gp.merge(
                 self.data.wh_storage_capacity_periodly_total.reset_index().rename(
                     columns={'fac_id': 'warehouse_id', "ds_id": "period"}),
                 how='left', on=['warehouse_id', "period"])
 
             tmp = tmp.assign(
-                utility=lambda df: df.storage / df.total_capacity
+                cap_utility=lambda df: df.storage.apply(lambda x: max(x, 0)) / df.total_capacity,
+                outbound=lambda df: 0.5 * (df.transfer_out + df.cus_out + df.wh_out),
+                outbound_cap=lambda df: df['warehouse_id'].apply(lambda i: self.data.wh_outbound_cap_periodly[i]),
+                outbound_cap_utility=lambda df: df.outbound / df.outbound_cap,
+                bool_is_new=lambda df: df['warehouse_id'].apply(lambda x: x in new_wh)
             )
             tmp.to_csv(self.model_dir + 'warehouse_io_cap.csv', index=False)
-            tmp.groupby(['warehouse_id']).utility.mean().reset_index().to_csv(
-                self.model_dir + 'warehouse_perf.csv', index=False)
+
             self.plant_to_warehouse = plant_to_warehouse
+
             self.model_metric()
         print("Phase Two Model End")
         self.clear_integer_fixings(z_l)

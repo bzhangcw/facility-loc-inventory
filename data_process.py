@@ -107,6 +107,7 @@ def data_construct(model_dir):
     data.I_1 = warehouse_df[warehouse_df.fac_type.apply(lambda x: 'level_1' in x)].fac_id.unique().tolist()
     data.I_2 = warehouse_df[warehouse_df.fac_type.apply(lambda x: 'level_2' in x)].fac_id.unique().tolist()
     data.S_0 = sku_df[sku_df.sku_category == '0'].sku.unique().tolist()
+    data.KST = [(k, s, t) for k in data.K for s in data.S for t in data.T]
     # 决策变量数据
     warehouse_transfer_df = pd.concat([level1_to_level1_inner, level1_to_level1_outer, level1_to_level2])
     data.W = warehouse_df.set_index(['fac_id']).index.tolist()
