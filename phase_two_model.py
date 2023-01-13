@@ -35,6 +35,17 @@ class PhaseTwo:
         print(f"Loading Phase-I Solution @{path}")
         self.data.available_routes, self.data.warehouse_routes = pickle.load(open(path, 'rb'))
 
+    def routing_heuristics(self, maximum_cardinality=3):
+        """
+        A heuristic for adding nearby routes
+        :return:
+        """
+        df_cost = pd.Series(self.data.warehouse_to_customer_cost).reset_index()
+        cus_sku_tuples = set(((i, j) for (i, j, t) in self.data.cus_demand_periodly))
+        greedy_routes = df_cost.groupby(['level_1', 'level_2']).apply(
+            lambda x: sorted(zip(x['level_0'], x[0]), key=lambda y: y[-1])[:maximum_cardinality])[cus_sku_tuples]
+        return [(i, j, k) for (j, k), vv in greedy_routes.items() for i, c in vv]
+
     @timer
     def build(self):
         print("Phase Two Model Start ...")
@@ -52,9 +63,25 @@ class PhaseTwo:
         x_w = model.addVars(self.data.X_W if DEFAULT_ALG_PARAMS.phase2_use_full_model else self.data.warehouse_routes,
                             self.data.T,
                             nameprefix="x_w", vtype=COPT.CONTINUOUS)  # 仓库->仓库 线路运输量
-        x_c = model.addVars(self.data.X_C if DEFAULT_ALG_PARAMS.phase2_use_full_model else self.data.available_routes,
-                            self.data.T,
-                            nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
+        if DEFAULT_ALG_PARAMS.phase2_use_full_model == 1:
+            x_c = model.addVars(
+                self.data.X_C,
+                self.data.T,
+                nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
+        elif DEFAULT_ALG_PARAMS.phase2_use_full_model == 2:
+            print("using greedy selections")
+            w2c_heur = self.routing_heuristics(3)
+            w2c_routes = set(w2c_heur).union(self.data.available_routes)
+            print(f"routing expansion: {len(self.data.available_routes)} => {len(w2c_routes)} from {len(w2c_heur)} ")
+            x_c = model.addVars(
+                w2c_routes,
+                self.data.T,
+                nameprefix="x_c", vtype=COPT.CONTINUOUS)
+        else:
+            x_c = model.addVars(
+                self.data.available_routes,
+                self.data.T,
+                nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
 
         inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)  # 库存量
         surplus_inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)
@@ -225,7 +252,7 @@ class PhaseTwo:
 
     @timer
     def qty_fix_heuristic(self):
-        model = self.model
+        model:coptpy.Model = self.model
         _logs = []
         z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, *_ = self.variables
         # --- forward iteration ---
@@ -243,6 +270,8 @@ class PhaseTwo:
         model.setObjective(self.obj_expr - 1e3 * quicksum(
             z_l[p, l, s, t] * v for (p, l, s, t), v in zl_invalid.items()
         ), COPT.MINIMIZE)
+        if DEFAULT_ALG_PARAMS.phase2_qty_heur_reset:
+            model.reset()
         model.solve()
 
         # --- backward iteration ---
@@ -264,6 +293,8 @@ class PhaseTwo:
                 pass
 
         model.setObjective(self.obj_expr, COPT.MINIMIZE)
+        if DEFAULT_ALG_PARAMS.phase2_qty_heur_reset:
+            model.reset()
         model.solve()
         zl = model.getInfo(COPT.Info.Value, z_l)
         zl_invalid, zl_empty = self.query_invalid_qty(zl)
@@ -417,7 +448,7 @@ class PhaseTwo:
         self.clear_integer_fixings(z_l)
 
     def set_state(self):
-        if DEFAULT_ALG_PARAMS.phase2_use_full_model:
+        if DEFAULT_ALG_PARAMS.phase2_use_full_model == 1:
             # todo, this is not realistic.
             # since |X_W|, |X_C| is too large.
             print("using full model...")

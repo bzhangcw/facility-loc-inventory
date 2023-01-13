@@ -17,12 +17,20 @@ class AlgParams(object):
     parser.add_argument("--phase2_use_full_model", type=int, default=0, help="""
         0 if we use the reduced model to preserve sparsity in phase-II.
         1 (o.w.), we use X_W, X_C to build the model.
+        2 (o.w.), we use a greedy algorithm to build the routes
     """)
     parser.add_argument("--phase2_use_qty_heur", type=int, default=1, help="""
         1 if we apply a greedy heuristic to fix production qty x s.t.
             x >= min_prod.
         0 we apply the disjunctive constraint (exact approach using an indicator variable)
     """)
+    parser.add_argument("--phase2_qty_heur_reset", type=int, default=0, help="""
+            once we apply a greedy heuristic to fix production qty x s.t.
+                x >= min_prod.
+            In theory dual simplex should work well, so we have two strategy:
+            0 we do not reset model and hot start
+            1 reset and presolve and solve from scratch.
+        """)
 
     def __init__(self):
         args = self.parser.parse_args()
@@ -30,6 +38,7 @@ class AlgParams(object):
         self.phase1_resolve = args.phase1_resolve
         self.phase2_use_full_model = args.phase2_use_full_model
         self.phase2_use_qty_heur = args.phase2_use_qty_heur
+        self.phase2_qty_heur_reset = args.phase2_qty_heur_reset
 
     def show(self):
         print("--- ALG PARAMS ---")
@@ -37,6 +46,7 @@ class AlgParams(object):
         print("- phase1_resolve:", self.phase1_resolve)
         print("- phase2_use_full_model:", self.phase2_use_full_model)
         print("- phase2_use_qty_heur:", self.phase2_use_qty_heur)
+        print("- phase2_qty_heur_reset:", self.phase2_qty_heur_reset)
         print("------------------")
 
 
