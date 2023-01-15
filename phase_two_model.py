@@ -44,6 +44,10 @@ class PhaseTwo:
         cus_sku_tuples = set(((i, j) for (i, j, t) in self.data.cus_demand_periodly))
         greedy_routes = df_cost.groupby(['level_1', 'level_2']).apply(
             lambda x: sorted(zip(x['level_0'], x[0]), key=lambda y: y[-1])[:maximum_cardinality])[cus_sku_tuples]
+        for (j, k), vv in greedy_routes.items():  # T0025仓的运输成本是按箱计算的，即使是深圳客户，该仓也无法进入成本前三，增加该条线路
+            upstream_facs = [v[0] for v in vv]
+            if 'T0015' in upstream_facs or 'TOO30' in upstream_facs:
+                vv.append(('T0025', 1))
         return [(i, j, k) for (j, k), vv in greedy_routes.items() for i, c in vv]
 
     @timer
@@ -73,9 +77,9 @@ class PhaseTwo:
             w2c_heur = self.routing_heuristics(3)
             w2c_routes = set(w2c_heur).union(self.data.available_routes)
             print(f"routing expansion: {len(self.data.available_routes)} => {len(w2c_routes)} from {len(w2c_heur)} ")
+            w2ct_list = [(i,k,s,t) for (i,k,s) in w2c_routes for t in self.data.T if (k,s,t) in self.data.cus_demand_periodly]
             x_c = model.addVars(
-                w2c_routes,
-                self.data.T,
+                w2ct_list,
                 nameprefix="x_c", vtype=COPT.CONTINUOUS)
         else:
             x_c = model.addVars(
