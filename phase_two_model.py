@@ -175,7 +175,7 @@ class PhaseTwo:
             model.addConstrs(
                 tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
 
-            model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t]  # 添加松弛变量
+            model.addConstrs((inv[i, s, t] <= tmp[i, s, t]  # 添加松弛变量
                               for i in self.data.I_1 for s in self.data.S), nameprefix='level1_inv')
 
         # # 0类商品不留库存
@@ -187,7 +187,7 @@ class PhaseTwo:
             if i >= 4:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs((inv.sum(i, '*', t_pre) + x_p.sum('*', i, '*', t) + x_w.sum('*', i, '*', t) -
-                                  1 / 2 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
+                                  0.75 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
                                            self.data.wh_demand_periodly_gp.get((i, t), 0))
                                   <= self.data.wh_storage_capacity_periodly_total[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I), nameprefix='wh_storage')
@@ -196,7 +196,7 @@ class PhaseTwo:
             if i >= 4:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs((quicksum([inv[i, s, t_pre] + x_p.sum('*', i, s, t) + x_w.sum('*', i, s, t) \
-                                            - 1 / 2 * (x_w.sum(i, '*', s, t) + x_c.sum(i, '*', s, t)) for s in
+                                            - 0.75 * (x_w.sum(i, '*', s, t) + x_c.sum(i, '*', s, t)) for s in
                                             self.data.normal_S])
                                   <= self.data.wh_storage_capacity_periodly_normal[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I),
@@ -221,9 +221,9 @@ class PhaseTwo:
                               # todo, why
                               for i, k, s, t in x_c),
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
-            cost_inv_gap=quicksum(inv_gap[i, s, t] * 100000 for i, s, t in inv_gap),
-            cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 100000 for i, s in end_inv_gap),
-            cost_surplus=quicksum(surplus_inv[i, s, t] * 10 for i, s, t in surplus_inv),
+            cost_inv_gap=quicksum(inv_gap[i, s, t] * 10000 for i, s, t in inv_gap),
+            cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 10000 for i, s in end_inv_gap),
+            cost_surplus=quicksum(tmp[i, s, t] * 10000000 for i, s, t in surplus_inv),
             cost_storage=quicksum(storage_gap[i, t] * 100 for i, t in storage_gap),
             cost_inv=quicksum(inv[i, s, t] for i, s, t in inv)
         )
@@ -403,9 +403,10 @@ class PhaseTwo:
             tmp4 = tmp4.merge(warehouse_to_warehouse_out_cap, how='left')
             tmp5 = tmp4.merge(warehouse_demand_out, how='left')
             tmp6 = tmp5.merge(inventory_gap, how='left')
+            tmp6['inv_pre'] = tmp6.groupby(['warehouse_id', 'sku']).inv.shift(1)
             tmp6 = tmp6.fillna(0)
-            tmp6['storage'] = tmp6.inv.apply(lambda x: max(x, 0)) + tmp6.prod_in + tmp6.transfer_in - \
-                              0.5 * (tmp6.transfer_out + tmp6.cus_out + tmp6.wh_out)
+            tmp6['storage'] = tmp6.inv_pre.apply(lambda x: max(x, 0)) + tmp6.prod_in + tmp6.transfer_in - \
+                              0.75 * (tmp6.transfer_out + tmp6.cus_out + tmp6.wh_out)
 
             plant_line_product.to_csv(self.model_dir + 'plant_line_product.csv', index=False)
             plant_to_warehouse.to_csv(self.model_dir + 'plant_to_warehouse.csv', index=False)
