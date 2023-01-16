@@ -47,7 +47,8 @@ class PhaseTwo:
         for (j, k), vv in greedy_routes.items():  # T0025仓的运输成本是按箱计算的，即使是深圳客户，该仓也无法进入成本前三，增加该条线路
             upstream_facs = [v[0] for v in vv]
             if 'T0015' in upstream_facs or 'TOO30' in upstream_facs:
-                vv.append(('T0025', 1))
+                if ('T0025', j, k) in self.data.cus_demand_periodly:
+                    vv.append(('T0025', 1))
         return [(i, j, k) for (j, k), vv in greedy_routes.items() for i, c in vv]
 
     @timer
@@ -220,8 +221,7 @@ class PhaseTwo:
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]) for
                               i, j, s, t in x_w),
             cost_w2c=quicksum(x_c[i, k, s, t] * (
-                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost.get((i, k, s),
-                                                                                                              0))
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost[(i, k, s)])
                               # todo, why
                               for i, k, s, t in x_c),
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
