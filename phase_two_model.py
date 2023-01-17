@@ -192,7 +192,7 @@ class PhaseTwo:
             if i >= 4:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs((inv.sum(i, '*', t_pre) + x_p.sum('*', i, '*', t) + x_w.sum('*', i, '*', t) -
-                                  0.75 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
+                                  1 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
                                            self.data.wh_demand_periodly_gp.get((i, t), 0))
                                   <= self.data.wh_storage_capacity_periodly_total[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I), nameprefix='wh_storage')
@@ -201,7 +201,7 @@ class PhaseTwo:
             if i >= 4:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs((quicksum([inv[i, s, t_pre] + x_p.sum('*', i, s, t) + x_w.sum('*', i, s, t) \
-                                            - 0.75 * (x_w.sum(i, '*', s, t) + x_c.sum(i, '*', s, t)) for s in
+                                            - 1 * (x_w.sum(i, '*', s, t) + x_c.sum(i, '*', s, t)) for s in
                                             self.data.normal_S])
                                   <= self.data.wh_storage_capacity_periodly_normal[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I),
@@ -410,7 +410,7 @@ class PhaseTwo:
             tmp6['inv_pre'] = tmp6.groupby(['warehouse_id', 'sku']).inv.shift(1)
             tmp6 = tmp6.fillna(0)
             tmp6['storage'] = tmp6.inv_pre.apply(lambda x: max(x, 0)) + tmp6.prod_in + tmp6.transfer_in - \
-                              0.75 * (tmp6.transfer_out + tmp6.cus_out + tmp6.wh_out)
+                              1 * (tmp6.transfer_out + tmp6.cus_out + tmp6.wh_out)
 
             plant_line_product.to_csv(self.model_dir + 'plant_line_product.csv', index=False)
             plant_to_warehouse.to_csv(self.model_dir + 'plant_to_warehouse.csv', index=False)
