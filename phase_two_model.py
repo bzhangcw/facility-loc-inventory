@@ -195,14 +195,15 @@ class PhaseTwo:
         inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)  # 库存量
         surplus_inv = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="inv", vtype=COPT.CONTINUOUS)
         storage_gap = model.addVars(self.data.I, self.data.T_t, nameprefix="storage_gap", vtype=COPT.CONTINUOUS)
-
+        inv_f = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="invf",
+                              vtype=COPT.CONTINUOUS)  # 丢弃库存量
         tmp = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="tmp", vtype=COPT.CONTINUOUS)
         inv_gap = model.addVars(self.data.I, self.data.S, self.data.T_t, nameprefix="gap",
                                 vtype=COPT.CONTINUOUS)  # 需求缺口量
         end_inv_gap = model.addVars(self.data.I, self.data.S, nameprefix="gap", vtype=COPT.CONTINUOUS)  # 期末库存缺口量
         M = self.data.warehouse_capacity_monthly.total_capacity.max() * 100  # 生成辅助变量
 
-        self.variables = z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap
+        self.variables = z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, inv_f
         self.model = model
 
         # ================== 添加业务约束 =====================
@@ -267,25 +268,47 @@ class PhaseTwo:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs(
                     (inv[i, s, t] == inv[i, s, t_pre] + inv_gap[i, s, t] + x_p.sum('*', i, s, t) + x_w.sum('*', i, s, t) \
-                     - x_w.sum(i, '*', s, t) - x_c.sum(i, '*', s, t) - self.data.wh_demand_periodly.get((i, s, t), 0)
+                     - x_w.sum(i, '*', s, t) - x_c.sum(i, '*', s, t) - self.data.wh_demand_periodly.get((i, s, t), 0) \
+                     - inv_f[i, s, t]
                      for i in self.data.I for s in self.data.S), nameprefix='inv')
 
         # 一段仓最多提前一个月备货
+        # @note: a new formulation
         for ind, t in enumerate(self.data.T):
             if ind >= len(self.data.T) - 3:  # 最后一个月无法的值后续需求，不添加该约束，遵循期末库存量约束
                 break
             i_start = ind + 1
             i_end = min(len(self.data.T), ind + 4)
             t_list = self.data.T[i_start: i_end]
-            model.addConstrs(tmp[i, s, t] == quicksum(x_c.sum(i, '*', s, t_p) +
-                                                      self.data.wh_demand_periodly.get((i, s, t_p), 0) for t_p in
-                                                      t_list)
-                             for i in self.data.I_1 for s in self.data.S)
+            if ind <= 3:
+                model.addConstrs(
+                    tmp[i, s, t] == self.data.init_inventory.get((i, s), 0)
+                    for i in self.data.I_1 for s in self.data.S)
+            else:
+                model.addConstrs(
+                    tmp[i, s, t] == quicksum(x_c.sum(i, '*', s, t_p) + self.data.wh_demand_periodly.get((i, s, t_p), 0)
+                                             for t_p in t_list)
+                    for i in self.data.I_1 for s in self.data.S)
             # model.addConstrs(
             #     tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
 
             model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t]  # 添加松弛变量
                               for i in self.data.I_1 for s in self.data.S), nameprefix='level1_inv')
+        # for ind, t in enumerate(self.data.T):
+        #     if ind >= len(self.data.T) - 3:  # 最后一个月无法的值后续需求，不添加该约束，遵循期末库存量约束
+        #         break
+        #     i_start = ind + 1
+        #     i_end = min(len(self.data.T), ind + 4)
+        #     t_list = self.data.T[i_start: i_end]
+        #     model.addConstrs(tmp[i, s, t] == quicksum(x_c.sum(i, '*', s, t_p) +
+        #                                               self.data.wh_demand_periodly.get((i, s, t_p), 0) for t_p in
+        #                                               t_list)
+        #                      for i in self.data.I_1 for s in self.data.S)
+        #     # model.addConstrs(
+        #     #     tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
+        #
+        #     model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t]  # 添加松弛变量
+        #                       for i in self.data.I_1 for s in self.data.S), nameprefix='level1_inv')
         # # 0类商品不留库存
         # model.addConstrs((inv[i,s,t] <= max(0, self.data.init_inventory.get((i,s), 0))
         #                   for i in self.data.I for s in self.data.S_0 for t in self.data.T), nameprefix='cate0_inv')
@@ -325,8 +348,10 @@ class PhaseTwo:
                               p, i, s, t in x_p),
             cost_w2w=quicksum(x_w[i, j, s, t] * (
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]
-                    * (500 if (i, j, s) in extra_cost else 1))
-                              for i, j, s, t in x_w),
+            ) for i, j, s, t in x_w if (i, j, s) not in extra_cost),
+            cost_w2w_weird=5000 * quicksum(x_w[i, j, s, t] * (
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]
+            ) for i, j, s, t in x_w if (i, j, s) in extra_cost),
             cost_w2c=quicksum(x_c[i, k, s, t] * (
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost[(i, k, s)])
                               # todo, why
@@ -334,9 +359,15 @@ class PhaseTwo:
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
             cost_inv_gap=quicksum(inv_gap[i, s, t] * 5000 for i, s, t in inv_gap),
             cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 5000 for i, s in end_inv_gap),
-            cost_surplus=quicksum(surplus_inv[i, s, t] * 100000 for i, s, t in surplus_inv),
+            cost_surplus=quicksum(
+                surplus_inv[i, s, t] * 100000
+                for (idx, t) in enumerate(self.data.T_t)
+                for i in self.data.I for s in self.data.S
+                if idx >= 4
+            ),
             cost_storage=quicksum(storage_gap[i, t] * 500 for i, t in storage_gap),
-            cost_inv=quicksum(inv[i, s, t] for i, s, t in inv)
+            cost_inv=quicksum(inv[i, s, t] for i, s, t in inv),
+            cost_giveup=200 * quicksum(inv_f[i, s, t] for i, s, t in inv_f)
         )
         self.obj_expr = obj = sum(self.obj_expr_map.values())
         # 期末库存不足惩罚/多余备货惩罚/库存成本，防止提前备货

@@ -64,7 +64,7 @@ mapping_category = {
     "p2w": "工厂-仓库转运",
     "w2w": "仓库-仓库转运",
     "w2c": "仓库-客户转运",
-    "production": "生产"
+    "prod": "生产"
 }
 df_p2w = plant_to_warehouse.query('qty > 0').assign(
     row_key=lambda df: list(zip(df['start_id'], df['end_id'], df['sku'])),
