@@ -46,8 +46,8 @@ class PhaseTwo:
             lambda x: sorted(zip(x['level_0'], x[0]), key=lambda y: y[-1])[:maximum_cardinality])[cus_sku_tuples]
         for (j, k), vv in greedy_routes.items():  # T0025仓的运输成本是按箱计算的，即使是深圳客户，该仓也无法进入成本前三，增加该条线路
             upstream_facs = [v[0] for v in vv]
-            if 'T0015' in upstream_facs or 'TOO30' in upstream_facs:
-                if ('T0025', j, k) in self.data.cus_demand_periodly:
+            if 'T0015' in upstream_facs or 'T0030' in upstream_facs:
+                if ('T0025', j, k) in self.data.warehouse_to_customer_cost:
                     vv.append(('T0025', 1))
         return [(i, j, k) for (j, k), vv in greedy_routes.items() for i, c in vv]
 
@@ -75,8 +75,9 @@ class PhaseTwo:
                 nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
         elif DEFAULT_ALG_PARAMS.phase2_use_full_model == 2:
             print("using greedy selections")
-            w2c_heur = self.routing_heuristics(3)
-            w2c_routes = set(w2c_heur).union(self.data.available_routes)
+            w2c_heur = self.routing_heuristics(6)
+            w2c_routes = set(w2c_heur)
+            # w2c_routes = set(w2c_heur).union(self.data.available_routes)
             print(f"routing expansion: {len(self.data.available_routes)} => {len(w2c_routes)} from {len(w2c_heur)} ")
             w2ct_list = [(i,k,s,t) for (i,k,s) in w2c_routes for t in self.data.T if (k,s,t) in self.data.cus_demand_periodly]
             x_c = model.addVars(
@@ -173,16 +174,15 @@ class PhaseTwo:
             i_start = ind + 1
             i_end = min(len(self.data.T), ind + 4)
             t_list = self.data.T[i_start: i_end]
-            model.addConstrs(tmp[i, s, t] >= quicksum(x_c.sum(i, '*', s, t_p) +
+            model.addConstrs(tmp[i, s, t] == quicksum(x_c.sum(i, '*', s, t_p) +
                                                       self.data.wh_demand_periodly.get((i, s, t_p), 0) for t_p in
                                                       t_list)
                              for i in self.data.I_1 for s in self.data.S)
-            model.addConstrs(
-                tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
+            # model.addConstrs(
+            #     tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
 
-            model.addConstrs((inv[i, s, t] <= tmp[i, s, t]  # 添加松弛变量
+            model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t] # 添加松弛变量
                               for i in self.data.I_1 for s in self.data.S), nameprefix='level1_inv')
-
         # # 0类商品不留库存
         # model.addConstrs((inv[i,s,t] <= max(0, self.data.init_inventory.get((i,s), 0))
         #                   for i in self.data.I for s in self.data.S_0 for t in self.data.T), nameprefix='cate0_inv')
@@ -211,6 +211,9 @@ class PhaseTwo:
         model.addConstrs((inv[i, s, self.data.T[-1]] + end_inv_gap[i, s] >= self.data.end_inventory[i, s] for i, s in
                           self.data.end_inventory),
                          nameprefix='end_inv')
+        # model.addConstrs(x_c[i, 'C00244033', 'Y000020', t] == 0 for t in self.data.T for i in self.data.I \
+        #                  if (i, 'C00244033', 'Y000020', t) in x_c and i != 'T0015')
+        model.addConstr(inv['T0025', 'Y000020', 'period01'] <= 60000)
 
         # ================== 添加目标函数 =====================
         self.obj_expr_map = dict(
@@ -225,10 +228,10 @@ class PhaseTwo:
                               # todo, why
                               for i, k, s, t in x_c),
             cost_prod=quicksum(z_l[p, l, s, t] * self.data.line_prod_cost[p, l, s] for p, l, s, t in z_l),
-            cost_inv_gap=quicksum(inv_gap[i, s, t] * 10000 for i, s, t in inv_gap),
-            cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 10000 for i, s in end_inv_gap),
-            cost_surplus=quicksum(tmp[i, s, t] * 10000000 for i, s, t in surplus_inv),
-            cost_storage=quicksum(storage_gap[i, t] * 100 for i, t in storage_gap),
+            cost_inv_gap=quicksum(inv_gap[i, s, t] * 5000 for i, s, t in inv_gap),
+            cost_inv_gap_end=quicksum(end_inv_gap[i, s] * 5000 for i, s in end_inv_gap),
+            cost_surplus=quicksum(surplus_inv[i, s, t] * 100000 for i, s, t in surplus_inv),
+            cost_storage=quicksum(storage_gap[i, t] * 500 for i, t in storage_gap),
             cost_inv=quicksum(inv[i, s, t] for i, s, t in inv)
         )
         self.obj_expr = obj = sum(self.obj_expr_map.values())
@@ -238,6 +241,7 @@ class PhaseTwo:
 
         model.setParam(COPT.Param.TimeLimit, 1200.0)
         model.setParam(COPT.Param.RelGap, 0.001)
+        model.write('phase_two_lp_2.lp')
 
     def query_invalid_qty(self, zl):
 
@@ -258,7 +262,7 @@ class PhaseTwo:
     def qty_fix_heuristic(self):
         model:coptpy.Model = self.model
         _logs = []
-        z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, *_ = self.variables
+        z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, storage_gap, end_inv_gap = self.variables
         # --- forward iteration ---
         # try to increase production qty
         zl = model.getInfo(COPT.Info.Value, z_l)
