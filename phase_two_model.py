@@ -7,6 +7,106 @@ from coptpy import *
 
 from utils import *
 
+# todo
+# dirty_trick
+extra_cost = {
+    # ('T0001', 'T0014', 'Y000001'),
+    # ('T0015', 'T0030', 'Y000001'),
+    # ('T0040', 'T0026', 'Y000001'),
+    # ('T0001', 'T0014', 'Y000002'),
+    # ('T0015', 'T0030', 'Y000002'),
+    # ('T0026', 'T0040', 'Y000002'),
+    # ('T0015', 'T0030', 'Y000003'),
+    # ('T0001', 'T0014', 'Y000003'),
+    # ('T0015', 'T0030', 'Y000004'),
+    # ('T0015', 'T0030', 'Y000005'),
+    # ('T0001', 'T0014', 'Y000005'),
+    # ('T0040', 'T0026', 'Y000005'),
+    # ('T0014', 'T0001', 'Y000006'),
+    # ('T0015', 'T0030', 'Y000006'),
+    # ('T0001', 'T0014', 'Y000006'),
+    # ('T0026', 'T0040', 'Y000006'),
+    # ('T0015', 'T0030', 'Y000007'),
+    # ('T0001', 'T0014', 'Y000007'),
+    # ('T0001', 'T0014', 'Y000009'),
+    # ('T0015', 'T0030', 'Y000009'),
+    # ('T0026', 'T0040', 'Y000009'),
+    # ('T0015', 'T0030', 'Y000011'),
+    # ('T0001', 'T0014', 'Y000011'),
+    # ('T0026', 'T0040', 'Y000011'),
+    # ('T0015', 'T0030', 'Y000012'),
+    # ('T0001', 'T0014', 'Y000012'),
+    # ('T0015', 'T0030', 'Y000013'),
+    # ('T0001', 'T0014', 'Y000013'),
+    # ('T0015', 'T0030', 'Y000014'),
+    # ('T0001', 'T0014', 'Y000014'),
+    # ('T0001', 'T0014', 'Y000015'),
+    # ('T0015', 'T0030', 'Y000015'),
+    # ('T0015', 'T0030', 'Y000016'),
+    # ('T0001', 'T0014', 'Y000016'),
+    # ('T0040', 'T0026', 'Y000016'),
+    # ('T0001', 'T0014', 'Y000017'),
+    # ('T0015', 'T0030', 'Y000017'),
+    # ('T0040', 'T0026', 'Y000017'),
+    ('T0015', 'T0030', 'Y000020'),
+    ('T0001', 'T0014', 'Y000020'),
+    ('T0040', 'T0026', 'Y000020'),
+    # ('T0015', 'T0030', 'Y000021'),
+    # ('T0015', 'T0030', 'Y000022'),
+    # ('T0015', 'T0030', 'Y000025'),
+    # ('T0001', 'T0014', 'Y000026'),
+    # ('T0015', 'T0030', 'Y000026'),
+    # ('T0040', 'T0026', 'Y000026'),
+    # ('T0014', 'T0001', 'Y000027'),
+    # ('T0001', 'T0014', 'Y000027'),
+    # ('T0015', 'T0030', 'Y000027'),
+    # ('T0040', 'T0026', 'Y000027'),
+    # ('T0015', 'T0030', 'Y000037'),
+    # ('T0014', 'T0001', 'Y000038'),
+    # ('T0015', 'T0030', 'Y000038'),
+    # ('T0001', 'T0014', 'Y000038'),
+    # ('T0040', 'T0026', 'Y000038'),
+    # ('T0015', 'T0030', 'Y000041'),
+    # ('T0001', 'T0014', 'Y000041'),
+    # ('T0040', 'T0026', 'Y000041'),
+    # ('T0015', 'T0030', 'Y000046'),
+    # ('T0015', 'T0030', 'Y000047'),
+    # ('T0015', 'T0030', 'Y000048'),
+    # ('T0015', 'T0030', 'Y000049'),
+    # ('T0015', 'T0030', 'Y000052'),
+    # ('T0015', 'T0030', 'Y000057'),
+    # ('T0001', 'T0014', 'Y000057'),
+    # ('T0015', 'T0030', 'Y000108'),
+    # ('T0001', 'T0014', 'Y000108'),
+    # ('T0001', 'T0014', 'Y000111'),
+    # ('T0015', 'T0030', 'Y000111'),
+    # ('T0040', 'T0026', 'Y000111'),
+    # ('T0015', 'T0030', 'Y000113'),
+    # ('T0001', 'T0014', 'Y000113'),
+    # ('T0015', 'T0030', 'Y000114'),
+    # ('T0001', 'T0014', 'Y000114'),
+    # ('T0015', 'T0030', 'Y000125'),
+    # ('T0001', 'T0014', 'Y000125'),
+    # ('T0040', 'T0026', 'Y000125'),
+    # ('T0015', 'T0030', 'Y000135'),
+    # ('T0040', 'T0026', 'Y000135'),
+    # ('T0015', 'T0030', 'Y000147'),
+    # ('T0003', 'T0015', 'Y000043'),
+    # ('T0001', 'T0014', 'Y000043'),
+    # ('T0040', 'T0026', 'Y000043'),
+    # ('T0040', 'T0026', 'Y000107'),
+    # ('T0040', 'T0026', 'Y000145'),
+    # ('T0040', 'T0026', 'Y000160'),
+    # ('T0030', 'T0015', 'Y000123'),
+    # ('T0026', 'T0040', 'Y000123'),
+    # ('T0014', 'T0001', 'Y000162'),
+    # ('T0030', 'T0015', 'Y000162'),
+    # ('T0026', 'T0040', 'Y000162'),
+    # ('T0003', 'T0015', 'Y000055'),
+    # ('T0003', 'T0015', 'Y000079'),
+    # ('T0014', 'T0001', 'Y000010'),
+}
+
 
 class PhaseTwo:
 
@@ -28,7 +128,8 @@ class PhaseTwo:
             k: f"{v:.2e}" for k, v in _values.items()
         }
         print("--- objective summary ---")
-        print(json.dumps(_values_repr, indent=3))
+        self.obj_map_str = json.dumps(_values_repr, indent=3)
+        print(self.obj_map_str)
 
     @timer
     def load_phasei_from_local(self, path):
@@ -72,14 +173,16 @@ class PhaseTwo:
             x_c = model.addVars(
                 self.data.X_C,
                 self.data.T,
-                nameprefix="x_c", vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
+                nameprefix="x_c",
+                vtype=COPT.CONTINUOUS)  # 仓库->客户 线路运输量
         elif DEFAULT_ALG_PARAMS.phase2_use_full_model == 2:
             print("using greedy selections")
-            w2c_heur = self.routing_heuristics(6)
-            w2c_routes = set(w2c_heur)
-            # w2c_routes = set(w2c_heur).union(self.data.available_routes)
-            print(f"routing expansion: {len(self.data.available_routes)} => {len(w2c_routes)} from {len(w2c_heur)} ")
-            w2ct_list = [(i,k,s,t) for (i,k,s) in w2c_routes for t in self.data.T if (k,s,t) in self.data.cus_demand_periodly]
+            w2c_heur = self.routing_heuristics(DEFAULT_ALG_PARAMS.phase2_greedy_range)
+            w2c_routes = set(w2c_heur).union(self.data.available_routes)
+            print(
+                f"routing expansion:#{DEFAULT_ALG_PARAMS.phase2_greedy_range}: {len(self.data.available_routes)} => {len(w2c_routes)} from {len(w2c_heur)} ")
+            w2ct_list = [(i, k, s, t) for (i, k, s) in w2c_routes for t in self.data.T if
+                         (k, s, t) in self.data.cus_demand_periodly]
             x_c = model.addVars(
                 w2ct_list,
                 nameprefix="x_c", vtype=COPT.CONTINUOUS)
@@ -181,7 +284,7 @@ class PhaseTwo:
             # model.addConstrs(
             #     tmp[i, s, t] >= self.data.init_inventory.get((i, s), 0) for i in self.data.I_1 for s in self.data.S)
 
-            model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t] # 添加松弛变量
+            model.addConstrs((inv[i, s, t] <= tmp[i, s, t] + surplus_inv[i, s, t]  # 添加松弛变量
                               for i in self.data.I_1 for s in self.data.S), nameprefix='level1_inv')
         # # 0类商品不留库存
         # model.addConstrs((inv[i,s,t] <= max(0, self.data.init_inventory.get((i,s), 0))
@@ -193,7 +296,7 @@ class PhaseTwo:
                 t_pre = self.data.T_t[i - 1]
                 model.addConstrs((inv.sum(i, '*', t_pre) + x_p.sum('*', i, '*', t) + x_w.sum('*', i, '*', t) -
                                   1 * (x_w.sum(i, '*', '*', t) + x_c.sum(i, '*', '*', t) +
-                                           self.data.wh_demand_periodly_gp.get((i, t), 0))
+                                       self.data.wh_demand_periodly_gp.get((i, t), 0))
                                   <= self.data.wh_storage_capacity_periodly_total[i, t] + storage_gap[(i, t)]
                                   for i in self.data.I), nameprefix='wh_storage')
 
@@ -213,7 +316,7 @@ class PhaseTwo:
                          nameprefix='end_inv')
         # model.addConstrs(x_c[i, 'C00244033', 'Y000020', t] == 0 for t in self.data.T for i in self.data.I \
         #                  if (i, 'C00244033', 'Y000020', t) in x_c and i != 'T0015')
-        model.addConstr(inv['T0025', 'Y000020', 'period01'] <= 60000)
+        # model.addConstr(inv['T0025', 'Y000020', 'period01'] <= 60000)
 
         # ================== 添加目标函数 =====================
         self.obj_expr_map = dict(
@@ -221,8 +324,9 @@ class PhaseTwo:
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.plant_to_warehouse_cost[p, i, s]) for
                               p, i, s, t in x_p),
             cost_w2w=quicksum(x_w[i, j, s, t] * (
-                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]) for
-                              i, j, s, t in x_w),
+                    self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_transfer_cost[i, j, s]
+                    * (500 if (i, j, s) in extra_cost else 1))
+                              for i, j, s, t in x_w),
             cost_w2c=quicksum(x_c[i, k, s, t] * (
                     self.data.added_warehouse_cost.get(i, 0) / 1e3 + self.data.warehouse_to_customer_cost[(i, k, s)])
                               # todo, why
@@ -260,7 +364,7 @@ class PhaseTwo:
 
     @timer
     def qty_fix_heuristic(self):
-        model:coptpy.Model = self.model
+        model: coptpy.Model = self.model
         _logs = []
         z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, storage_gap, end_inv_gap = self.variables
         # --- forward iteration ---
@@ -485,3 +589,12 @@ class PhaseTwo:
                                (self.plant_to_warehouse.start_id == 'P000X') & (self.plant_to_warehouse.qty > 0)]) & \
                        set(self.data.plant_sku_df[self.data.plant_sku_df.fac_id != 'P000X'].sku)
         print(f"model fake production, x_w: {len(fake_product)}")
+
+    def debug(self):
+        model = self.model
+        z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, tmp, inv_gap, *_ = self.variables
+        expr = quicksum(x_c.select("T0015", "C00244033", "Y000020", "*"))
+        self.constr_dbg = self.model.addConstr(expr == 10200)
+        self.model.solve()
+        print(self.obj_map_str)
+        self.obj_visualize()

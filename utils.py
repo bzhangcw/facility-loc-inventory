@@ -39,6 +39,7 @@ class AlgParams(object):
         self.phase2_use_full_model = args.phase2_use_full_model
         self.phase2_use_qty_heur = args.phase2_use_qty_heur
         self.phase2_qty_heur_reset = args.phase2_qty_heur_reset
+        self.phase2_greedy_range = 5
 
     def show(self):
         print("--- ALG PARAMS ---")
