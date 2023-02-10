@@ -7,7 +7,10 @@ import pandas as pd
 
 
 class AlgParams(object):
-    parser = argparse.ArgumentParser("SINO Facility location")
+    parser = argparse.ArgumentParser(
+        "SINO Facility location",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
     parser.add_argument("--phase1_relax", type=int, default=0)
     parser.add_argument("--phase1_resolve", type=int, default=1, help="""
@@ -68,6 +71,7 @@ def timer(func):
         et = time.time()
         GLOBAL_PROFILE['total'][func.__qualname__] += et - st
         GLOBAL_PROFILE['count'][func.__qualname__] += 1
+        print(f"func @{func.__qualname__} finished")
         return cc
 
     return wrapper

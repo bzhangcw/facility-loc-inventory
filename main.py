@@ -18,7 +18,6 @@ if DEFAULT_ALG_PARAMS.phase1_resolve:
 phase_two = PhaseTwo(model_data, phase_two_dir)
 phase_two.load_phasei_from_local(phase_one.solution_dir)
 phase_two.build()
-phase_two.set_state()
 phase_two.run()
 
 show_profiling()

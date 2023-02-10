@@ -55,9 +55,11 @@ def data_construct(model_dir):
         'min_size'].to_dict()
 
     # 成本参数
-    data.plant_to_warehouse_cost = plant_to_warehouse_cost.set_index(['start_id', 'end_id', 'sku'])['total_cost'].to_dict()
+    data.plant_to_warehouse_cost = plant_to_warehouse_cost.set_index(['start_id', 'end_id', 'sku'])[
+        'total_cost'].to_dict()
     data.warehouse_transfer_cost = pd.concat([level1_to_level1_inner_cost, level1_to_level1_outer_cost,
-                                             level1_to_level2_cost]).set_index(['start_id', 'end_id', 'sku'])['total_cost'].to_dict()
+                                              level1_to_level2_cost]).set_index(['start_id', 'end_id', 'sku'])[
+        'total_cost'].to_dict()
     data.warehouse_to_customer_cost = warehouse_to_customer_cost.set_index(['start_id', 'end_id', 'sku'])[
         'total_cost'].to_dict()
     data.line_prod_cost = plant_info_monthly.set_index(['fac_id', 'line_id', 'sku'])[
@@ -70,7 +72,7 @@ def data_construct(model_dir):
     data.init_inventory = consider_init_inventory.set_index(['fac_id', 'sku'])['qty'].to_dict()
     tmp = consider_init_inventory.groupby(['fac_id']).qty.sum().reset_index()
     data.init_inventory_wh = tmp.set_index(['fac_id'])['qty'].to_dict()
-    data.inventory_days = consider_inventory_days.set_index(['fac_id','sku']).inv_days.to_dict()
+    data.inventory_days = consider_inventory_days.set_index(['fac_id', 'sku']).inv_days.to_dict()
     # 时间参数
     ds_df = cus_demand_periodly[['ds']].drop_duplicates().sort_values(by='ds').reset_index(drop=True)
     ds_df['ds_id'] = ['period' + str(i).rjust(2, '0') for i in range(1, len(ds_df) + 1)]
@@ -104,6 +106,7 @@ def data_construct(model_dir):
     data.normal_S = list(set(sku_df.sku.unique()) - {'Y000168', 'Y000169', 'Y000170'})
     data.T = ds_df.ds_id.unique().tolist()
     data.T_t = ['period00'] + data.T
+    data.T_n = dict(zip(data.T_t, range(len(data.T_t))))
     data.I_1 = warehouse_df[warehouse_df.fac_type.apply(lambda x: 'level_1' in x)].fac_id.unique().tolist()
     data.I_2 = warehouse_df[warehouse_df.fac_type.apply(lambda x: 'level_2' in x)].fac_id.unique().tolist()
     data.S_0 = sku_df[sku_df.sku_category == '0'].sku.unique().tolist()
