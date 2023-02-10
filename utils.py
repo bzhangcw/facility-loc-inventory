@@ -19,7 +19,7 @@ class AlgParams(object):
         help="""
         1 then build and solve phase I.
         0 (o.w.) read from local.
-    """,
+        """,
     )
     parser.add_argument(
         "--phase2_use_full_model",
@@ -29,7 +29,7 @@ class AlgParams(object):
         0 if we use the reduced model to preserve sparsity in phase-II.
         1 (o.w.), we use X_W, X_C to build the model.
         2 (o.w.), we use a greedy algorithm to build the routes
-    """,
+        """,
     )
     parser.add_argument(
         "--phase2_use_qty_heur",
@@ -39,7 +39,7 @@ class AlgParams(object):
         1 if we apply a greedy heuristic to fix production qty x s.t.
             x >= min_prod.
         0 we apply the disjunctive constraint (exact approach using an indicator variable)
-    """,
+        """,
     )
     parser.add_argument(
         "--phase2_qty_heur_reset",
@@ -75,6 +75,14 @@ class AlgParams(object):
         default=2,
         help="""
             phase II linear programming method, default ipm
+        """,
+    )
+    parser.add_argument(
+        "--phase2_greedy_range",
+        type=int,
+        default=5,
+        help="""
+            see covering.py
         """,
     )
 

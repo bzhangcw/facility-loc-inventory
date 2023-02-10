@@ -182,6 +182,7 @@ def add_inventory_constr(self):
         }
     )
     x_p_unavailable, x_p_unavailable_sum = query_unavail_prod(self)
+    x_p_available, x_p_avail_sum = query_unavail_prod(self)
 
     # ====== 仓库出货量约束 =====
     model.addConstrs(
@@ -298,13 +299,13 @@ def add_inventory_constr(self):
         # we place a simple rule as below.
         # for w2w case,
         #   the qty of `transfer` must be lower than fresh coming-in
-        # model.addConstr(
-        #     (
-        #             x_p_avail_sum.get((i, s, t), 0) + xwi
-        #             >= xwo
-        #     ),
-        #     name=f"fresh-perishable-relaxation-{i}{s}{t}",
-        # )
+        model.addConstr(
+            (
+                    x_p_avail_sum.get((i, s, t), 0) + xwi
+                    >= xwo
+            ),
+            name=f"fresh-perishable-relaxation-{i}{s}{t}",
+        )
 
     # ====== 期末库存约束 =====
     model.addConstrs(
