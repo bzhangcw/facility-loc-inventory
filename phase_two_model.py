@@ -239,8 +239,10 @@ class PhaseTwo:
         # 期末库存不足惩罚/多余备货惩罚/库存成本，防止提前备货
         model.setObjective(obj, sense=COPT.MINIMIZE)
 
-        model.setParam(COPT.Param.TimeLimit, 1200.0)
-        model.setParam(COPT.Param.RelGap, 0.001)
+        model.setParam(COPT.Param.TimeLimit, DEFAULT_ALG_PARAMS.timelimit)
+        model.setParam(COPT.Param.LpMethod, DEFAULT_ALG_PARAMS.phase2_lpmethod)
+        model.setParam(COPT.Param.FeasTol, 1e-5)
+        model.setParam(COPT.Param.DualTol, 1e-5)
         model.write('phase_two_lp_2.lp')
 
     @timer
