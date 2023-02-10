@@ -32,7 +32,6 @@ def clear_integer_fixings(self, z_l):
 @timer
 def qty_fix_heuristic(self):
     model: coptpy.Model = self.model
-    model.setParam("LpMethod", 1)
     _logs = []
     z_p, z_l, x_p, x_w, x_c, *_ = self.variables
     # --- forward iteration ---
