@@ -71,7 +71,7 @@ def timer(func):
         et = time.time()
         GLOBAL_PROFILE['total'][func.__qualname__] += et - st
         GLOBAL_PROFILE['count'][func.__qualname__] += 1
-        print(f"func @{func.__qualname__} finished")
+        print(f"func finished eps: {et - st:5.2f} @{func.__qualname__} ")
         return cc
 
     return wrapper

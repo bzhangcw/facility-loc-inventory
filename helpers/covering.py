@@ -13,9 +13,14 @@ from utils import *
 
 @timer
 def addvars_xw(self, model):
-    x_w = model.addVars(self.data.X_W if DEFAULT_ALG_PARAMS.phase2_use_full_model else self.data.warehouse_routes,
-                        self.data.T,
-                        nameprefix="x_w", vtype=COPT.CONTINUOUS)  # 仓库->仓库 线路运输量
+    x_w = model.addVars(
+        self.data.X_W
+        if DEFAULT_ALG_PARAMS.phase2_use_full_model
+        else self.data.warehouse_routes,
+        self.data.T,
+        nameprefix="x_w",
+        vtype=COPT.CONTINUOUS,
+    )  # 仓库->仓库 线路运输量
     return x_w
 
 
