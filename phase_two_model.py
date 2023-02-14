@@ -3,6 +3,7 @@ import pickle
 
 import coptpy
 import numpy as np
+import pandas as pd
 from coptpy import *
 
 from utils import *
@@ -196,8 +197,13 @@ class PhaseTwo:
         for t in self.data.T:
             for (p, l), s_list in self.data.Ls.items():
                 model.addConstr(
-                    (quicksum(z_l[(p, l, s, t)] / self.data.line_prod_capcity_periodly[(p, l, s)] for s in s_list) <= 1)
+                    (quicksum(z_l[(p, l, s, t)] / self.data.line_prod_capcity_periodly[(p, l, s)] for s in s_list) <=
+                     1) #self.data.line_utilization[(p, l, t)])
                     , name='line_capacity')
+
+        # # 代工厂最小生产量约束
+        # model.addConstrs(z_l.sum((p, l, '*', '*')) >= self.data.min_production[(p, l)]
+        #                  for p, l in self.data.min_production)
 
         # ====== 客户需求满足约束 =====
         for k, s, t in self.data.KST:
@@ -248,7 +254,7 @@ class PhaseTwo:
     @timer
     def run(self, finalize=True):
         model = self.model
-        z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, inv_gap, *_ = self.variables
+        z_p, z_l, x_p, x_w, x_c, inv, surplus_inv, inv_gap, inv_f, inv_avail, storage_gap, end_inv_gap = self.variables
 
         model.write(self.model_dir + "phase_two.mps.gz")
         model.solve()
@@ -305,6 +311,12 @@ class PhaseTwo:
             inventory = pd.DataFrame(pd.Series(model.getInfo(COPT.Info.Value, inv))).reset_index()
             inventory.columns = ['warehouse_id', 'sku', 'period', 'inv']
             inventory['inv'] = inventory['inv'].apply(lambda x: round(x, 3))
+            inventory_dropped = pd.DataFrame(pd.Series(model.getInfo(COPT.Info.Value, inv_f))).reset_index()
+            inventory_dropped.columns = ['warehouse_id', 'sku', 'period', 'inv_dropped']
+            inventory_dropped['inv_dropped'] = inventory_dropped['inv_dropped'].apply(lambda x: round(x, 3))
+            inventory_avail = pd.DataFrame(pd.Series(model.getInfo(COPT.Info.Value, inv_avail))).reset_index()
+            inventory_avail.columns = ['warehouse_id', 'sku', 'period', 'inv_avail']
+            inventory_avail['inv_avail'] = inventory_avail['inv_avail'].apply(lambda x: round(x, 3))
 
             # ======= 统计仓库*sku*period的库存变动情况
             plant_to_warehouse_in = plant_to_warehouse.rename(columns={'end_id': 'warehouse_id', 'qty': 'prod_in'})
@@ -346,6 +358,8 @@ class PhaseTwo:
             tmp4 = tmp4.merge(warehouse_to_warehouse_out_cap, how='left')
             tmp5 = tmp4.merge(warehouse_demand_out, how='left')
             tmp6 = tmp5.merge(inventory_gap, how='left')
+            tmp6 = tmp6.merge(inventory_dropped, how='left')
+            tmp6 = tmp6.merge(inventory_avail, how='left')
             tmp6['inv_pre'] = tmp6.groupby(['warehouse_id', 'sku']).inv.shift(1)
             tmp6 = tmp6.fillna(0)
             tmp6['storage'] = tmp6.inv_pre.apply(lambda x: max(x, 0)) + tmp6.prod_in + tmp6.transfer_in - \

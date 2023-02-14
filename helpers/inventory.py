@@ -182,7 +182,7 @@ def add_inventory_constr(self):
         }
     )
     x_p_unavailable, x_p_unavailable_sum = query_unavail_prod(self)
-    x_p_available, x_p_avail_sum = query_unavail_prod(self)
+    x_p_available, x_p_avail_sum = query_avail_prod(self)
 
     # ====== 仓库出货量约束 =====
     model.addConstrs(
@@ -285,7 +285,7 @@ def add_inventory_constr(self):
                 - xwo
                 - xco
                 - self.data.wh_demand_periodly.get((i, s, t), 0)
-                - inv_f[i, s, t]  # perished
+                # - inv_f[i, s, t]  # perished  # 暂时不考虑丢弃
             ),
             name=f"inv-{i}{s}{t}",
         )
@@ -293,6 +293,13 @@ def add_inventory_constr(self):
             (inv_avail[i, s, t] == inv[i, s, t] - xpiu),
             name=f"inv_avail-{i}{s}{t}",
         )
+        # # # 每期出货量不超过当期可用库存
+        # # print(t,i,s,inv_avail)
+        # model.addConstr(
+        #     xwo + xco + self.data.wh_demand_periodly.get((i, s, t), 0) <=
+        #     inv_avail.get((i, s, t_pre), 0) + x_p_avail_sum.get((i, s, t), 0) + xwi,
+        #     name=f"inv_avail_outbound-{i}{s}{t}",
+        # )
 
         # now consider a simple relaxation
         #   of fresh-perishable requirements.
@@ -306,6 +313,17 @@ def add_inventory_constr(self):
             ),
             name=f"fresh-perishable-relaxation-{i}{s}{t}",
         )
+
+    # # ====== 安全库存约束 =====
+    # for t, i, s in tqdm(_list_inventory, desc="build-safety-stock", ncols=100):
+    #     idx = self.data.T_n[t]
+    #     if idx == len(self.data.T_n) - 1:
+    #         break
+    #     t_next = self.data.T_t[idx + 1]
+    #     xco = x_c.sum(i, "*", s, t_next)  # outbound w2c
+    #     model.addConstrs(
+    #         inv[i, s, t] >= self.data.safety_stock_coef * xco
+    #     )
 
     # ====== 期末库存约束 =====
     model.addConstrs(

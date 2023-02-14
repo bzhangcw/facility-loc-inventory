@@ -29,6 +29,9 @@ def data_construct(model_dir):
     consider_end_inventory = pd.read_csv(model_dir + 'consider_end_inventory.csv')
     consider_init_inventory = pd.read_csv(model_dir + 'consider_init_inventory.csv')
     consider_inventory_days = pd.read_csv(model_dir + 'consider_inventory_days.csv')
+    prod_leadtime_df = pd.read_csv(model_dir + 'sku_examination_period.csv')
+    safety_stock_df = pd.read_csv(model_dir + 'safety_stock_periodly.csv')
+    line_utilization_df = pd.read_csv(model_dir + 'capacity_utilization_periodly.csv')
     # 决策变量数据
     plant_to_warehouse = pd.read_csv(model_dir + 'plant_to_warehouse.csv')
     level1_to_level1_inner = pd.read_csv(model_dir + 'level1_to_level1_inner.csv')
@@ -79,6 +82,19 @@ def data_construct(model_dir):
     # 产线生产sku列表
     tmp = plant_info_monthly.groupby(['fac_id', 'line_id']).agg({'sku': lambda x: x.unique().tolist()}).reset_index()
     data.Ls = tmp.set_index(['fac_id', 'line_id'])['sku']
+    # 工厂*sku打检期数据生成  # todo 表结构改成工厂*sku格式
+    plant_prod_leadtime = plant_info_monthly[['fac_id', 'sku']].drop_duplicates().merge(prod_leadtime_df, on='sku',
+                                                                                        how='left')
+    plant_prod_leadtime['leadtime'] = plant_prod_leadtime['exam_period'] / 10  # 打检期天数折合成旬
+    plant_prod_leadtime.loc[plant_prod_leadtime.fac_id == 'P000X', 'leadtime'] = 0
+    data.prod_leadtime = plant_prod_leadtime.set_index(['fac_id', 'sku']).leadtime.to_dict()
+    # 各旬安全库存系数生成
+    safety_stock_df = pd.merge(safety_stock_df, ds_df, how='left', on='ds')
+    data.safety_stock_coef = safety_stock_df.set_index(['ds_id']).ss_coef.to_dict()
+    # 工厂*产线*旬剩余产能利用率生成
+    line_utilization_df = pd.merge(line_utilization_df, ds_df, how='left', on='ds')
+    data.line_utilization = line_utilization_df.set_index(['fac_id', 'line_id', 'ds_id']).utility.to_dict()
+
     # 各旬需求数据生成
     warehouse_demand_periodly_tmp = warehouse_demand_periodly.merge(ds_df, how='left', on='ds')
     cus_demand_periodly_tmp = cus_demand_periodly.merge(ds_df, how='left', on='ds')

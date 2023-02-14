@@ -15,7 +15,7 @@ class AlgParams(object):
     parser.add_argument(
         "--phase1_resolve",
         type=int,
-        default=1,
+        default=0,
         help="""
         1 then build and solve phase I.
         0 (o.w.) read from local.
@@ -24,7 +24,7 @@ class AlgParams(object):
     parser.add_argument(
         "--phase2_use_full_model",
         type=int,
-        default=0,
+        default=2,
         help="""
         0 if we use the reduced model to preserve sparsity in phase-II.
         1 (o.w.), we use X_W, X_C to build the model.
