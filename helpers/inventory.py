@@ -306,24 +306,25 @@ def add_inventory_constr(self):
         # we place a simple rule as below.
         # for w2w case,
         #   the qty of `transfer` must be lower than fresh coming-in
-        model.addConstr(
-            (
-                    x_p_avail_sum.get((i, s, t), 0) + xwi
-                    >= xwo
-            ),
-            name=f"fresh-perishable-relaxation-{i}{s}{t}",
-        )
+        if idx > 2:
+            model.addConstr(
+                (
+                        x_p_avail_sum.get((i, s, t), 0) + xwi
+                        >= xwo
+                ),
+                name=f"fresh-perishable-relaxation-{i}{s}{t}",
+            )
 
-    # # ====== 安全库存约束 =====
-    # for t, i, s in tqdm(_list_inventory, desc="build-safety-stock", ncols=100):
-    #     idx = self.data.T_n[t]
-    #     if idx == len(self.data.T_n) - 1:
-    #         break
-    #     t_next = self.data.T_t[idx + 1]
-    #     xco = x_c.sum(i, "*", s, t_next)  # outbound w2c
-    #     model.addConstrs(
-    #         inv[i, s, t] >= self.data.safety_stock_coef * xco
-    #     )
+    # ====== 安全库存约束 =====
+    for t, i, s in tqdm(_list_inventory, desc="build-safety-stock", ncols=100):
+        idx = self.data.T_n[t]
+        if idx == len(self.data.T_n) - 1:
+            break
+        t_next = self.data.T_t[idx + 1]
+        xco = x_c.sum(i, "*", s, t_next)  # outbound w2c
+        model.addConstrs(
+            inv_avail[i, s, t] >= self.data.safety_stock_coef * xco
+        )
 
     # ====== 期末库存约束 =====
     model.addConstrs(

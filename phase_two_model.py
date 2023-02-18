@@ -198,12 +198,12 @@ class PhaseTwo:
             for (p, l), s_list in self.data.Ls.items():
                 model.addConstr(
                     (quicksum(z_l[(p, l, s, t)] / self.data.line_prod_capcity_periodly[(p, l, s)] for s in s_list) <=
-                     1) #self.data.line_utilization[(p, l, t)])
+                     self.data.line_utilization[(p, l, t)])
                     , name='line_capacity')
 
-        # # 代工厂最小生产量约束
-        # model.addConstrs(z_l.sum((p, l, '*', '*')) >= self.data.min_production[(p, l)]
-        #                  for p, l in self.data.min_production)
+        # 代工厂最小生产量约束
+        model.addConstrs(z_l.sum((p, l, '*', '*')) >= self.data.min_production[(p, l)]
+                         for p, l in self.data.min_production)
 
         # ====== 客户需求满足约束 =====
         for k, s, t in self.data.KST:

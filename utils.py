@@ -15,7 +15,7 @@ class AlgParams(object):
     parser.add_argument(
         "--phase1_resolve",
         type=int,
-        default=0,
+        default=1,
         help="""
         1 then build and solve phase I.
         0 (o.w.) read from local.
