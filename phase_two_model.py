@@ -202,7 +202,7 @@ class PhaseTwo:
                     , name='line_capacity')
 
         # 代工厂最小生产量约束
-        model.addConstrs(z_l.sum((p, l, '*', '*')) >= self.data.min_production[(p, l)]
+        model.addConstrs(z_l.sum(p, l, '*', '*') >= self.data.min_production[(p, l)]
                          for p, l in self.data.min_production)
 
         # ====== 客户需求满足约束 =====

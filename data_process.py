@@ -39,6 +39,7 @@ def data_construct(model_dir):
     level1_to_level1_outer_map = pd.read_csv(model_dir + 'level1_to_level1_outer_map.csv')
     level1_to_level2 = pd.read_csv(model_dir + 'level1_to_level2.csv')
     warehouse_to_customer = pd.read_csv(model_dir + 'warehouse_to_customer.csv')
+    line_min_production = pd.read_csv(model_dir + 'plant_min_production.csv')
 
     # ================= 数据构造 =========================
     data = namedtuple("data", ['demand'])
@@ -92,8 +93,11 @@ def data_construct(model_dir):
     safety_stock_df = pd.merge(safety_stock_df, ds_df, how='left', on='ds')
     data.safety_stock_coef = safety_stock_df.set_index(['ds_id']).ss_coef.to_dict()
     # 工厂*产线*旬剩余产能利用率生成
+    line_utilization_df['ds'] = pd.to_datetime(line_utilization_df['ds'])
+    line_utilization_df['ds'] = line_utilization_df['ds'].apply(lambda x: x.strftime('%Y-%m-%d'))
     line_utilization_df = pd.merge(line_utilization_df, ds_df, how='left', on='ds')
     data.line_utilization = line_utilization_df.set_index(['fac_id', 'line_id', 'ds_id']).utility.to_dict()
+    data.min_production = line_min_production.set_index(['fac_id', 'line_id']).min_production.to_dict()
 
     # 各旬需求数据生成
     warehouse_demand_periodly_tmp = warehouse_demand_periodly.merge(ds_df, how='left', on='ds')

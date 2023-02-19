@@ -322,8 +322,8 @@ def add_inventory_constr(self):
             break
         t_next = self.data.T_t[idx + 1]
         xco = x_c.sum(i, "*", s, t_next)  # outbound w2c
-        model.addConstrs(
-            inv_avail[i, s, t] >= self.data.safety_stock_coef * xco
+        model.addConstr(
+            inv_avail[i, s, t] >= self.data.safety_stock_coef.get(t,0) * xco
         )
 
     # ====== 期末库存约束 =====
