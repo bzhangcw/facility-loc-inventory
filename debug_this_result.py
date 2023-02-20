@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from collections import namedtuple
 from itertools import product
+import itertools
 from tqdm import tqdm
 from pylab import *
 from pyecharts import options as opts
@@ -13,6 +14,24 @@ import matplotlib.pyplot as plt
 import sys
 
 from data_process import data_construct
+
+
+import sys
+
+if len(sys.argv) < 3:
+    print(
+    """usage:
+        choose sku: e.g., Y000170
+        choose sparsity: T (default) if you only analyze active paths (appeared in the model)
+            else full
+    1. cmd: 
+        python *.py <sku_name> <sparse?>
+    2. ipython: 
+        # invoke ipython first
+        In [..]: %run -i debug_this_result.py <sku_name> <sparse?>
+    """
+    )
+    exit(0)
 
 # 设置
 pd.options.display.notebook_repr_html = True  # 表格显示
@@ -57,8 +76,13 @@ from data_process import data_construct
 model_dir = '../模型数据v1/'
 phase_one_dir = 'data/phase_one/'
 phase_two_dir = 'data/phase_two/'
+# %%
+# weird_pairs = {('T0015', 'T0030'), 
+#                ('T0015', 'T0003'), ('T0001', 'T0014'), ('T0026', 'T0040')}
 
 model_data = data_construct(model_dir)
+ld = model_data.warehouse_df.query("fac_type == 'level_1_inner'").fac_id.tolist()
+weird_pairs = set(list(itertools.product(ld,ld)))
 
 mapping_category = {
     "p2w": "工厂-仓库转运",
@@ -66,19 +90,19 @@ mapping_category = {
     "w2c": "仓库-客户转运",
     "prod": "生产"
 }
-df_p2w = plant_to_warehouse.query('qty > 0').assign(
+df_p2w = plant_to_warehouse.assign(
     row_key=lambda df: list(zip(df['start_id'], df['end_id'], df['sku'])),
     unit_cost=lambda df: df.apply(lambda row: model_data.plant_to_warehouse_cost.get(row['row_key'], 0), axis=1),
     cost=lambda df: df['qty'] * df['unit_cost'],
     category='p2w'
 )
-df_w2w = warehouse_to_warehouse.query('qty > 0').assign(
+df_w2w = warehouse_to_warehouse.assign(
     row_key=lambda df: list(zip(df['start_id'], df['end_id'], df['sku'])),
     unit_cost=lambda df: df.apply(lambda row: model_data.warehouse_transfer_cost.get(row['row_key'], 0), axis=1),
     cost=lambda df: df['qty'] * df['unit_cost'],
     category='w2w'
 )
-df_w2c = warehouse_to_customer.query('qty > 0').assign(
+df_w2c = warehouse_to_customer.assign(
     row_key=lambda df: list(zip(df['start_id'], df['end_id'], df['sku'])),
     unit_cost=lambda df: df.apply(lambda row: model_data.warehouse_to_customer_cost.get(row['row_key'], 0), axis=1),
     cost=lambda df: df['qty'] * df['unit_cost'],
@@ -102,8 +126,6 @@ df_total_sum = pd.concat(
             category_chs=lambda df: df['category'].apply(mapping_category.get))
     ])
 
-df_total_sum.to_csv("./cost_agg.csv")
-df_transfer_cost.to_csv("./cost_transfer.csv")
 
 columns = df_transfer_cost.columns
 df_cost = pd.concat(
@@ -116,7 +138,10 @@ df_cost = df_cost.groupby(['start_id', 'end_id', 'sku', 'category']).agg({
     "qty": sum,
     "cost": sum,
     "unit_cost": "first"
-}).reset_index()
+}).reset_index().assign(
+    bool_is_weird=lambda df: 
+    df.apply(lambda row: (row['start_id'], row['end_id']) in model_data.weird_pairs, axis=1)
+)
 
 second_wh = set(model_data.warehouse_df.query('fac_type=="level_2"').fac_id.tolist())
 
@@ -130,13 +155,21 @@ def has_2nd(path):
 
 import networkx as nx
 
-# %%
-weird_pairs = {('T0015', 'T0030'), ('T0015', 'T0003'), ('T0001', 'T0014'), ('T0026', 'T0040')}
 
+
+
+sku_name = sys.argv[1]
+sparsity = sys.argv[2]
+if sku_name == 'all':
+    lsa = df_cost.sku.unique()
+else:
+    lsa = [sku_name]
 path_data = []
-for sku in tqdm(df_cost.sku.unique()):
-    df = df_cost.query(f"sku == '{sku}'")
-    customers = df.query("category in ['p2c', 'w2c']").end_id.tolist()
+for sku in tqdm(lsa):
+    df = df_cost.query(f"sku == '{sku}'") if sparsity == "F" else df_cost.query(f"sku == '{sku}' and qty > 0")
+    # customers = df.query("category in ['p2c', 'w2c']").end_id.tolist()
+    customers = df.end_id.tolist()
+
     g = nx.DiGraph()
     data = df.set_index(['start_id', 'end_id']).to_dict(orient='records')
     edges = [(i, j, k) for i, j, k in zip(df['start_id'], df['end_id'], data)]
@@ -152,6 +185,7 @@ for sku in tqdm(df_cost.sku.unique()):
                 path_name = "-".join(path)
                 edges = list(zip(path[:-1], path[1:]))
                 costs = {df_query['category'][e]: df_query['unit_cost'][e] for e in edges}
+                qty = min(df_query['qty'][e] for e in edges)
                 path_data.append(
                     dict(
                         start='s',
@@ -164,7 +198,8 @@ for sku in tqdm(df_cost.sku.unique()):
                         pairs=(path[-2], path[-3]) if (edges.__len__() == 4) else "",
                         is_weird=(edges.__len__() == 4) and (
                                     ((path[-2], path[-3]) in weird_pairs) or ((path[-3], path[-2]) in weird_pairs)),
-                        key=(path[-3], path[-2], sku)
+                        key=(path[-3], path[-2], sku),
+                        qty=qty
                     )
                 )
                 ct += 1
@@ -172,6 +207,11 @@ for sku in tqdm(df_cost.sku.unique()):
             pass
 
 df_final = pd.DataFrame.from_dict(path_data).fillna(0).assign(
-    cost=lambda df: df['prod'] + df['p2w'] + df['w2w'] + df['w2c']
+    cost=lambda df: sum(df[kk] for kk in ['prod', 'p2w', 'w2w', 'w2c'] if kk in df.columns)
 )
-df_final.to_excel(f"diagnostics-this.xlsx")
+
+#
+df_final.to_excel(f"diagnostics-this-{sku_name}.xlsx")
+df_total_sum.to_csv("./cost_agg.csv")
+df_transfer_cost.to_csv("./cost_transfer.csv")
+df_cost.to_csv("./cost_analysis.csv")

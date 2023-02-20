@@ -1,4 +1,5 @@
 import pandas as pd
+import itertools
 from collections import namedtuple
 
 
@@ -147,5 +148,7 @@ def data_construct(model_dir):
     data.plant_sku_df = plant_sku_df
     data.level1_to_level1_inner = level1_to_level1_inner
     data.warehouse_df = warehouse_df
+    ld = data.warehouse_df.query("fac_type == 'level_1_inner'").fac_id.tolist()
+    data.weird_pairs = set(list(itertools.product(ld, ld)))
     print("Data construct end !")
     return data
