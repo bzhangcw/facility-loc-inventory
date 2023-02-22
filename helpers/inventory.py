@@ -184,19 +184,6 @@ def add_inventory_constr(self):
     x_p_unavailable, x_p_unavailable_sum = query_unavail_prod(self)
     x_p_available, x_p_avail_sum = query_avail_prod(self)
 
-    # ====== 仓库出货量约束 =====
-    model.addConstrs(
-        (
-            quicksum(x_w_subset.select(i, "*", "*", t))
-            + x_c.sum(i, "*", "*", t)
-            + self.data.wh_demand_periodly_gp.get((i, t), 0)
-            <= self.data.wh_outbound_cap_periodly[i]
-            for i in self.data.I
-            for t in self.data.T
-        ),
-        nameprefix="wh_outbound",
-    )
-
     # 一段仓最多提前一个月备货
     # @note: a new formulation
     for ind, t in enumerate(self.data.T):
@@ -219,6 +206,19 @@ def add_inventory_constr(self):
                 name=f"level1_inv-{i, s, t}",
             )
 
+    # ====== 仓库出货量约束 =====
+    model.addConstrs(
+        (
+            quicksum(x_w_subset.select(i, "*", "*", t))
+            + x_c.sum(i, "*", "*", t)
+            + self.data.wh_demand_periodly_gp.get((i, t), 0)
+            <= self.data.wh_outbound_cap_periodly[i]
+            for i in self.data.I
+            for t in self.data.T
+        ),
+        nameprefix="wh_outbound",
+    )
+    
     # ====== 仓库库容约束 =====
     for i, t in enumerate(self.data.T_t[4:]):
         model.addConstrs(

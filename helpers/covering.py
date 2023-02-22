@@ -11,29 +11,27 @@ from coptpy import *
 from utils import *
 
 
+
 @timer
 def addvars_xw(self, model):
-    
-    if DEFAULT_ALG_PARAMS.phase2_use_full_model == 1:
-        x_w = model.addVars(
-            self.data.X_W,
-            self.data.T,
-            nameprefix="x_w",
-            vtype=COPT.CONTINUOUS,
-        )  # 仓库->仓库 线路运输量
+    if DEFAULT_ALG_PARAMS.phase2_use_full_model in {1, 3}:
+        fullset = self.data.X_W 
     else:
-        weird_subset = {
-            (i, j, k) for (i, j, k) in self.data.warehouse_routes if (k in {"Y000168", "Y000169", "Y000170"} and
-            (i, j) in self.data.weird_pairs)
-        }
-        left_set = {k for k in self.data.warehouse_routes if k not in weird_subset}
-        print(f"removing subset of length {len(self.data.warehouse_routes)} => {len(left_set)}: {weird_subset.__len__()}")
-        x_w = model.addVars(
-            left_set,
-            self.data.T,
-            nameprefix="x_w",
-            vtype=COPT.CONTINUOUS,
-        )  # 仓库->仓库 线路运输量
+        fullset = self.data.warehouse_routes
+    
+    weird_subset = {
+        (i, j, k) for (i, j, k) in fullset if (k in {"Y000168", "Y000169", "Y000170"} and
+        (i, j) in self.data.weird_pairs)
+    }
+    left_set = {k for k in fullset if k not in weird_subset}
+    
+    print(f"removing subset of length {len(fullset)} => {len(left_set)}: {weird_subset.__len__()}")
+    x_w = model.addVars(
+        left_set,
+        self.data.T,
+        nameprefix="x_w",
+        vtype=COPT.CONTINUOUS,
+    )  # 仓库->仓库 线路运输量
     return x_w
 
 
@@ -49,7 +47,7 @@ def addvars_xc(self, model):
         x_c = model.addVars(
             self.data.X_C, self.data.T, nameprefix="x_c", vtype=COPT.CONTINUOUS
         )  # 仓库->客户 线路运输量
-    elif DEFAULT_ALG_PARAMS.phase2_use_full_model == 2:
+    elif DEFAULT_ALG_PARAMS.phase2_use_full_model in {2, 3}:
         print("using greedy selections")
         w2c_heur = self.routing_heuristics(DEFAULT_ALG_PARAMS.phase2_greedy_range)
         w2c_routes = set(w2c_heur).union(self.data.available_routes)

@@ -11,7 +11,35 @@ class AlgParams(object):
         "SINO Facility location", formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    parser.add_argument("--phase1_relax", type=int, default=0)
+    parser.add_argument(
+        "--phase1_relax", 
+        type=int, 
+        default=0
+    )
+    parser.add_argument(
+        "--result_dir", 
+        type=str, 
+        default='data',
+        help="""
+        root directory of the results
+        """
+    )
+    parser.add_argument(
+        "--phase_one_dir", 
+        type=str, 
+        default='phase_one/',
+        help="""
+        directory of the results (phase-1)
+        """
+    )
+    parser.add_argument(
+        "--phase_two_dir", 
+        type=str, 
+        default='phase_two/',
+        help="""
+        directory of the results (phase-2)
+        """
+    )
     parser.add_argument(
         "--phase1_resolve",
         type=int,
@@ -85,14 +113,35 @@ class AlgParams(object):
             see covering.py
         """,
     )
+    parser.add_argument(
+        "--phase2_new_fac_penalty",
+        type=float,
+        default=1e-6,
+        help="""
+            see covering.py
+        """,
+    )
+    parser.add_argument(
+        "--phase2_inner_transfer_penalty",
+        type=float,
+        default=5e3,
+        help="""
+            see covering.py
+        """,
+    )
 
     __slots__ = (
         "phase1_relax",
+        "result_dir",
+        "phase_one_dir",
+        "phase_two_dir",
         "phase1_resolve",
         "phase2_use_full_model",
         "phase2_use_qty_heur",
         "phase2_qty_heur_reset",
         "phase2_greedy_range",
+        "phase2_new_fac_penalty",
+        "phase2_inner_transfer_penalty",
         "phase1_lpmethod",
         "phase2_lpmethod",
         "timelimit",
@@ -100,9 +149,24 @@ class AlgParams(object):
 
     def __init__(self):
         args = self.parser.parse_args()
-        self.phase2_greedy_range = 5  # todo, unparameterized
+        
         for i in self.__slots__:
             self.__setattr__(i, args.__getattribute__(i))
+            
+        if not os.path.exists(self.result_dir):
+            os.mkdir(self.result_dir)
+        
+        p1 = os.path.join(self.result_dir, self.phase_one_dir)
+        p2 = os.path.join(self.result_dir, self.phase_two_dir)
+        
+        if not os.path.exists(p1):
+            os.mkdir(p1)
+        if not os.path.exists(p2):
+            os.mkdir(p2)
+        
+        self.phase_one_dir = p1
+        self.phase_two_dir = p2
+        
 
     def show(self):
         print("--- ALG PARAMS ---")

@@ -18,17 +18,17 @@ from data_process import data_construct
 
 import sys
 
-if len(sys.argv) < 3:
+if len(sys.argv) < 4:
     print(
     """usage:
         choose sku: e.g., Y000170
         choose sparsity: T (default) if you only analyze active paths (appeared in the model)
             else full
     1. cmd: 
-        python *.py <sku_name> <sparse?>
+        python *.py <sku_name> <sparse?> <directory>
     2. ipython: 
         # invoke ipython first
-        In [..]: %run -i debug_this_result.py <sku_name> <sparse?>
+        In [..]: %run -i debug_this_result.py <sku_name> <sparse?> <directory>
     """
     )
     exit(0)
@@ -40,8 +40,8 @@ sns.set_style("darkgrid")  # 图形主题
 plt.rcParams['font.sans-serif'] = ['SimHei']
 # %%
 model_dir = '../模型数据v1/'
-phase_one_dir = 'data/phase_one/'
-phase_two_dir = 'data/phase_two/'
+phase_one_dir = f'{sys.argv[3]}/phase_one/'
+phase_two_dir = f'{sys.argv[3]}/phase_two/'
 # %% md
 # 阶段一结果分析
 # %%
@@ -211,7 +211,7 @@ df_final = pd.DataFrame.from_dict(path_data).fillna(0).assign(
 )
 
 #
-df_final.to_excel(f"diagnostics-this-{sku_name}.xlsx")
-df_total_sum.to_csv("./cost_agg.csv")
-df_transfer_cost.to_csv("./cost_transfer.csv")
-df_cost.to_csv("./cost_analysis.csv")
+df_final.to_excel(f"{sys.argv[3]}-diagnostics-this-{sku_name}.xlsx")
+df_total_sum.to_csv(f"{sys.argv[3]}-cost_agg.csv")
+df_transfer_cost.to_csv(f"{sys.argv[3]}-cost_transfer.csv")
+df_cost.to_csv(f"{sys.argv[3]}-cost_analysis.csv")
