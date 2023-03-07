@@ -189,13 +189,13 @@ class PhaseTwo:
 
         # @todo,
         # why do we even need this.
-        model.addConstr(
-            quicksum(
-                x_w[i, j, s, t]
-                for i, j, s, t in x_w
-                if (i, j) in self.data.weird_pairs 
-            ) <= 2e5
-        )
+        # model.addConstr(
+        #     quicksum(
+        #         x_w[i, j, s, t]
+        #         for i, j, s, t in x_w
+        #         if (i, j) in self.data.weird_pairs 
+        #     ) <= 2e5
+        # )
         
         mh.add_inventory_constr(self)
 

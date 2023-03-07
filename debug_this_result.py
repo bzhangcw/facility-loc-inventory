@@ -25,15 +25,18 @@ if len(sys.argv) < 4:
         choose sparsity: T (default) if you only analyze active paths (appeared in the model)
             else full
     1. cmd: 
-        python *.py <sku_name> <sparse?> <directory>
+        python *.py <sku_name> <sparse?> <directory> <customers>
     2. ipython: 
         # invoke ipython first
-        In [..]: %run -i debug_this_result.py <sku_name> <sparse?> <directory>
+        In [..]: %run -i debug_this_result.py <sku_name> <sparse?> <directory> <customers>
     """
     )
     exit(0)
 
 # 设置
+
+sku_name = sys.argv[1]
+sparsity = sys.argv[2]
 pd.options.display.notebook_repr_html = True  # 表格显示
 plt.rcParams['figure.dpi'] = 1000  # 图形分辨率
 sns.set_style("darkgrid")  # 图形主题
@@ -128,13 +131,13 @@ df_total_sum = pd.concat(
 
 
 columns = df_transfer_cost.columns
-df_cost = pd.concat(
+df_cost_raw = pd.concat(
     [df_transfer_cost, df_prod.assign(
         end_id=lambda df: df['plant_id'],
         start_id="source"
     ).filter(columns)]
 )
-df_cost = df_cost.groupby(['start_id', 'end_id', 'sku', 'category']).agg({
+df_cost = df_cost_raw.groupby(['start_id', 'end_id', 'sku', 'category']).agg({
     "qty": sum,
     "cost": sum,
     "unit_cost": "first"
@@ -142,6 +145,16 @@ df_cost = df_cost.groupby(['start_id', 'end_id', 'sku', 'category']).agg({
     bool_is_weird=lambda df: 
     df.apply(lambda row: (row['start_id'], row['end_id']) in model_data.weird_pairs, axis=1)
 )
+
+df_cost_all = df_cost_raw.groupby(['start_id', 'end_id', 'sku', 'category', 'period']).agg({
+    "qty": sum,
+    "cost": sum,
+    "unit_cost": "first"
+}).reset_index().assign(
+    bool_is_weird=lambda df: 
+    df.apply(lambda row: (row['start_id'], row['end_id']) in model_data.weird_pairs, axis=1)
+)
+
 
 second_wh = set(model_data.warehouse_df.query('fac_type=="level_2"').fac_id.tolist())
 
@@ -156,19 +169,22 @@ def has_2nd(path):
 import networkx as nx
 
 
-
-
-sku_name = sys.argv[1]
-sparsity = sys.argv[2]
 if sku_name == 'all':
     lsa = df_cost.sku.unique()
 else:
-    lsa = [sku_name]
+    lsa = sku_name.split(",")
+
 path_data = []
+
+weird_end_wh_sku = df_cost.query('bool_is_weird')[["sku", "end_id"]].drop_duplicates()
+weird_end_wh_sku = {tuple(k) for k in weird_end_wh_sku.to_numpy()}
+df_cost_1 = df_cost.copy()
+df_cost_1['hash1'] = list(zip(df_cost_1['sku'], df_cost_1['start_id']))
+df_cost_1 = df_cost_1.query('hash1 in @weird_end_wh_sku')
+
 for sku in tqdm(lsa):
+    
     df = df_cost.query(f"sku == '{sku}'") if sparsity == "F" else df_cost.query(f"sku == '{sku}' and qty > 0")
-    # customers = df.query("category in ['p2c', 'w2c']").end_id.tolist()
-    customers = df.end_id.tolist()
 
     g = nx.DiGraph()
     data = df.set_index(['start_id', 'end_id']).to_dict(orient='records')
@@ -176,8 +192,8 @@ for sku in tqdm(lsa):
     g.add_edges_from(edges)
 
     df_query = df.set_index(['start_id', 'end_id'])
-    for c in customers:
-        # path = nx.algorithms.shortest_path(g, source='source', target=c, weight='unit_cost')
+    for c in df_cost_1.end_id.unique():
+        
         try:
             paths = nx.all_simple_paths(g, source='source', target=c, cutoff=4)
             ct = 0
@@ -207,11 +223,26 @@ for sku in tqdm(lsa):
             pass
 
 df_final = pd.DataFrame.from_dict(path_data).fillna(0).assign(
-    cost=lambda df: sum(df[kk] for kk in ['prod', 'p2w', 'w2w', 'w2c'] if kk in df.columns)
+    cost=lambda df: sum(df[kk] for kk in ['prod', 'p2w', 'w2w', 'w2c'] if kk in df.columns),
+    cost_no_prod=lambda df: df['cost'] - df['prod']
 )
 
 #
-df_final.to_excel(f"{sys.argv[3]}-diagnostics-this-{sku_name}.xlsx")
+df_final.to_csv(f"{sys.argv[3]}-diagnostics-this-{sku_name}.csv")
 df_total_sum.to_csv(f"{sys.argv[3]}-cost_agg.csv")
 df_transfer_cost.to_csv(f"{sys.argv[3]}-cost_transfer.csv")
 df_cost.to_csv(f"{sys.argv[3]}-cost_analysis.csv")
+df_cost_all.to_csv(f"{sys.argv[3]}-cost_analysis_all.csv")
+
+#
+df = df_final
+df = df[df.path.apply(lambda x: "X" not in x)].sort_values(['end', 'cost', 'cost_no_prod'])
+df['cc'] = 1
+df['cs'] = df.groupby('end')['cc'].cumsum()
+weird_end = df.query('cs==1 and length !=3').end.unique()
+df[df['end'].apply(lambda x: x in weird_end)][
+    ['start', 'end', 'path', 'length', 'sku',
+       'has_2nd', 'pairs', 'is_weird', 'key', 'qty', 
+       'prod', 'p2w', 'w2w', 'w2c', 'cost',
+       'cost_no_prod', 'cc', 'cs']
+].to_csv(f"{sys.argv[3]}-diagnostics-this-{sku_name}-simple.csv")

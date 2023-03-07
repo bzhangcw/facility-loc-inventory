@@ -150,5 +150,26 @@ def data_construct(model_dir):
     data.warehouse_df = warehouse_df
     ld = data.warehouse_df.query("fac_type == 'level_1_inner'").fac_id.tolist()
     data.weird_pairs = set(list(itertools.product(ld, ld)))
+    # @todo, fix this.
+    for k, v in data.warehouse_transfer_cost.items():
+        if k[0] == 'T1001':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[('T0002', k[1], k[2])]
+        if k[1] == 'T1001':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[(k[0],'T0002', k[2])]
+        if k[0] == 'T1007':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[('T0031', k[1], k[2])]
+        if k[1] == 'T1007':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[(k[0],'T0031', k[2])]
+        if k[0] == 'T1003':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[('T0024', k[1], k[2])]
+        if k[1] == 'T1003':
+            data.warehouse_transfer_cost[k] = data.warehouse_transfer_cost[(k[0],'T0024', k[2])]
+    for k, v in data.warehouse_to_customer_cost.items():
+        if k[0] == 'T1001':
+            data.warehouse_to_customer_cost[k] = data.warehouse_to_customer_cost[('T0002', k[1], k[2])]
+        if k[0] == 'T1007':
+            data.warehouse_to_customer_cost[k] = data.warehouse_to_customer_cost[('T0031', k[1], k[2])]
+        if k[0] == 'T1003':
+            data.warehouse_to_customer_cost[k] = data.warehouse_to_customer_cost[('T0024', k[1], k[2])]
     print("Data construct end !")
     return data
