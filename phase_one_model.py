@@ -79,7 +79,7 @@ class PhaseOne:
                                   for s in self.data.S) <= self.data.wh_storage_capacity_monthly_total[i] + overstorage[i] for i
                          in self.data.I)
         # ==== 虚拟工厂生产约束 ===
-        model.addConstrs((x_p.sum('P000X', '*', s) == 0 for s in self.data.insourcing_sku), nameprefix='outsourcing')
+        # model.addConstrs((x_p.sum('P000X', '*', s) == 0 for s in self.data.insourcing_sku), nameprefix='outsourcing')
 
         # ================== 添加目标函数 =====================
         obj = quicksum(x_p[p, i, s] * self.data.plant_to_warehouse_cost[p, i, s] for p, i, s in x_p) + \
