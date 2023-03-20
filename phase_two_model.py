@@ -213,7 +213,10 @@ class PhaseTwo:
             cost_w2w=quicksum(
                 x_w[i, j, s, t]
                 * (
-                    self.data.added_warehouse_cost.get(i, 0)
+                    max(
+                        self.data.added_warehouse_cost.get(i, 0), 
+                        self.data.added_warehouse_cost.get(j, 0)
+                    )
                     * DEFAULT_ALG_PARAMS.phase2_new_fac_penalty
                     + self.data.warehouse_transfer_cost[i, j, s]
                 )

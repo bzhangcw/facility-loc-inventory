@@ -10,6 +10,7 @@ from coptpy import *
 
 from utils import *
 
+skip_plants = {"P000X"}
 
 def query_invalid_qty(self, zl):
     invalid = {
@@ -41,9 +42,13 @@ def qty_fix_heuristic(self):
     _logs.append(f"original, invalid size {len(zl_invalid)}")
 
     for (p, l, s, t), v in zl_empty.items():
+        if p in skip_plants:
+            continue
         z_l[p, l, s, t].setInfo(COPT.Info.UB, 0)
     # if v is large, we make it as large as possible (up to min_prod).
     for (p, l, s, t), v in zl_invalid.items():
+        if p in skip_plants:
+            continue
         z_l[p, l, s, t].setInfo(COPT.Info.UB, self.data.line_prod_mpq[p, l, s])
 
     model.setObjective(
@@ -63,6 +68,8 @@ def qty_fix_heuristic(self):
     _logs.append(f"after forward, invalid size {len(zl_invalid)}")
 
     for (p, l, s, t), v in z_l.items():
+        if p in skip_plants:
+            continue
         if (p, l, s, t) in zl_invalid:
             v.setInfo(COPT.Info.UB, 0)
         elif (p, l, s, t) in zl_empty:

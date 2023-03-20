@@ -192,7 +192,7 @@ def add_inventory_constr(self):
         i_start = ind + 1
         i_end = min(len(self.data.T), ind + 4)
         t_list = self.data.T[i_start:i_end]
-        for i, s in itertools.product(self.data.I_1, self.data.S):
+        for i, s in itertools.product(self.data.I, self.data.S):
             if ind <= 2:
                 tmp = self.data.init_inventory.get((i, s), 0)
             else:
