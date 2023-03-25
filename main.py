@@ -5,7 +5,7 @@ from phase_two_model import PhaseTwo
 
 from utils import show_profiling, DEFAULT_ALG_PARAMS
 
-model_dir = '../模型数据v1/'
+model_dir = 'input/sample1/'
 
 DEFAULT_ALG_PARAMS.show()
 

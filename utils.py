@@ -19,7 +19,7 @@ class AlgParams(object):
     parser.add_argument(
         "--result_dir", 
         type=str, 
-        default='data',
+        default='results',
         help="""
         root directory of the results
         """
