@@ -188,5 +188,3 @@ def read_data(  data_dir,
         edge_list.append(this_edge)
 
     return sku_list, plant_list, warehouse_list, customer_list, edge_list
-
-read_data('/Users/liu/Desktop/仓网/data/waiyun/Data_0401_V3.xlsx', 10,5)
