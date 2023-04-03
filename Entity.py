@@ -9,8 +9,11 @@ class SKU:
     this is a class for SKU
     """
 
-    def __init__(self, idx: str) -> None:
+    # def __init__(self, idx: str) -> None:
+    #     self.idx = idx
+    def __init__(self, idx: str, weight: float=0.0) -> None:
         self.idx = idx
+        self.weight = weight
 
     def __str__(self) -> str:
         return f"SKU_{self.idx}"
@@ -48,6 +51,7 @@ class Plant(Node):
         self, idx: str, location: np.ndarray,
         production_capacity: float,
         producible_sku: List[SKU],
+        production_sku_rate: "pd.Series[SKU, float]" = None,
         production_sku_capacity: "pd.Series[SKU, float]" = None,
         production_fixed_cost: float = 0.0,
         production_sku_fixed_cost: "pd.Series[SKU, float]" = None,
@@ -57,6 +61,7 @@ class Plant(Node):
         super().__init__(idx, location)
         self.production_capacity = production_capacity
         self.producible_sku = producible_sku
+        self.production_sku_rate = production_sku_rate
         self.production_sku_capacity = production_sku_capacity
         self.production_fixed_cost = production_fixed_cost
         self.production_sku_fixed_cost = production_sku_fixed_cost
@@ -79,13 +84,16 @@ class Warehouse(Node):
     """
 
     def __init__(
-        self, idx: str, location: np.ndarray[float, float],
+        self, idx: str, location: 'np.ndarray[float, float]',
         inventory_capacity: float,
+        if_current: bool = False,
         inventory_sku_capacity: "pd.Series[SKU, float]" = None,
         holding_fixed_cost: float = 0.0,
         holding_sku_unit_cost: "pd.Series[SKU, float]" = None,
-        initial_inventory: float = 0.0,
-        end_inventory: float = 0.0,
+        # initial_inventory: float = 0.0,
+        # end_inventory: float = 0.0,
+        initial_inventory: "pd.Series[SKU, float]" = None,
+        end_inventory: "pd.Series[SKU, float]" = None,
         end_inventory_bias_cost: float = 0.0,
         demand: "pd.Series[(int, SKU), float]" = None,
         demand_sku: "pd.Series[int, List[SKU]]" = None,
@@ -104,7 +112,7 @@ class Warehouse(Node):
         self.demand = demand
         self.demand_sku = demand_sku
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
-
+        self.if_current = if_current
         self.type = CONST.WAREHOUSE
 
     def __str__(self) -> str:
