@@ -1,3 +1,3 @@
 # Dynamic Network Problem
 
-Requirement: `networkx` and `coptpy`
+Requirement: `networkx`, `coptpy`, `openpyxl`

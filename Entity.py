@@ -9,9 +9,7 @@ class SKU:
     this is a class for SKU
     """
 
-    # def __init__(self, idx: str) -> None:
-    #     self.idx = idx
-    def __init__(self, idx: str, weight: float=0.0) -> None:
+    def __init__(self, idx: str, weight: float = 1.0) -> None:
         self.idx = idx
         self.weight = weight
 
@@ -90,8 +88,6 @@ class Warehouse(Node):
         inventory_sku_capacity: "pd.Series[SKU, float]" = None,
         holding_fixed_cost: float = 0.0,
         holding_sku_unit_cost: "pd.Series[SKU, float]" = None,
-        # initial_inventory: float = 0.0,
-        # end_inventory: float = 0.0,
         initial_inventory: "pd.Series[SKU, float]" = None,
         end_inventory: "pd.Series[SKU, float]" = None,
         end_inventory_bias_cost: float = 0.0,

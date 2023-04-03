@@ -239,10 +239,10 @@ class DNP:
                                                        k] - self.vars['sku_demand_slack'][t, node, k]
 
                     if t == 0:
-                        print(self.vars['sku_flow'].sum(
-                            t, list(self.network.predecessors(node)), k))
+                        initial_inventory = node.initial_inventory[
+                            k] if node.initial_inventory is not None else 0.0
                         constr = self.model.addConstr(self.vars['sku_flow'].sum(
-                            t, in_edges, k) + node.initial_inventory - self.vars['sku_flow'].sum(
+                            t, in_edges, k) + initial_inventory - self.vars['sku_flow'].sum(
                             t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k], name=constr_name)
                     else:
                         constr = self.model.addConstr(self.vars['sku_flow'].sum(
@@ -366,10 +366,10 @@ class DNP:
             obj = obj + self.cal_sku_transportation_cost(t)
             obj = obj + self.cal_sku_unfulfill_demand_cost(t)
 
-            obj = obj + self.cal_fixed_node_cost(t)
-            obj = obj + self.cal_fixed_edge_cost(t)
+        obj = obj + self.cal_fixed_node_cost()
+        obj = obj + self.cal_fixed_edge_cost()
 
-        obj = obj + self.cal_end_inventory_cost()
+        obj = obj + self.cal_end_inventory_bias_cost()
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
@@ -495,7 +495,7 @@ class DNP:
 
         return unfulfill_demand_cost
 
-    def cal_fixed_node_cost(self, t: int):
+    def cal_fixed_node_cost(self):
 
         self.obj['fixed_node_cost'] = dict()
 
@@ -507,16 +507,22 @@ class DNP:
                 this_node_fixed_cost = node.production_fixed_cost
             elif node.type == CONST.WAREHOUSE:
                 this_node_fixed_cost = node.holding_fixed_cost
-            node_fixed_node_cost = this_node_fixed_cost * \
-                self.vars['open'][(t, node)]
+            elif node.type == CONST.CUSTOMER:
+                break
+
+            y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
+            for t in range(self.T):
+                self.model.addConstr(self.vars['open'][(t, node)] <= y)
+
+            node_fixed_node_cost = this_node_fixed_cost * y
 
             fixed_node_cost = fixed_node_cost + node_fixed_node_cost
 
-            self.obj['fixed_node_cost'][(t, node)] = node_fixed_node_cost
+            self.obj['fixed_node_cost'][node] = node_fixed_node_cost
 
         return fixed_node_cost
 
-    def cal_fixed_edge_cost(self, t: int):
+    def cal_fixed_edge_cost(self):
 
         self.obj['fixed_edge_cost'] = dict()
 
@@ -525,15 +531,20 @@ class DNP:
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
 
-            edge_fixed_edge_cost = edge.transportation_fixed_cost * \
-                self.vars['select_edge'][(t, edge)]
+            p = self.model.addVar(vtype=COPT.BINARY, name=f"p_{edge}")
+
+            for t in range(self.T):
+                self.model.addConstr(
+                    self.vars['select_edge'][(t, edge)] <= p)
+
+            edge_fixed_edge_cost = edge.transportation_fixed_cost * p
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost
 
-            self.obj['fixed_edge_cost'][(t, edge)] = edge_fixed_edge_cost
+            self.obj['fixed_edge_cost'][edge] = edge_fixed_edge_cost
 
         return fixed_edge_cost
 
-    def cal_end_inventory_cost(self):
+    def cal_end_inventory_bias_cost(self):
 
         self.obj['end_inventory_cost'] = dict()
 
@@ -541,22 +552,30 @@ class DNP:
 
         for node in self.network.nodes:
 
-            if node.type == CONST.WAREHOUSE:
+            if node.type == CONST.WAREHOUSE and node.end_inventory is not None:
 
-                node_end_inventory_cost = 0.0
+                sku_list = get_node_sku_list(
+                    node, self.T-1, self.full_sku_list)
 
-                end_inventory_bias = self.model.addVar(
-                    lb=-COPT.INFINITY, name=f"end_I_bias_{node}")
+                for k in sku_list:
 
-                self.model.addConstr(
-                    end_inventory_bias >= node.end_inventory - self.vars['sku_inventory'].sum(self.T-1, node, '*'))
-                self.model.addConstr(end_inventory_bias >= self.vars['sku_inventory'].sum(
-                    self.T-1, node, '*') - node.end_inventory)
+                    node_end_inventory_cost = 0.0
 
-                node_end_inventory_cost = node_end_inventory_cost + \
-                    node.end_inventory_bias_cost * end_inventory_bias
+                    end_inventory_bias = self.model.addVar(
+                        lb=-COPT.INFINITY, name=f"end_I_bias_{node}")
 
-                end_inventory_cost = end_inventory_cost + node_end_inventory_cost
+                    self.model.addConstr(
+                        end_inventory_bias >= node.end_inventory[k] - self.vars['sku_inventory'].sum(self.T-1, node, '*'))
+                    self.model.addConstr(end_inventory_bias >= self.vars['sku_inventory'].sum(
+                        self.T-1, node, '*') - node.end_inventory[k])
+
+                    node_end_inventory_cost = node_end_inventory_cost + \
+                        node.end_inventory_bias_cost * end_inventory_bias
+
+                    end_inventory_cost = end_inventory_cost + node_end_inventory_cost
+
+                    self.obj['end_inventory_cost'][(
+                        node, k)] = node_end_inventory_cost
 
         return end_inventory_cost
 
@@ -585,8 +604,11 @@ if __name__ == "__main__":
 
     holding_sku_unit_cost = pd.Series({sku: 1.0})
     end_inventory_bias_cost = 100
+    initial_inventory = pd.Series({sku: 0.0})
+    end_inventory = pd.Series({sku: 0.0})
+
     warehouse = Warehouse('1', np.array(
-        [1, 2]), 1, holding_sku_unit_cost=holding_sku_unit_cost, end_inventory_bias_cost=end_inventory_bias_cost)
+        [1, 2]), 1, initial_inventory=initial_inventory, end_inventory=end_inventory, holding_sku_unit_cost=holding_sku_unit_cost, end_inventory_bias_cost=end_inventory_bias_cost)
     print(warehouse)
 
     demand = pd.Series({(0, sku): 1})
