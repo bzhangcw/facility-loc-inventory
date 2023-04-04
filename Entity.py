@@ -82,7 +82,7 @@ class Warehouse(Node):
     """
 
     def __init__(
-        self, idx: str, location: 'np.ndarray[float, float]',
+        self, idx: str, location: np.ndarray,
         inventory_capacity: float,
         if_current: bool = False,
         inventory_sku_capacity: "pd.Series[SKU, float]" = None,
@@ -111,6 +111,21 @@ class Warehouse(Node):
         self.if_current = if_current
         self.type = CONST.WAREHOUSE
 
+    def has_demand(self, t: int, sku: SKU = None) -> bool:
+        """
+        > This function check whether node has demand (or has certain demand SKU if sku is given) at period t
+        """
+
+        demand_flag = False
+
+        if self.demand_sku is not None and t in self.demand_sku.index:
+            if sku is None:
+                demand_flag = len(self.demand_sku[t]) > 0
+            else:
+                demand_flag = sku in self.demand_sku[t]
+
+        return demand_flag
+
     def __str__(self) -> str:
         return f"Warehouse_{self.idx}"
 
@@ -138,6 +153,21 @@ class Customer(Node):
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
 
         self.type = CONST.CUSTOMER
+
+    def has_demand(self, t: int, sku: SKU = None) -> bool:
+        """
+        > This function check whether node has demand (or has certain demand SKU if sku is given) at period t
+        """
+
+        demand_flag = False
+
+        if self.demand_sku is not None and t in self.demand_sku.index:
+            if sku is None:
+                demand_flag = len(self.demand_sku[t]) > 0
+            else:
+                demand_flag = sku in self.demand_sku[t]
+
+        return demand_flag
 
     def __str__(self) -> str:
         return f"Customer_{self.idx}"

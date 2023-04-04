@@ -4,6 +4,12 @@ import CONST
 
 
 def intersect_list(l1: List, l2: List) -> List:
+    """
+    > The function calculates intersection of two lists
+
+    :param l1: list one
+    :param l2: list two
+    """
     l = []
     for e in l1:
         if e in l2:
@@ -12,15 +18,29 @@ def intersect_list(l1: List, l2: List) -> List:
 
 
 def get_edge_sku_list(edge: Edge, t: int, full_sku_list: List[SKU]) -> List[SKU]:
+    """
+    > The function gets all possible SKUs flow on edge, i.e. intersection of possible SKUs on start node and end node, at period t
+
+    :param edge: edge
+    :param t: period t
+    :param full_sku_list: full possible SKU list
+    """
+
     if edge.start.type == CONST.PLANT and edge.end.type == CONST.CUSTOMER:
         sku_list_start = edge.start.producible_sku
-        sku_list_end = edge.end.demand_sku[t]
+        if edge.end.has_demand(t):
+            sku_list_end = edge.end.demand_sku[t]
+        else:
+            sku_list_end = list()
     elif edge.start.type == CONST.PLANT and edge.end.type == CONST.WAREHOUSE:
         sku_list_start = edge.start.producible_sku
         sku_list_end = None
     elif edge.start.type == CONST.WAREHOUSE and edge.end.type == CONST.CUSTOMER:
         sku_list_start = None
-        sku_list_end = edge.end.demand_sku[t]
+        if edge.end.has_demand(t):
+            sku_list_end = edge.end.demand_sku[t]
+        else:
+            sku_list_end = list()
     elif edge.start.type == CONST.WAREHOUSE and edge.end.type == CONST.WAREHOUSE:
         sku_list_start = None
         sku_list_end = None
@@ -39,11 +59,25 @@ def get_edge_sku_list(edge: Edge, t: int, full_sku_list: List[SKU]) -> List[SKU]
 
 
 def get_node_sku_list(node: "Node", t: int, full_sku_list: "List[SKU]"):
+    """
+    The function gets all possible SKUs on node at period t:
+     - for a plant: producible SKUs
+     - for a warehouse: full_sku_list
+     - for a customer: demand SKUs at period t
+
+    :param node: node
+    :param t: period t
+    :param full_sku_list: full possible SKU list
+    """
+
     if node.type == CONST.PLANT:
         sku_list = node.producible_sku
     elif node.type == CONST.WAREHOUSE:
         sku_list = full_sku_list
     elif node.type == CONST.CUSTOMER:
-        sku_list = node.demand_sku[t]
+        if node.has_demand(t):
+            sku_list = node.demand_sku[t]
+        else:
+            sku_list = list()
 
     return sku_list

@@ -148,13 +148,14 @@ class DNP:
                         # amount of sku k stored on node i at t
                         idx['sku_inventory'].append((t, node, k))
                         # demand of sku k not fulfilled on node i at t
-                        if node.demand_sku is not None and k in node.demand_sku[t]:
+                        if node.has_demand(t, k):
+                            print(node.demand)
                             idx['sku_demand_slack'].append((t, node, k))
                             var_types['sku_demand_slack']['ub'].append(
                                 node.demand[t, k])
                     elif node.type == CONST.CUSTOMER:
                         # demand of sku k not fulfilled on node i at t
-                        if k in node.demand_sku[t]:
+                        if node.has_demand(t, k):
                             idx['sku_demand_slack'].append((t, node, k))
                             var_types['sku_demand_slack']['ub'].append(
                                 node.demand[t, k])
@@ -234,7 +235,7 @@ class DNP:
                         t, out_edges, k) == 0, name=constr_name)
                 elif node.type == CONST.WAREHOUSE:
                     fulfilled_demand = 0
-                    if node.demand_sku is not None and k in node.demand_sku[t]:
+                    if node.has_demand(t, k):
                         fulfilled_demand = node.demand[t,
                                                        k] - self.vars['sku_demand_slack'][t, node, k]
 
@@ -292,7 +293,7 @@ class DNP:
             sku_list = get_node_sku_list(
                 node, t, self.full_sku_list)
 
-            if node.type == CONST.WAREHOUSE and node.demand_sku is not None and len(node.demand_sku[t]) > 0:
+            if node.type == CONST.WAREHOUSE and node.has_demand(t) and len(node.demand_sku[t]) > 0:
                 constr = self.model.addConstr(
                     self.vars['open'][t, node] == 1
                 )
@@ -478,7 +479,7 @@ class DNP:
         for node in self.network.nodes:
 
             if node.type == CONST.WAREHOUSE or node.type == CONST.CUSTOMER:
-                if node.demand_sku is not None:
+                if node.has_demand(t):
 
                     for k in node.demand_sku[t]:
                         unfulfill_sku_unit_cost = 0.0
