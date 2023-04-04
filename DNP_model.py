@@ -48,7 +48,7 @@ class DNP:
         add variables
         """
 
-        var_types = {
+        self.var_types = {
             'select_edge': {
                 'lb': 0,
                 'ub': 1,
@@ -94,14 +94,14 @@ class DNP:
             'sku_inventory': {
                 'lb': -COPT.INFINITY,
                 'ub': COPT.INFINITY,
-                'vtype': COPT.BINARY,
+                'vtype': COPT.CONTINUOUS,
                 'nameprefix': 'I',
                 'index': '(t, warehouse, k)'
             },
             'sku_demand_slack': {
                 'lb': 0,
                 'ub': [],  # TBD
-                'vtype': COPT.BINARY,
+                'vtype': COPT.CONTINUOUS,
                 'nameprefix': 's',
                 'index': '(t, warehouse with demand / customer, k)'
             }
@@ -109,7 +109,7 @@ class DNP:
 
         # generate index tuple
         idx = dict()
-        for vt in var_types.keys():
+        for vt in self.var_types.keys():
             idx[vt] = list()
 
         # periods
@@ -151,17 +151,17 @@ class DNP:
                         if node.has_demand(t, k):
                             # print(node.demand)
                             idx['sku_demand_slack'].append((t, node, k))
-                            var_types['sku_demand_slack']['ub'].append(
+                            self.var_types['sku_demand_slack']['ub'].append(
                                 node.demand[t, k])
                     elif node.type == CONST.CUSTOMER:
                         # demand of sku k not fulfilled on node i at t
                         if node.has_demand(t, k):
                             idx['sku_demand_slack'].append((t, node, k))
-                            var_types['sku_demand_slack']['ub'].append(
+                            self.var_types['sku_demand_slack']['ub'].append(
                                 node.demand[t, k])
 
         # add variables
-        for vt, param in var_types.items():
+        for vt, param in self.var_types.items():
             print(f"  - {vt}")
             self.vars[vt] = self.model.addVars(
                 idx[vt],
@@ -173,7 +173,7 @@ class DNP:
 
     def add_constraints(self):
 
-        constr_types = {
+        self.constr_types = {
             'flow_conservation': {
                 'index': '(t, node, k)'
             },
@@ -202,6 +202,12 @@ class DNP:
             }
         }
 
+        for constr in self.constr_types.keys():
+            self.constrs[constr] = dict()
+
+        for constr in self.constr_types['open_relationship'].keys():
+            self.constrs['open_relationship'][constr] = dict()
+
         for t in tqdm(range(self.T)):
 
             # initial status and flow conservation
@@ -217,13 +223,10 @@ class DNP:
 
     def add_constr_flow_conservation(self, t: int):
 
-        self.constrs['flow_conservation'] = dict()
-
         for node in self.network.nodes:
             sku_list = get_node_sku_list(node, t, self.full_sku_list)
 
             for k in sku_list:
-                constr_name = f"flow_con_{t}_{node}_{k}"
 
                 in_edges = [e[2]['object']
                             for e in list(self.network.in_edges(node, data=True))]
@@ -232,7 +235,7 @@ class DNP:
 
                 if node.type == CONST.PLANT:
                     constr = self.model.addConstr(self.vars['sku_production'][t, node, k] - self.vars['sku_flow'].sum(
-                        t, out_edges, k) == 0, name=constr_name)
+                        t, out_edges, k) == 0)
                 elif node.type == CONST.WAREHOUSE:
                     fulfilled_demand = 0
                     if node.has_demand(t, k):
@@ -240,31 +243,26 @@ class DNP:
                                                        k] - self.vars['sku_demand_slack'][t, node, k]
 
                     if t == 0:
-                        initial_inventory = node.initial_inventory[
+                        last_period_inventory = node.initial_inventory[
                             k] if node.initial_inventory is not None and k in node.initial_inventory else 0.0
-                        constr = self.model.addConstr(self.vars['sku_flow'].sum(
-                            t, in_edges, k) + initial_inventory - self.vars['sku_flow'].sum(
-                            t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k], name=constr_name)
                     else:
-                        constr = self.model.addConstr(self.vars['sku_flow'].sum(
-                            t, in_edges, k) + self.vars['sku_inventory'][t-1, node, k] - self.vars['sku_flow'].sum(
-                            t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k], name=constr_name)
+                        last_period_inventory = self.vars['sku_inventory'][t-1, node, k]
+
+                    constr = self.model.addConstr(self.vars['sku_flow'].sum(
+                        t, in_edges, k) + last_period_inventory - self.vars['sku_flow'].sum(
+                        t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k])
+
                 elif node.type == CONST.CUSTOMER:
                     fulfilled_demand = node.demand[t,
                                                    k] - self.vars['sku_demand_slack'][t, node, k]
                     constr = self.model.addConstr(self.vars['sku_flow'].sum(
-                        t, in_edges, k) - fulfilled_demand == 0, name=constr_name)
+                        t, in_edges, k) - fulfilled_demand == 0)
 
                 self.constrs['flow_conservation'][(t, node, k)] = constr
 
         return
 
     def add_constr_open_relationship(self, t: int):
-        self.constrs['open_relationship'] = dict()
-        self.constrs['open_relationship']['select_edge'] = dict()
-        self.constrs['open_relationship']['sku_select_edge'] = dict()
-        self.constrs['open_relationship']['open'] = dict()
-        self.constrs['open_relationship']['sku_open'] = dict()
 
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
@@ -316,8 +314,6 @@ class DNP:
 
     def add_constr_transportation_capacity(self, t: int):
 
-        self.constrs['transportation_capacity'] = dict()
-
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
 
@@ -332,8 +328,6 @@ class DNP:
 
     def add_constr_production_capacity(self, t: int):
 
-        self.constrs['production_capacity'] = dict()
-
         for node in self.network.nodes:
             if node.type == CONST.PLANT:
                 constr = self.model.addConstr(
@@ -343,8 +337,6 @@ class DNP:
         return
 
     def add_constr_holding_capacity(self, t: int):
-
-        self.constrs['holding_capacity'] = dict()
 
         for node in self.network.nodes:
             if node.type == CONST.WAREHOUSE:
@@ -356,11 +348,36 @@ class DNP:
 
     def set_objective(self):
 
+        self.obj_types = {
+            'sku_producing_cost': {
+                'index': '(t, plant, k)'
+            },
+            'sku_holding_cost': {
+                'index': '(t, warehouse, k)'
+            },
+            'sku_transportation_cost': {
+                'index': '(t, edge, k)'
+            },
+            'unfulfill_demand_cost': {
+                'index': '(t, warehouse with demand / customer, k)'
+            },
+            'fixed_node_cost': {
+                'index': '(t, plant / warehouse, k)'
+            },
+            'fixed_edge_cost': {
+                'index': '(t, edge, k)'
+            },
+            'end_inventory_cost': {
+                'index': '(node, k)'
+            }
+        }
+
+        for obj in self.obj_types.keys():
+            self.obj[obj] = dict()
+
         obj = 0.0
 
         for t in tqdm(range(self.T)):
-
-            self.obj[t] = dict()
 
             obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
@@ -377,8 +394,6 @@ class DNP:
         return
 
     def cal_sku_producing_cost(self, t: int):
-
-        self.obj['sku_producing_cost'] = dict()
 
         producing_cost = 0.0
 
@@ -409,8 +424,6 @@ class DNP:
         return producing_cost
 
     def cal_sku_holding_cost(self, t: int):
-
-        self.obj['sku_holding_cost'] = dict()
 
         holding_cost = 0.0
 
@@ -443,8 +456,6 @@ class DNP:
 
     def cal_sku_transportation_cost(self, t: int):
 
-        self.obj['sku_transportation_cost'] = dict()
-
         transportation_cost = 0.0
 
         for e in self.network.edges:
@@ -453,7 +464,7 @@ class DNP:
                                          t, self.full_sku_list)
             for k in sku_list:
 
-                edge_sku_transportation_cost = 0.0 
+                edge_sku_transportation_cost = 0.0
 
                 if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
                     edge_sku_transportation_cost = edge_sku_transportation_cost + edge.transportation_sku_fixed_cost[k] * self.vars['sku_select_edge'][t,
@@ -471,8 +482,6 @@ class DNP:
         return transportation_cost
 
     def cal_sku_unfulfill_demand_cost(self, t: int):
-
-        self.obj['unfulfill_demand_cost'] = dict()
 
         unfulfill_demand_cost = 0.0
 
@@ -497,8 +506,6 @@ class DNP:
         return unfulfill_demand_cost
 
     def cal_fixed_node_cost(self):
-
-        self.obj['fixed_node_cost'] = dict()
 
         fixed_node_cost = 0.0
 
@@ -525,8 +532,6 @@ class DNP:
 
     def cal_fixed_edge_cost(self):
 
-        self.obj['fixed_edge_cost'] = dict()
-
         fixed_edge_cost = 0.0
 
         for e in self.network.edges:
@@ -547,24 +552,18 @@ class DNP:
 
     def cal_end_inventory_bias_cost(self):
 
-        self.obj['end_inventory_cost'] = dict()
-
         end_inventory_cost = 0.0
 
         for node in self.network.nodes:
 
             if node.type == CONST.WAREHOUSE and node.end_inventory is not None:
 
-                sku_list = get_node_sku_list(
-                    node, self.T-1, self.full_sku_list)
-
-                # for k in sku_list:
                 for k in node.end_inventory.index:
 
                     node_end_inventory_cost = 0.0
 
                     end_inventory_bias = self.model.addVar(
-                        lb=-COPT.INFINITY, name=f"end_I_bias_{node}")
+                        name=f"end_I_bias_{node}")
 
                     self.model.addConstr(
                         end_inventory_bias >= node.end_inventory[k] - self.vars['sku_inventory'].sum(self.T-1, node, '*'))
@@ -600,7 +599,7 @@ if __name__ == "__main__":
     sku_list = [sku]
 
     production_sku_unit_cost = pd.Series({sku: 10.0})
-    plant = Plant('1', np.array([1, 1]), 1,
+    plant = Plant('1', np.array([1, 1]), 10,
                   sku_list, production_sku_unit_cost=production_sku_unit_cost)
     print(plant)
 
@@ -613,7 +612,7 @@ if __name__ == "__main__":
         [1, 2]), 1, initial_inventory=initial_inventory, end_inventory=end_inventory, holding_sku_unit_cost=holding_sku_unit_cost, end_inventory_bias_cost=end_inventory_bias_cost)
     print(warehouse)
 
-    demand = pd.Series({(0, sku): 1})
+    demand = pd.Series({(0, sku): 5})
     demand_sku = pd.Series({0: [sku]})
     unfulfill_sku_unit_cost = pd.Series({(0, sku): 1000})
     customer = Customer('1', np.array(
