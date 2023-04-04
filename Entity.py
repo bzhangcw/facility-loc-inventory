@@ -118,7 +118,7 @@ class Warehouse(Node):
 
         demand_flag = False
 
-        if self.demand_sku is not None and t in self.demand_sku.index:
+        if self.demand_sku is not None and t in self.demand_sku:
             if sku is None:
                 demand_flag = len(self.demand_sku[t]) > 0
             else:
@@ -161,7 +161,7 @@ class Customer(Node):
 
         demand_flag = False
 
-        if self.demand_sku is not None and t in self.demand_sku.index:
+        if self.demand_sku is not None and t in self.demand_sku:
             if sku is None:
                 demand_flag = len(self.demand_sku[t]) > 0
             else:

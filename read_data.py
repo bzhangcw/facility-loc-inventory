@@ -78,8 +78,8 @@ def read_data(  data_dir,
         if plant_id in plant_sku_df_dict:
             plant_sku_df = plant_sku_df_dict[plant_id].replace({"sku": sku_dict})
             producible_sku = plant_sku_df['sku'].drop_duplicates().tolist()
-            sku_rate = plant_sku_df[['sku', 'rate']]
-            sku_unit_cost = plant_sku_df[['sku', 'unit_cost']]
+            sku_rate = plant_sku_df[['sku', 'rate']].set_index('sku')['rate'].dropna()
+            sku_unit_cost = plant_sku_df[['sku', 'unit_cost']].set_index('sku')['unit_cost'].dropna()
         else:
             producible_sku = None
             sku_rate = None
@@ -108,15 +108,15 @@ def read_data(  data_dir,
 
         if ws_id in warehouse_sku_df_dict.keys():
             ws_df = warehouse_sku_df_dict[ws_id].replace({"sku": sku_dict})
-            begin_inventory = ws_df[['sku', 'int_inv']]
-            end_inventory = ws_df[['sku', 'end_inv']]
+            begin_inventory = ws_df[['sku', 'int_inv']].set_index('sku')['int_inv'].dropna()
+            end_inventory = ws_df[['sku', 'end_inv']].set_index('sku')['end_inv'].dropna()
         else:
             begin_inventory = None
             end_inventory = None
 
         if ws_id in warehouse_sku_time_df_dict.keys():   
             wst_df = warehouse_sku_time_df_dict[ws_id].replace({"sku": sku_dict})
-            demand = wst_df[['time', 'sku', 'demand']]
+            demand = wst_df[['time', 'sku', 'demand']].set_index(['time', 'sku'])['demand'].dropna()
             demand_sku = {}
             for t in list(wst_df.groupby('time')):
                 demand_sku[t[0]] = t[1]['sku'].tolist()
@@ -146,7 +146,7 @@ def read_data(  data_dir,
 
         if cst_id in customer_sku_time_df_list.keys():
             cst_df = customer_sku_time_df_list[cst_id].replace({"sku": sku_dict})
-            demand = cst_df[['time', 'sku', 'demand']]
+            demand = cst_df[['time', 'sku', 'demand']].set_index(['time', 'sku'])['demand']
 
             demand_sku = {}
             for t in list(cst_df.groupby('time')):

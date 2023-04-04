@@ -149,7 +149,7 @@ class DNP:
                         idx['sku_inventory'].append((t, node, k))
                         # demand of sku k not fulfilled on node i at t
                         if node.has_demand(t, k):
-                            print(node.demand)
+                            # print(node.demand)
                             idx['sku_demand_slack'].append((t, node, k))
                             var_types['sku_demand_slack']['ub'].append(
                                 node.demand[t, k])
@@ -241,7 +241,7 @@ class DNP:
 
                     if t == 0:
                         initial_inventory = node.initial_inventory[
-                            k] if node.initial_inventory is not None else 0.0
+                            k] if node.initial_inventory is not None and k in node.initial_inventory else 0.0
                         constr = self.model.addConstr(self.vars['sku_flow'].sum(
                             t, in_edges, k) + initial_inventory - self.vars['sku_flow'].sum(
                             t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k], name=constr_name)
@@ -453,12 +453,12 @@ class DNP:
                                          t, self.full_sku_list)
             for k in sku_list:
 
-                edge_sku_transportation_cost = 0.0
+                edge_sku_transportation_cost = 0.0 
 
-                if edge.transportation_sku_fixed_cost is not None:
+                if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
                     edge_sku_transportation_cost = edge_sku_transportation_cost + edge.transportation_sku_fixed_cost[k] * self.vars['sku_select_edge'][t,
                                                                                                                                                        edge, k]
-                if edge.transportation_sku_unit_cost is not None:
+                if edge.transportation_sku_unit_cost is not None and k in edge.transportation_sku_unit_cost:
                     edge_sku_transportation_cost = edge_sku_transportation_cost + \
                         edge.transportation_sku_unit_cost[k] * \
                         self.vars['sku_flow'][t, edge, k]
@@ -558,7 +558,8 @@ class DNP:
                 sku_list = get_node_sku_list(
                     node, self.T-1, self.full_sku_list)
 
-                for k in sku_list:
+                # for k in sku_list:
+                for k in node.end_inventory.index:
 
                     node_end_inventory_cost = 0.0
 
