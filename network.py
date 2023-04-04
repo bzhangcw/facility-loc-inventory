@@ -5,7 +5,7 @@ import pandas as pd
 from typing import List
 
 
-def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]):
+def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> nx.DiGraph:
     """
     construct a graph from given nodes and edges
     """

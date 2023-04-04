@@ -1,6 +1,7 @@
 from typing import List
 from Entity import Node, SKU, Edge
 import CONST
+import networkx as nx
 
 
 def intersect_list(l1: List, l2: List) -> List:
@@ -81,3 +82,27 @@ def get_node_sku_list(node: "Node", t: int, full_sku_list: "List[SKU]"):
             sku_list = list()
 
     return sku_list
+
+
+def get_in_edges(network: nx.DiGraph, node: Node) -> List[Edge]:
+    """
+    The function returns list of edges into node
+
+    :param network: network
+    :param node: node
+    """
+
+    return [e[2]['object']
+            for e in list(network.in_edges(node, data=True))]
+
+
+def get_out_edges(network: nx.DiGraph, node: Node) -> List[Edge]:
+    """
+    The function returns list of edges out of node
+
+    :param network: network
+    :param node: node
+    """
+
+    return [e[2]['object']
+            for e in list(network.out_edges(node, data=True))]

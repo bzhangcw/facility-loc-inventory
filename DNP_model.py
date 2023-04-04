@@ -1,7 +1,7 @@
 import coptpy as cp
 from coptpy import COPT
 import CONST
-from utils import get_edge_sku_list, get_node_sku_list
+from utils import get_edge_sku_list, get_node_sku_list, get_in_edges, get_out_edges
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -152,7 +152,7 @@ class DNP:
                             # print(node.demand)
                             idx['sku_demand_slack'].append((t, node, k))
                             self.var_types['sku_demand_slack']['ub'].append(
-                                node.demand[t, k])
+                                node.demand[(t, k)])
                     elif node.type == CONST.CUSTOMER:
                         # demand of sku k not fulfilled on node i at t
                         if node.has_demand(t, k):
@@ -228,10 +228,8 @@ class DNP:
 
             for k in sku_list:
 
-                in_edges = [e[2]['object']
-                            for e in list(self.network.in_edges(node, data=True))]
-                out_edges = [e[2]['object']
-                             for e in list(self.network.out_edges(node, data=True))]
+                in_edges = get_in_edges(self.network, node)
+                out_edges = get_out_edges(self.network, node)
 
                 if node.type == CONST.PLANT:
                     constr = self.model.addConstr(self.vars['sku_production'][t, node, k] - self.vars['sku_flow'].sum(
@@ -381,13 +379,17 @@ class DNP:
 
             obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
-            obj = obj + self.cal_sku_transportation_cost(t)
+
+            if self.arg.transportation_cost:
+                obj = obj + self.cal_sku_transportation_cost(t)
+
             obj = obj + self.cal_sku_unfulfill_demand_cost(t)
 
         obj = obj + self.cal_fixed_node_cost()
         obj = obj + self.cal_fixed_edge_cost()
 
-        obj = obj + self.cal_end_inventory_bias_cost()
+        if self.arg.end_inventory:
+            obj = obj + self.cal_end_inventory_bias_cost()
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
@@ -467,8 +469,9 @@ class DNP:
                 edge_sku_transportation_cost = 0.0
 
                 if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
-                    edge_sku_transportation_cost = edge_sku_transportation_cost + edge.transportation_sku_fixed_cost[k] * self.vars['sku_select_edge'][t,
-                                                                                                                                                       edge, k]
+                    edge_sku_transportation_cost = edge_sku_transportation_cost + \
+                        edge.transportation_sku_fixed_cost[k] * \
+                        self.vars['sku_select_edge'][t, edge, k]
                 if edge.transportation_sku_unit_cost is not None and k in edge.transportation_sku_unit_cost:
                     edge_sku_transportation_cost = edge_sku_transportation_cost + \
                         edge.transportation_sku_unit_cost[k] * \
@@ -491,17 +494,21 @@ class DNP:
                 if node.has_demand(t):
 
                     for k in node.demand_sku[t]:
-                        unfulfill_sku_unit_cost = 0.0
+                        unfulfill_node_sku_cost = 0.0
 
                         if node.unfulfill_sku_unit_cost is not None:
-                            unfulfill_sku_unit_cost = unfulfill_sku_unit_cost + \
-                                node.unfulfill_sku_unit_cost[(
-                                    t, k)] * self.vars['sku_demand_slack'][(t, node, k)]
+                            unfulfill_sku_unit_cost = node.unfulfill_sku_unit_cost[(
+                                t, k)]
+                        else:
+                            unfulfill_sku_unit_cost = 1.0
 
-                        unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_sku_unit_cost
+                        unfulfill_node_sku_cost = unfulfill_sku_unit_cost * \
+                            self.vars['sku_demand_slack'][(t, node, k)]
+
+                        unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_node_sku_cost
 
                         self.obj['unfulfill_demand_cost'][(
-                            t, node, k)] = unfulfill_sku_unit_cost
+                            t, node, k)] = unfulfill_node_sku_cost
 
         return unfulfill_demand_cost
 
@@ -544,6 +551,7 @@ class DNP:
                     self.vars['select_edge'][(t, edge)] <= p)
 
             edge_fixed_edge_cost = edge.transportation_fixed_cost * p
+
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost
 
             self.obj['fixed_edge_cost'][edge] = edge_fixed_edge_cost

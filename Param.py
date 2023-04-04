@@ -28,9 +28,18 @@ class Param:
         )
 
         parser.add_argument(
+            "--transportation_cost",
+            type=bool,
+            default=False,
+            help="""
+            whether to consider end inventory level
+            """
+        )
+
+        parser.add_argument(
             "--end_inventory",
-            type=int,
-            default=1,
+            type=bool,
+            default=True,
             help="""
             whether to consider end inventory level
             """
