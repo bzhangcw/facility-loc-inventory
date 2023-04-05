@@ -1,7 +1,7 @@
 import coptpy as cp
 from coptpy import COPT
 import CONST
-from utils import get_edge_sku_list, get_node_sku_list, get_in_edges, get_out_edges
+from utils import get_in_edges, get_out_edges
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -121,8 +121,8 @@ class DNP:
                 # select edge (i,j) at t
                 idx['select_edge'].append((t, edge))
 
-                sku_list = get_edge_sku_list(edge,
-                                             t, self.full_sku_list)
+                sku_list = edge.get_edge_sku_list(
+                    t, self.full_sku_list)
 
                 for k in sku_list:
                     # sku k select edge (i,j) at t
@@ -135,8 +135,7 @@ class DNP:
                 # open node i at t
                 idx['open'].append((t, node))
 
-                sku_list = get_node_sku_list(
-                    node, t, self.full_sku_list)
+                sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
                 for k in sku_list:
                     if node.type == CONST.PLANT:
@@ -224,7 +223,7 @@ class DNP:
     def add_constr_flow_conservation(self, t: int):
 
         for node in self.network.nodes:
-            sku_list = get_node_sku_list(node, t, self.full_sku_list)
+            sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
             for k in sku_list:
 
@@ -265,8 +264,8 @@ class DNP:
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
 
-            sku_list = get_edge_sku_list(edge,
-                                         t, self.full_sku_list)
+            sku_list = edge.get_edge_sku_list(
+                t, self.full_sku_list)
 
             constr = self.model.addConstr(
                 self.vars['select_edge'][t, edge] <= self.vars['open'][t, edge.start])
@@ -286,8 +285,7 @@ class DNP:
                     t, edge, k)] = constr
 
         for node in self.network.nodes:
-            sku_list = get_node_sku_list(
-                node, t, self.full_sku_list)
+            sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
             if node.type == CONST.WAREHOUSE and node.has_demand(t) and len(node.demand_sku[t]) > 0:
                 constr = self.model.addConstr(
@@ -354,7 +352,7 @@ class DNP:
                 'index': '(t, warehouse, k)'
             },
             'sku_transportation_cost': {
-                'index': '(t, edge, k)'
+                'index': '(t, edge)'
             },
             'unfulfill_demand_cost': {
                 'index': '(t, warehouse with demand / customer, k)'
@@ -403,8 +401,7 @@ class DNP:
 
             if node.type == CONST.PLANT:
 
-                sku_list = get_node_sku_list(
-                    node, t, self.full_sku_list)
+                sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
                 for k in sku_list:
 
@@ -433,8 +430,7 @@ class DNP:
 
             if node.type == CONST.WAREHOUSE:
 
-                sku_list = get_node_sku_list(
-                    node, t, self.full_sku_list)
+                sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
                 for k in sku_list:
 
@@ -462,25 +458,28 @@ class DNP:
 
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
-            sku_list = get_edge_sku_list(edge,
-                                         t, self.full_sku_list)
-            for k in sku_list:
 
-                edge_sku_transportation_cost = 0.0
+            edge_transportation_cost = 0.0
 
+            sku_list_with_fixed_transportation_cost, sku_list_with_unit_transportation_cost = edge.get_edge_sku_list_with_transportation_cost(
+                t, self.full_sku_list)
+
+            for k in sku_list_with_fixed_transportation_cost:
                 if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
-                    edge_sku_transportation_cost = edge_sku_transportation_cost + \
+                    edge_transportation_cost = edge_transportation_cost + \
                         edge.transportation_sku_fixed_cost[k] * \
                         self.vars['sku_select_edge'][t, edge, k]
+
+            for k in sku_list_with_unit_transportation_cost:
                 if edge.transportation_sku_unit_cost is not None and k in edge.transportation_sku_unit_cost:
-                    edge_sku_transportation_cost = edge_sku_transportation_cost + \
+                    edge_transportation_cost = edge_transportation_cost + \
                         edge.transportation_sku_unit_cost[k] * \
                         self.vars['sku_flow'][t, edge, k]
 
-                transportation_cost = transportation_cost + edge_sku_transportation_cost
+            transportation_cost = transportation_cost + edge_transportation_cost
 
-                self.obj['sku_transportation_cost'][(
-                    t, edge, k)] = edge_sku_transportation_cost
+            self.obj['sku_transportation_cost'][(
+                t, edge)] = edge_transportation_cost
 
         return transportation_cost
 
@@ -629,9 +628,13 @@ if __name__ == "__main__":
 
     nodes = [plant, warehouse, customer]
 
+    transportation_sku_unit_cost = pd.Series({sku: 1})
+
     edges = [
-        Edge('e1', plant, warehouse, 10),
-        Edge('e2', warehouse, customer, 10)
+        Edge('e1', plant, warehouse, 10,
+             transportation_sku_unit_cost=transportation_sku_unit_cost),
+        Edge('e2', warehouse, customer, 10,
+             transportation_sku_unit_cost=transportation_sku_unit_cost)
     ]
     for e in edges:
         print(e)
@@ -645,8 +648,8 @@ if __name__ == "__main__":
 
     for t in range(arg.T):
         for edge in edges:
-            temp_sku_list = get_edge_sku_list(edge,
-                                              t, model.full_sku_list)
+            temp_sku_list = edge.get_edge_sku_list(
+                t, model.full_sku_list)
             for k in temp_sku_list:
                 print(
                     f"Flow on {edge}: {model.vars['sku_flow'][(t, edge, k)].x}")

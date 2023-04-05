@@ -2,6 +2,7 @@ import CONST
 import numpy as np
 import pandas as pd
 from typing import List
+from abc import abstractmethod
 
 
 class SKU:
@@ -33,6 +34,21 @@ class Node:
         self.location = location
 
         self.type = None
+
+    @abstractmethod
+    def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
+        """
+        The function gets all possible SKUs on node at period t:
+        - for a plant: producible SKUs
+        - for a warehouse: full_sku_list
+        - for a customer: demand SKUs at period t
+
+        :param node: node
+        :param t: period t
+        :param full_sku_list: full possible SKU list
+        """
+
+        return
 
     def __str__(self) -> str:
         return f"Node_{self.idx}"
@@ -66,6 +82,22 @@ class Plant(Node):
         self.production_sku_unit_cost = production_sku_unit_cost
 
         self.type = CONST.PLANT
+
+    def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
+        """
+        The function gets all possible SKUs on node at period t:
+        - for a plant: producible SKUs
+        - for a warehouse: full_sku_list
+        - for a customer: demand SKUs at period t
+
+        :param node: node
+        :param t: period t
+        :param full_sku_list: full possible SKU list
+        """
+
+        sku_list = self.producible_sku
+
+        return sku_list
 
     def __str__(self) -> str:
         return f"Plant_{self.idx}"
@@ -111,6 +143,22 @@ class Warehouse(Node):
         self.if_current = if_current
         self.type = CONST.WAREHOUSE
 
+    def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
+        """
+        The function gets all possible SKUs on node at period t:
+        - for a plant: producible SKUs
+        - for a warehouse: full_sku_list
+        - for a customer: demand SKUs at period t
+
+        :param node: node
+        :param t: period t
+        :param full_sku_list: full possible SKU list
+        """
+
+        sku_list = full_sku_list
+
+        return sku_list
+
     def has_demand(self, t: int, sku: SKU = None) -> bool:
         """
         > This function check whether node has demand (or has certain demand SKU if sku is given) at period t
@@ -153,6 +201,25 @@ class Customer(Node):
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
 
         self.type = CONST.CUSTOMER
+
+    def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
+        """
+        The function gets all possible SKUs on node at period t:
+        - for a plant: producible SKUs
+        - for a warehouse: full_sku_list
+        - for a customer: demand SKUs at period t
+
+        :param node: node
+        :param t: period t
+        :param full_sku_list: full possible SKU list
+        """
+
+        if self.has_demand(t):
+            sku_list = self.demand_sku[t]
+        else:
+            sku_list = list()
+
+        return sku_list
 
     def has_demand(self, t: int, sku: SKU = None) -> bool:
         """
@@ -200,6 +267,72 @@ class Edge:
 
     def cal_distance(self):
         return np.linalg.norm(self.start.location - self.end.location)
+
+    def get_edge_sku_list(self, t: int, full_sku_list: List[SKU]) -> List[SKU]:
+        """
+        > The function gets all possible SKUs flow on edge, i.e. intersection of possible SKUs on start node and end node, at period t
+
+        :param edge: edge
+        :param t: period t
+        :param full_sku_list: full possible SKU list
+        """
+
+        if self.start.type == CONST.PLANT and self.end.type == CONST.CUSTOMER:
+            sku_list_start = self.start.producible_sku
+            if self.end.has_demand(t):
+                sku_list_end = self.end.demand_sku[t]
+            else:
+                sku_list_end = list()
+        elif self.start.type == CONST.PLANT and self.end.type == CONST.WAREHOUSE:
+            sku_list_start = self.start.producible_sku
+            sku_list_end = None
+        elif self.start.type == CONST.WAREHOUSE and self.end.type == CONST.CUSTOMER:
+            sku_list_start = None
+            if self.end.has_demand(t):
+                sku_list_end = self.end.demand_sku[t]
+            else:
+                sku_list_end = list()
+        elif self.start.type == CONST.WAREHOUSE and self.end.type == CONST.WAREHOUSE:
+            sku_list_start = None
+            sku_list_end = None
+
+        if sku_list_start is None and sku_list_end is None:
+            sku_list = full_sku_list
+        elif sku_list_start is not None and sku_list_end is None:
+            sku_list = sku_list_start
+        elif sku_list_start is None and sku_list_end is not None:
+            sku_list = sku_list_end
+        else:
+            sku_list = self.intersect_list(
+                sku_list_start, sku_list_end)
+
+        return sku_list
+
+    def get_edge_sku_list_with_transportation_cost(self, t: int, full_sku_list: List[SKU]):
+
+        sku_list = self.get_edge_sku_list(
+            t, full_sku_list)
+
+        sku_list_with_fixed_transportation_cost = self.intersect_list(
+            sku_list, self.transportation_sku_fixed_cost.index.tolist()) if self.transportation_sku_fixed_cost is not None else list()
+
+        sku_list_with_unit_transportation_cost = self.intersect_list(
+            sku_list, self.transportation_sku_unit_cost.index.tolist()) if self.transportation_sku_unit_cost is not None else list()
+
+        return sku_list_with_fixed_transportation_cost, sku_list_with_unit_transportation_cost
+
+    def intersect_list(self, l1: List, l2: List) -> List:
+        """
+        > The function calculates intersection of two lists
+
+        :param l1: list one
+        :param l2: list two
+        """
+        l = []
+        for e in l1:
+            if e in l2:
+                l.append(e)
+        return l
 
     def __str__(self) -> str:
         return f"Edge_{self.idx}_({self.start}, {self.end})"
