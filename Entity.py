@@ -99,6 +99,12 @@ class Plant(Node):
 
         return sku_list
 
+    def construct_output(self, output):
+        '''
+        quantity of each SKU produced at each period
+        '''
+        pass
+
     def __str__(self) -> str:
         return f"Plant_{self.idx}"
 
@@ -173,6 +179,13 @@ class Warehouse(Node):
                 demand_flag = sku in self.demand_sku[t]
 
         return demand_flag
+    
+    def construct_output(self, output):
+        '''
+        quantity of each SKU stored at each period
+        quantity of all SKUs stored at each period
+        '''
+        pass
 
     def __str__(self) -> str:
         return f"Warehouse_{self.idx}"
@@ -235,6 +248,12 @@ class Customer(Node):
                 demand_flag = sku in self.demand_sku[t]
 
         return demand_flag
+
+    def construct_output(self, output):
+        '''
+        quantity of each SKU got at each period
+        '''
+        pass
 
     def __str__(self) -> str:
         return f"Customer_{self.idx}"
@@ -333,6 +352,12 @@ class Edge:
             if e in l2:
                 l.append(e)
         return l
+
+    def construct_output(self, output):
+        '''
+        quantity of each SKU transit at each period
+        '''
+        pass
 
     def __str__(self) -> str:
         return f"Edge_{self.idx}_({self.start}, {self.end})"

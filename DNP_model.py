@@ -9,7 +9,7 @@ from typing import List
 import argparse
 from Entity import SKU
 from tqdm import tqdm
-
+import os
 
 class DNP:
     """
@@ -589,6 +589,78 @@ class DNP:
 
     def solve(self):
         self.model.solve()
+
+
+    def get_solution(self, data_dir: str = './'):
+
+        # node output
+        plant_sku_t_production = pd.DataFrame(columns=['node', 'type', 'sku', 't', 'qty'])
+        warehouse_sku_t_storage = pd.DataFrame(columns=['node', 'type', 'sku', 't', 'qty'])
+        customer_sku_t_recipt = pd.DataFrame(columns=['node', 'type', 'sku', 't', 'qty'])
+        node_sku_t_demand_slack = pd.DataFrame(columns=['node', 'type', 'sku', 't', 'qty'])
+        node_t_open = pd.DataFrame(columns=['node', 'type', 't', 'open'])
+
+        # edge output
+        edge_sku_t_flow = pd.DataFrame(columns=['id', 'start', 'end', 'sku', 't', 'qty'])
+
+        num = 0
+
+        for node in self.network.nodes:
+            num += 1
+            for t in range(self.T):
+                node_t_open = node_t_open.append({'node': node.idx, 'type': node.type, 't': t, 'open': self.vars['open'][(t, node)].x}, ignore_index=True)
+                if node.type == CONST.PLANT:
+                    if node.producible_sku is not None:
+                        for k in node.producible_sku:
+                            plant_sku_t_production = plant_sku_t_production.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_production'][(t, node, k)].x}, ignore_index=True)
+            if node.type != CONST.PLANT and node.demand_sku is not None:
+                for t in node.demand_sku.index:
+                    for k in node.demand_sku[t]:
+                        if node.type == CONST.WAREHOUSE:
+                            warehouse_sku_t_storage = warehouse_sku_t_storage.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_inventory'][(t, node, k)].x}, ignore_index=True)
+                            node_sku_t_demand_slack = node_sku_t_demand_slack.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand_slack'][(t, node, k)].x}, ignore_index=True)
+                        elif node.type == CONST.CUSTOMER:
+                            # customer_sku_t_recipt = customer_sku_t_recipt.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_inventory'][(t, node, k)].x}, ignore_index=True)
+                            node_sku_t_demand_slack = node_sku_t_demand_slack.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand_slack'][(t, node, k)].x}, ignore_index=True)
+                        else:
+                            raise Exception('node type is not correct')
+                        
+        # for node in self.network.nodes:
+        #     for t in range(self.T):
+        #         node_t_open = node_t_open.append({'node': node.idx, 'type': node.type, 't': t, 'open': self.vars['open'][(t, node)].x}, ignore_index=True)
+
+        #         if node.type == CONST.PLANT:
+        #             if node.producible_sku is not None:
+        #                 for k in node.producible_sku:
+        #                     plant_sku_t_production = plant_sku_t_production.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_production'][(t, node, k)].x}, ignore_index=True) 
+        #         elif node.type == CONST.WAREHOUSE: 
+        #             if node.demand_sku is not None and t in node.demand_sku.index:
+        #                 for k in node.demand_sku[t]:
+        #                     warehouse_sku_t_storage = warehouse_sku_t_storage.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_inventory'][(t, node, k)].x}, ignore_index=True)
+        #                     node_sku_t_demand_slack = node_sku_t_demand_slack.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand_slack'][(t, node, k)].x}, ignore_index=True)
+        #         elif node.type == CONST.CUSTOMER:
+        #             if node.demand_sku is not None and t in node.demand_sku.index:
+        #                 for k in node.demand_sku[t]:
+        #                     # customer_sku_t_recipt = customer_sku_t_recipt.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand'][(t, node, k)].x}, ignore_index=True)
+        #                     node_sku_t_demand_slack = node_sku_t_demand_slack.append({'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand_slack'][(t, node, k)].x}, ignore_index=True)
+        #         else:
+        #             raise Exception('node type is not correct')
+        num = 0
+        for e in self.network.edges:
+            num += 1
+            edge = self.network.edges[e]['object']            
+            for t in range(self.T):
+                edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                for k in edge_sku_list:
+                    edge_sku_t_flow = edge_sku_t_flow.append({'id': edge.idx, 'start': edge.start.idx, 'end': edge.end.idx, 'sku': k.idx, 't': t, 'qty': self.vars['sku_flow'][(t, edge, k)].x}, ignore_index=True)
+       
+
+        plant_sku_t_production.to_csv(os.path.join(data_dir, 'plant_sku_t_production.csv'), index=False)
+        warehouse_sku_t_storage.to_csv(os.path.join(data_dir, 'warehouse_sku_t_storage.csv'), index=False)
+        # customer_sku_t_recipt.to_csv(os.path.join(data_dir, 'customer_sku_t_recipt.csv'), index=False)
+        node_sku_t_demand_slack.to_csv(os.path.join(data_dir, 'node_sku_t_demand_slack.csv'), index=False)
+        node_t_open.to_csv(os.path.join(data_dir, 'node_t_open.csv'), index=False)
+        edge_sku_t_flow.to_csv(os.path.join(data_dir, 'edge_sku_t_flow.csv'), index=False)
 
 
 if __name__ == "__main__":
