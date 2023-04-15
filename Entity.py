@@ -126,6 +126,7 @@ class Warehouse(Node):
         inventory_sku_capacity: "pd.Series[SKU, float]" = None,
         holding_fixed_cost: float = 0.0,
         holding_sku_unit_cost: "pd.Series[SKU, float]" = None,
+        backorder_sku_unit_cost: "pd.Series[SKU, float]" = None,
         initial_inventory: "pd.Series[SKU, float]" = None,
         end_inventory: "pd.Series[SKU, float]" = None,
         end_inventory_bias_cost: float = 0.0,
@@ -140,6 +141,7 @@ class Warehouse(Node):
         self.holding_fixed_cost = holding_fixed_cost
         # self.holding_sku_fixed_cost = holding_sku_fixed_cost
         self.holding_sku_unit_cost = holding_sku_unit_cost
+        self.backorder_sku_unit_cost = backorder_sku_unit_cost
         self.initial_inventory = initial_inventory
         self.end_inventory = end_inventory
         self.end_inventory_bias_cost = end_inventory_bias_cost
@@ -179,7 +181,7 @@ class Warehouse(Node):
                 demand_flag = sku in self.demand_sku[t]
 
         return demand_flag
-    
+
     def construct_output(self, output):
         '''
         quantity of each SKU stored at each period

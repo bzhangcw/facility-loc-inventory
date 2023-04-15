@@ -28,11 +28,65 @@ class Param:
         )
 
         parser.add_argument(
-            "--transportation_cost",
+            "--backorder",
             type=bool,
             default=True,
             help="""
-            whether to consider end inventory level
+            whether to allow backorder, inventory can be true if backorder allowed
+            """
+        )
+
+        parser.add_argument(
+            "--M",
+            type=float,
+            default=1e10,
+            help="""
+            big M for modeling
+            """
+        )
+
+        parser.add_argument(
+            "--unfulfill_sku_unit_cost",
+            type=float,
+            default=50,
+            help="""
+            default unfulfill_sku_unit_cost if not given
+            """
+        )
+
+        parser.add_argument(
+            "--holding_sku_unit_cost",
+            type=float,
+            default=5,
+            help="""
+            default holding_sku_unit_cost if not given
+            """
+        )
+
+        parser.add_argument(
+            "--backorder_sku_unit_cost",
+            type=float,
+            default=20,
+            help="""
+            default backorder_sku_unit_cost if not given
+            """
+        )
+
+        parser.add_argument(
+            "--end_inventory_bias_cost",
+            type=float,
+            default=200,
+            help="""
+            default end_inventory_bias_cost if not given
+            """
+        )
+
+        parser.add_argument(
+            "--transportation_sku_unit_cost",
+            type=float,
+            default=0.01,
+            help="""
+            default transportation_sku_unit_cost if not given
             """
         )
 

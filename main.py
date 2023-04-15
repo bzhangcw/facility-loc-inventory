@@ -9,8 +9,8 @@ if __name__ == '__main__':
 
     arg.T = 27
 
-    # datapath = '/Users/sky/Desktop/computer/sky/projects/NetworkFlow/data/Data_0401/data_0401_V3.xlsx'
-    datapath = '/Users/liu/Desktop/仓网/data/waiyun/data_0401_V3.xlsx'
+    datapath = '/Users/sky/Desktop/computer/sky/projects/NetworkFlow/data/Data_0401/data_0401_V3.xlsx'
+    # datapath = '/Users/liu/Desktop/仓网/data/waiyun/data_0401_V3.xlsx'
 
     sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
         data_dir=datapath)
@@ -21,4 +21,7 @@ if __name__ == '__main__':
     model = DNP(arg, network)
     model.modeling()
     model.solve()
-    model.get_solution('/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output')
+
+    solpath = '/Users/sky/Desktop/computer/sky/projects/NetworkFlow/output/output'
+    # solpath = '/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output'
+    model.get_solution(solpath)
