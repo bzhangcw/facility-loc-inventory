@@ -21,4 +21,4 @@ if __name__ == '__main__':
     model = DNP(arg, network)
     model.modeling()
     model.solve()
-    model.get_solution('/Users/liu/Desktop/MyRepositories/facility-loc-inventory')
+    model.get_solution('/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output')
