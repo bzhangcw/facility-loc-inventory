@@ -61,6 +61,11 @@ def read_data(data_dir,
                                       engine="python").iloc[:warehouse_num],
                         node_df.query("id.str.startswith('C')", engine="python").iloc[:customer_num]])
 
+    # TODO: can do better to drop nodes and skus
+    edge_df = edge_df[edge_df['from'].isin(node_df['id']) & edge_df['to'].isin(node_df['id'])]
+    node_sku_df = node_sku_df[node_sku_df['id'].isin(node_df['id']) & node_sku_df['sku'].isin(sku_df['id'])]
+    edge_sku_df = edge_sku_df[edge_sku_df['start_id'].isin(node_df['id']) & edge_sku_df['end_id'].isin(node_df['id']) & edge_sku_df['sku'].isin(sku_df['id'])]
+    node_sku_time_df = node_sku_time_df[node_sku_time_df['id'].isin(node_df['id']) & node_sku_time_df['sku'].isin(sku_df['id'])]
     # ==================== construct sku ============================
     sku_dict = {}
 

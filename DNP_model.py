@@ -649,7 +649,7 @@ class DNP:
     def solve(self):
         self.model.solve()
 
-    def get_solution(self, data_dir: str = './'):
+    def get_solution(self, data_dir: str = './', preserve_zeros: bool = False):
 
         # node output
         plant_sku_t_production = pd.DataFrame(index=range(
@@ -657,7 +657,7 @@ class DNP:
         warehouse_sku_t_storage = pd.DataFrame(index=range(
             len(self.vars['sku_inventory'])), columns=['node', 'type', 'sku', 't', 'qty'])
         node_sku_t_demand_slack = pd.DataFrame(index=range(
-            len(self.vars['sku_demand_slack'])), columns=['node', 'type', 'sku', 't', 'qty'])
+            len(self.vars['sku_demand_slack'])), columns=['node', 'type', 'sku', 't', 'demand', 'slack', 'fulfill'])
         node_t_open = pd.DataFrame(index=range(len(self.vars['open'])), columns=[
                                    'node', 'type', 't', 'open'])
 
@@ -680,32 +680,87 @@ class DNP:
                 if node.type == CONST.PLANT:
                     if node.producible_sku is not None:
                         for k in node.producible_sku:
-                            plant_sku_t_production.iloc[plant_index] = {
-                                'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_production'][(t, node, k)].x}
-                            plant_index += 1
+                            if preserve_zeros or self.vars['sku_production'][(t, node, k)].x != 0:
+                                plant_sku_t_production.iloc[plant_index] = {
+                                    'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_production'][(t, node, k)].x}
+                                plant_index += 1
 
                 if node.type == CONST.WAREHOUSE:
                     sku_list = node.get_node_sku_list(t, self.full_sku_list)
                     for k in sku_list:
-                        warehouse_sku_t_storage.iloc[warehouse_index] = {
-                            'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_inventory'][(t, node, k)].x}
-                        warehouse_index += 1
+                        if preserve_zeros or self.vars['sku_inventory'][(t, node, k)].x != 0:
+                            warehouse_sku_t_storage.iloc[warehouse_index] = {
+                                'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_inventory'][(t, node, k)].x}
+                            warehouse_index += 1
 
             if node.type != CONST.PLANT and node.demand_sku is not None:
                 for t in node.demand_sku.index:
                     for k in node.demand_sku[t]:
-                        node_sku_t_demand_slack.iloc[demand_slack_index] = {
-                            'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'qty': self.vars['sku_demand_slack'][(t, node, k)].x}
-                        demand_slack_index += 1
+                        slack = self.vars['sku_demand_slack'][(t, node, k)].x
+                        demand = node.demand[t, k]
+                        if preserve_zeros or slack != 0 or demand != 0:
+                            node_sku_t_demand_slack.iloc[demand_slack_index] = {
+                                'node': node.idx, 'type': node.type, 'sku': k.idx, 't': t, 'demand': demand, 'slack':slack, 'fulfill': 1 - slack/demand}
+                            demand_slack_index += 1
 
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
             for t in range(self.T):
                 edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
                 for k in edge_sku_list:
-                    edge_sku_t_flow.iloc[edge_index] = {'id': edge.idx, 'start': edge.start.idx,
-                                                        'end': edge.end.idx, 'sku': k.idx, 't': t, 'qty': self.vars['sku_flow'][(t, edge, k)].x}
-                    edge_index += 1
+                    if preserve_zeros or self.vars['sku_flow'][(t, edge, k)].x != 0:
+                        edge_sku_t_flow.iloc[edge_index] = {'id': edge.idx, 'start': edge.start.idx,
+                                                            'end': edge.end.idx, 'sku': k.idx, 't': t, 'qty': self.vars['sku_flow'][(t, edge, k)].x}
+                        edge_index += 1
+
+        '''
+        kpi:
+        1. demand fulfillment rate (for each sku and total)
+        2. avg inventory for each warehouse along time 
+
+        '''
+        plant_sku_t_production.dropna(inplace=True)
+        warehouse_sku_t_storage.dropna(inplace=True)
+        node_sku_t_demand_slack.dropna(inplace=True)
+        edge_sku_t_flow.dropna(inplace=True)
+
+
+        if len(node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.CUSTOMER]) != 0:
+            customer_fullfill_sku_rate = node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.CUSTOMER].groupby('sku').sum()[['demand', 'slack']]
+            customer_fullfill_sku_rate['fulfill_rate'] = customer_fullfill_sku_rate.apply(lambda x: 1 - x['slack']/x['demand'], axis=1)
+            customer_fullfill_total_rate = 1 - customer_fullfill_sku_rate['slack'].sum()/customer_fullfill_sku_rate['demand'].sum()
+        else:
+            customer_fullfill_sku_rate = node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.CUSTOMER][['demand', 'slack']]
+            customer_fullfill_total_rate = 1
+
+        if len(node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.WAREHOUSE]) != 0:
+            warehouse_fullfill_sku_rate = node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.WAREHOUSE].groupby('sku').sum()[['demand', 'slack']]
+            warehouse_fullfill_sku_rate['fulfill_rate'] = warehouse_fullfill_sku_rate.apply(lambda x: 1 - x['slack']/x['demand'], axis=1)
+            warehouse_fullfill_total_rate = 1 - warehouse_fullfill_sku_rate['slack'].sum()/warehouse_fullfill_sku_rate['demand'].sum()
+        else:
+            warehouse_fullfill_sku_rate = node_sku_t_demand_slack[node_sku_t_demand_slack['type'] == CONST.WAREHOUSE][['demand', 'slack']]
+            warehouse_fullfill_total_rate = 1
+
+        if len(node_sku_t_demand_slack) != 0:
+            total_fullfill_sku_rate = node_sku_t_demand_slack.groupby('sku').sum()[['demand', 'slack']]
+            total_fullfill_sku_rate['fulfill_rate'] = total_fullfill_sku_rate.apply(lambda x: 1 - x['slack']/x['demand'], axis=1)
+            total_fullfill_rate = 1 - total_fullfill_sku_rate['slack'].sum()/total_fullfill_sku_rate['demand'].sum()
+        else:
+            total_fullfill_sku_rate = node_sku_t_demand_slack[['demand', 'slack']]
+            total_fullfill_rate = 1
+
+        warehouse_avg_inventory_t = warehouse_sku_t_storage.groupby('node').sum()['qty'] / self.T
+        warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(warehouse_avg_inventory_t)
+        
+        overall_kpi = {'customer_fullfill_rate': customer_fullfill_total_rate, 'warehouse_fullfill_rate': warehouse_fullfill_total_rate, 'overall_fullfill_rate': total_fullfill_rate, 'warehouse_avg_inventory': warehouse_total_avg_inventory}
+        print(overall_kpi)
+        overall_kpi = pd.DataFrame(overall_kpi, index=[0])
+        with pd.ExcelWriter(os.path.join(data_dir, 'kpi.xlsx')) as writer:
+            customer_fullfill_sku_rate.to_excel(writer, sheet_name='customer_fullfill_sku_rate')
+            warehouse_fullfill_sku_rate.to_excel(writer, sheet_name='warehouse_fullfill_sku_rate')
+            total_fullfill_sku_rate.to_excel(writer, sheet_name='node_fullfill_sku_rate')
+            warehouse_avg_inventory_t.to_excel(writer, sheet_name='warehouse_avg_inventory_along_time')
+            overall_kpi.to_excel(writer, sheet_name='overall_kpi')
 
         plant_sku_t_production.to_csv(os.path.join(
             data_dir, 'plant_sku_t_production.csv'), index=False)
