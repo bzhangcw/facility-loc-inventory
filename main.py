@@ -13,8 +13,8 @@ if __name__ == '__main__':
     datapath = '/Users/liu/Desktop/仓网/data/waiyun/data_0401_V3.xlsx'
 
     sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-        data_dir=datapath)
-        # data_dir=datapath, sku_num=5, plant_num=5, warehouse_num=5, customer_num=5)
+        # data_dir=datapath)
+        data_dir=datapath, sku_num=5, plant_num=5, warehouse_num=5, customer_num=5)
 
 
     node_list = plant_list + warehouse_list + customer_list
@@ -25,5 +25,5 @@ if __name__ == '__main__':
     model.solve()
 
     # solpath = '/Users/sky/Desktop/computer/sky/projects/NetworkFlow/output/output'
-    solpath = '/Users/liu/Desktop/MyRepositories/facility-loc-inventory/tem_out'
+    solpath = '/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output'
     model.get_solution(solpath)

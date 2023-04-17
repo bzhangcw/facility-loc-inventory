@@ -752,16 +752,16 @@ class DNP:
         warehouse_avg_inventory_t = warehouse_sku_t_storage.groupby('node').sum()['qty'] / self.T
         warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(warehouse_avg_inventory_t)
         
-        overall_kpi = {'customer_fullfill_rate': customer_fullfill_total_rate, 'warehouse_fullfill_rate': warehouse_fullfill_total_rate, 'overall_fullfill_rate': total_fullfill_rate, 'warehouse_avg_inventory': warehouse_total_avg_inventory}
+        overall_kpi = {'customer_fullfill_rate': customer_fullfill_total_rate, 'warehouse_fullfill_rate': warehouse_fullfill_total_rate, 'overall_fullfill_rate': total_fullfill_rate, 'warehouse_overall_avg_inventory': warehouse_total_avg_inventory}
         print(overall_kpi)
         overall_kpi = pd.DataFrame(overall_kpi, index=[0])
         with pd.ExcelWriter(os.path.join(data_dir, 'kpi.xlsx')) as writer:
             customer_fullfill_sku_rate.to_excel(writer, sheet_name='customer_fullfill_sku_rate')
             warehouse_fullfill_sku_rate.to_excel(writer, sheet_name='warehouse_fullfill_sku_rate')
             total_fullfill_sku_rate.to_excel(writer, sheet_name='node_fullfill_sku_rate')
-            warehouse_avg_inventory_t.to_excel(writer, sheet_name='warehouse_avg_inventory_along_time')
+            warehouse_avg_inventory_t.to_excel(writer, sheet_name='warehouse_avg_inventory')
             overall_kpi.to_excel(writer, sheet_name='overall_kpi')
-
+            
         plant_sku_t_production.to_csv(os.path.join(
             data_dir, 'plant_sku_t_production.csv'), index=False)
         warehouse_sku_t_storage.to_csv(os.path.join(
