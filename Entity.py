@@ -375,6 +375,7 @@ if __name__ == "__main__":
     sku_list = [sku]
 
     plant = Plant('1', np.array([1, 1]), 1, sku_list)
+    print(plant.get_node_sku_list(0,sku_list))
     print(plant)
 
     demand = pd.Series({(0, sku): 1})

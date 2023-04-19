@@ -3,7 +3,16 @@ from Entity import *
 import numpy as np
 
 loc = np.array([0, 0])
+def resolve(edge_sku_df,node_df,edge_df,node_sku_df,node_sku_time_df):
+    """
+    edge_sku_df:start-end-sku-unit_cost
+    node_df: type-id-total_capacity-fixed_cost-if_current
+    edge_df:empty
+    node_sku_df:id-sku-unit_cost-int_inv-end_inv-rate(工厂产率）
+    node_sku_time_df: id-sku-demand-time
+    """
 
+    return edge_sku_df
 
 def read_data(data_dir,
               sku_num=np.inf,
@@ -62,13 +71,12 @@ def read_data(data_dir,
                         node_df.query("id.str.startswith('C')", engine="python").iloc[:customer_num]])
 
     # TODO: can do better to drop nodes and skus
-    edge_df = edge_df[edge_df['from'].isin(node_df['id']) & edge_df['to'].isin(node_df['id'])]
+    edge_df = edge_df[edge_df['from'].isin(node_df['id']) & edge_df['to'].isin(node_df['id'])] #empty
     node_sku_df = node_sku_df[node_sku_df['id'].isin(node_df['id']) & node_sku_df['sku'].isin(sku_df['id'])]
     edge_sku_df = edge_sku_df[edge_sku_df['start_id'].isin(node_df['id']) & edge_sku_df['end_id'].isin(node_df['id']) & edge_sku_df['sku'].isin(sku_df['id'])]
     node_sku_time_df = node_sku_time_df[node_sku_time_df['id'].isin(node_df['id']) & node_sku_time_df['sku'].isin(sku_df['id'])]
     # ==================== construct sku ============================
     sku_dict = {}
-
     for i in list(sku_df.index):
         irow = sku_df.loc[i]
         SKUi = SKU(irow['id'], irow['value'])
@@ -190,6 +198,8 @@ def read_data(data_dir,
         customer_list.append(this_customer)
         nodes_dict[cst_id] = this_customer
     # ==================== construct edge ============================
+    # 对edge_sku_df进行重构操作
+    edge_sku_df = resolve(edge_sku_df,node_df,edge_df,node_sku_df,node_sku_time_df)
     edge_sku_df_list = list(edge_sku_df.groupby(['start_id', 'end_id']))
 
     for edge in edge_sku_df_list:
@@ -213,5 +223,10 @@ def read_data(data_dir,
                          transportation_sku_unit_cost=unit_cost
                          )
         edge_list.append(this_edge)
-
     return sku_list, plant_list, warehouse_list, customer_list, edge_list
+
+if __name__ == "__main__":
+    datapath = './data_0401_V3.xlsx'
+
+    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
+        data_dir=datapath, sku_num=5, plant_num=5, warehouse_num=5, customer_num=5)

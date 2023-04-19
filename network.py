@@ -3,8 +3,7 @@ from Entity import SKU, Node, Plant, Warehouse, Customer, Edge
 import numpy as np
 import pandas as pd
 from typing import List
-
-
+import math
 def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> nx.DiGraph:
     """
     construct a graph from given nodes and edges
@@ -18,49 +17,30 @@ def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> n
 
     return graph
 
+def prune(graph,ratio):
+    """
+    Simplify the topology based on distances
+    """
 
-if __name__ == "__main__":
-    sku = SKU('1')
-    print(sku)
+    nodes = graph.nodes()
+    # print("Before:",len(graph.edges))
 
-    sku_list = [sku]
+    distance_map = {}
+    for start in nodes:
+        distances = []
+        for e in graph.out_edges(start):
+            distance = graph.edges[e]['object'].cal_distance()
+            print(distance)
+            distances.append((e, distance))
+        n = math.ceil(ratio * len(graph.out_edges(start)))
+        distances.sort(key=lambda x:x[1])
+        distance_map[start] = distances[:n]
 
-    plant = Plant('1', np.array([1, 1]), 1, sku_list)
-    print(plant)
+    edges_to_remove = []
+    for start, distances in distance_map.items():
+        node_to_remove = set(graph.out_edges(start)) - set([dist[0] for dist in distances])
+        edges_to_remove.extend([end for end in node_to_remove])
+    graph.remove_edges_from(edges_to_remove)
 
-    warehouse = Warehouse('1', np.array([1, 2]), 1)
-    print(warehouse)
-
-    demand = pd.Series({(0, sku): 1})
-    demand_sku = pd.Series({0: [sku]})
-    customer = Customer('1', np.array([2, 3]), demand, demand_sku)
-    print(customer)
-
-    nodes = [plant, warehouse, customer]
-
-    edges = [
-        Edge('e1', plant, warehouse, 10),
-        Edge('e2', warehouse, customer, 10)
-    ]
-    for e in edges:
-        print(e)
-
-    graph = constuct_network(nodes, edges, sku_list)
-    print(graph.graph['sku_list'])
-    print(graph.nodes, graph.edges)
-
-    print(graph.edges[plant, warehouse])
-
-    print(list(graph.successors(plant)))
-    print(list(graph.predecessors(customer)))
-    print(list(graph.neighbors(warehouse)))
-
-    print(list(graph.in_edges(data=True)), list(graph.in_edges(customer)))
-    lst = list(graph.in_edges(customer))
-
-    for node in graph.nodes:
-        print(node.location)
-
-    for e in graph.edges:
-        edge = graph.edges[e]['object']
-        print(edge.cal_distance())
+    # print("After:",len(graph.edges))
+    return graph
