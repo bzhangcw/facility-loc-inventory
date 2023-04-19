@@ -3,17 +3,6 @@ from Entity import *
 import numpy as np
 
 loc = np.array([0, 0])
-def resolve(edge_sku_df,node_df,edge_df,node_sku_df,node_sku_time_df):
-    """
-    edge_sku_df:start-end-sku-unit_cost
-    node_df: type-id-total_capacity-fixed_cost-if_current
-    edge_df:empty
-    node_sku_df:id-sku-unit_cost-int_inv-end_inv-rate(工厂产率）
-    node_sku_time_df: id-sku-demand-time
-    """
-
-    return edge_sku_df
-
 def read_data(data_dir,
               sku_num=np.inf,
               plant_num=np.inf,
@@ -198,8 +187,6 @@ def read_data(data_dir,
         customer_list.append(this_customer)
         nodes_dict[cst_id] = this_customer
     # ==================== construct edge ============================
-    # 对edge_sku_df进行重构操作
-    edge_sku_df = resolve(edge_sku_df,node_df,edge_df,node_sku_df,node_sku_time_df)
     edge_sku_df_list = list(edge_sku_df.groupby(['start_id', 'end_id']))
 
     for edge in edge_sku_df_list:

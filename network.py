@@ -19,26 +19,26 @@ def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> n
 
 def prune(graph,ratio):
     """
-    Simplify the topology based on distances
+    Simplify the topology based on performances
     """
 
     nodes = graph.nodes()
     # print("Before:",len(graph.edges))
 
-    distance_map = {}
+    performance_map = {}
     for start in nodes:
-        distances = []
+        performances = []
         for e in graph.out_edges(start):
-            distance = graph.edges[e]['object'].cal_distance()
-            print(distance)
-            distances.append((e, distance))
+            performance = graph.edges[e]['object'].cal_performance()
+            # print(performance)
+            performances.append((e, performance))
         n = math.ceil(ratio * len(graph.out_edges(start)))
-        distances.sort(key=lambda x:x[1])
-        distance_map[start] = distances[:n]
+        performances.sort(key=lambda x:x[1])
+        performance_map[start] = performances[:n]
 
     edges_to_remove = []
-    for start, distances in distance_map.items():
-        node_to_remove = set(graph.out_edges(start)) - set([dist[0] for dist in distances])
+    for start, performances in performance_map.items():
+        node_to_remove = set(graph.out_edges(start)) - set([dist[0] for dist in performances])
         edges_to_remove.extend([end for end in node_to_remove])
     graph.remove_edges_from(edges_to_remove)
 

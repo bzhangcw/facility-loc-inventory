@@ -16,13 +16,12 @@ if __name__ == '__main__':
         data_dir=datapath, sku_num=5, plant_num=5, warehouse_num=5, customer_num=5)
 
     node_list = plant_list + warehouse_list + customer_list
-
     network = constuct_network(node_list, edge_list, sku_list)
 
-    simplifed_network = prune(network,0.2)
-    model = DNP(arg, simplifed_network)
+    simplified_network = prune(network,0.2)
+    model = DNP(arg, simplified_network)
     model.modeling()
     model.solve()
 
-    solpath = './simplifed_output'
+    solpath = './simplified_output'
     model.get_solution(solpath)

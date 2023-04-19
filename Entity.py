@@ -289,6 +289,8 @@ class Edge:
     def cal_distance(self):
         return np.linalg.norm(self.start.location - self.end.location)
 
+    def cal_performance(self):
+        return self.transportation_sku_unit_cost.sum()
     def get_edge_sku_list(self, t: int, full_sku_list: List[SKU]) -> List[SKU]:
         """
         > The function gets all possible SKUs flow on edge, i.e. intersection of possible SKUs on start node and end node, at period t
