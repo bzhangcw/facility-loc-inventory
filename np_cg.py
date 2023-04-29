@@ -7,10 +7,11 @@ import numpy as np
 import pandas as pd
 from typing import List
 import argparse
-from Entity import SKU, Customer
+from Entity import SKU, Customer, Warehouse,Plant,Edge
 from tqdm import tqdm
 import os
-
+from network import constuct_network,get_pred_reachable_nodes
+from read_data import read_data
 
 
 class NP_CG:
@@ -28,88 +29,35 @@ class NP_CG:
         self.columns = None # Dict[customer, List[tuple(x, y, p)]]
         self.oracles = None # Dict[customer, copt.model]
 
-    def get_subgraph(self):
+    def get_subgraph(self, customer: Customer):
         """
         Get a subgraph for each customer from the original graph
         """
+        pred_reachable_nodes = set()
+        get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
+        related_nodes = pred_reachable_nodes.copy()
+        for node in pred_reachable_nodes:
+            if bool(node.get_node_sku_list(0, sku_list)):
+                if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(customer.get_node_sku_list(0, self.full_sku_list)):
+                    related_nodes.remove(node)
+            else:
+                related_nodes.remove(node)
+        related_nodes.add(customer)
+        self.subgraph = self.network.subgraph(related_nodes)
+        return self.subgraph
 
-        self.subgraph = {}
-        pass
-
-    def construct_oracle(self, customer: Customer):
-        """
-        Construct oracles  for each customer
-        """
-
-        pass
-
-    def init_cols(self, customer: Customer):
-        """
-        Initialize the columns for the subproblem according to the oracles
-        """
-
-        self.columns = {}
-        pass
-
-    def init_RMP(self):
-        """
-        Initialize the RMP with initial columns
-        """
-
-        pass
-
-    def solve_RMP(self):
-        """
-        Solve the RMP and get the dual variables to construct the subproblem
-        """
-
-        pass
-
-    def update_RMP(self):
-        """
-        Update the RMP with new columns
-        """
-
-        pass
-
-    def subproblem(self, customer: Customer, dual_vars):
-        """
-        Construct and solve the subproblem
-        Only need to change the objective function, subject to the same oracle constraints
-        """
-
-        v = 0 # the objective value of the subproblem
-        added = False # whether a new column is added
-
-        x = None # the x variable of the subproblem
-        y = None # the y variable of the subproblem
-        p = None # the p variable of the subproblem
-
-        if v < 0:
-            added = True
-            self.columns[customer].append((x, y, p))
-
-        return added
-    
-    def CG(self):
-        """
-        The main loop of column generation algorithm
-        """
-
-        self.get_subgraph()
-        for customer in self.customer_list:
-            self.construct_oracle(customer)
-            self.init_cols(customer)
-        self.init_RMP()
-
-        while True: # may need to add a termination condition
-            self.solve_RMP()
-
-            added = False
-            for customer in self.customer_list:
-                added = self.subproblem(customer, self.RMP_model.getDuals()) or added
-
-            if not added:
-                break
-
-            self.update_RMP()
+if __name__ == "__main__":
+    datapath = './data_0401_V3.xlsx'
+    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
+        data_dir=datapath, sku_num=10, plant_num=20, warehouse_num=10, customer_num=3)
+    node_list = plant_list + warehouse_list + customer_list
+    network = constuct_network(node_list, edge_list, sku_list)
+    print(network)
+    print(network.edges)
+    customer1 = customer_list[1]
+    np_cg = NP_CG(argparse.Namespace,network,sku_list)
+    subgraph = np_cg.get_subgraph(customer1)
+    print(subgraph.edges())
+    for node in subgraph.nodes():
+        print(node,node.get_node_sku_list(0,sku_list))
+    print(subgraph)

@@ -34,6 +34,7 @@ class Node:
         self.location = location
 
         self.type = None
+        self.visited = None
 
     @abstractmethod
     def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
@@ -80,7 +81,7 @@ class Plant(Node):
         self.production_fixed_cost = production_fixed_cost
         self.production_sku_fixed_cost = production_sku_fixed_cost
         self.production_sku_unit_cost = production_sku_unit_cost
-
+        self.visited = None
         self.type = CONST.PLANT
 
     def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
@@ -150,6 +151,7 @@ class Warehouse(Node):
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
         self.if_current = if_current
         self.type = CONST.WAREHOUSE
+        self.visited = None
 
     def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
         """
@@ -216,6 +218,7 @@ class Customer(Node):
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
 
         self.type = CONST.CUSTOMER
+        self.visited = None
 
     def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
         """
@@ -387,3 +390,6 @@ if __name__ == "__main__":
 
     edge = Edge('e', plant, customer, 10)
     print(edge)
+    plant.visited = True
+    print(plant.visited)
+    print(customer.visited)

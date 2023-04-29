@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from typing import List
 import math
+import CONST
 def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> nx.DiGraph:
     """
     construct a graph from given nodes and edges
@@ -23,8 +24,6 @@ def prune(graph,ratio):
     """
 
     nodes = graph.nodes()
-    # print("Before:",len(graph.edges))
-
     performance_map = {}
     for start in nodes:
         performances = []
@@ -41,6 +40,15 @@ def prune(graph,ratio):
         node_to_remove = set(graph.out_edges(start)) - set([dist[0] for dist in performances])
         edges_to_remove.extend([end for end in node_to_remove])
     graph.remove_edges_from(edges_to_remove)
-
-    # print("After:",len(graph.edges))
     return graph
+
+def get_pred_reachable_nodes(network,node, pred_reachable_nodes):
+    if node.type == CONST.PLANT:
+        pred_reachable_nodes.add(node)
+        return
+    if not node.visited:
+        node.visited = True
+        for n in set(network.predecessors(node)):
+            pred_reachable_nodes.add(n)
+            get_pred_reachable_nodes(network, n, pred_reachable_nodes)
+    return
