@@ -61,7 +61,7 @@ class NP_CG:
         env_name = customer.idx + '_oracle_env'
         model_name = customer.idx + '_oracle'
 
-        return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, True)
+        return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, False)
 
 
     def init_cols(self, customer: Customer):
@@ -72,7 +72,7 @@ class NP_CG:
         oracle = self.oracles[customer]
         oracle.modeling()
         oracle.solve()
-        beta = 0 # the objective value of the oracle
+        beta = oracle.getObjective()
         self.columns[customer] = [(oracle.vars, beta)]
 
     def init_RMP(self):
@@ -197,7 +197,7 @@ class NP_CG:
         self.oracles[customer].update_objective(dual_vars)
         self.oracles[customer].solve()
         new_column = self.oracles[customer].vars
-        v = self.oracles[customer].objVal
+        v = self.oracles[customer].getObjective()
 
         if v < 0:
             added = True
