@@ -17,7 +17,15 @@ class DNP:
     this is a class for dynamic network flow (DNP)
     """
 
-    def __init__(self, arg: argparse.Namespace, network: nx.DiGraph, full_sku_list: List[SKU] = None, env_name: str = "DNP_env", model_name: str = "DNP") -> None:
+    def __init__(self, 
+                 arg: argparse.Namespace, 
+                 network: nx.DiGraph, 
+                 full_sku_list: List[SKU] = None, 
+                 env_name: str = "DNP_env", 
+                 model_name: str = "DNP",
+                 open_relationship:bool = True,
+                 capacity:bool = True,
+                 feasibility:bool = False) -> None:
         self.arg = arg
         self.T = arg.T
         self.network = network
@@ -29,6 +37,10 @@ class DNP:
         self.vars = dict()  # variables
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
+
+        self.open_relationship = open_relationship
+        self.capacity = capacity
+        self.feasibility = feasibility
 
     def modeling(self):
         """
@@ -42,7 +54,10 @@ class DNP:
         self.add_constraints()
 
         print("set objective ...")
-        self.set_objective()
+        if self.feasibility:
+            self.model.setObjective(0.0, sense=COPT.MINIMIZE)
+        else:
+            self.set_objective()
 
     def add_vars(self):
         """
@@ -213,13 +228,15 @@ class DNP:
             # initial status and flow conservation
             self.add_constr_flow_conservation(t)
 
-            # node status and open relationship
-            self.add_constr_open_relationship(t)
-
-            # transportation/production/holding capacity
-            self.add_constr_transportation_capacity(t)
-            self.add_constr_production_capacity(t)
-            self.add_constr_holding_capacity(t)
+            if self.open_relationship:
+                # node status and open relationship
+                self.add_constr_open_relationship(t)
+            
+            if self.capacity:
+                # transportation/production/holding capacity
+                self.add_constr_transportation_capacity(t)
+                self.add_constr_production_capacity(t)
+                self.add_constr_holding_capacity(t)
 
     def add_constr_flow_conservation(self, t: int):
 
@@ -349,6 +366,16 @@ class DNP:
                         self.vars['sku_inventory'].sum(t, node, '*') >= - self.arg.M * self.vars['open'][t, node])
 
         return
+
+
+
+    def update_objective(self, dual_variables):
+        """
+        Use dual variables to update the calculate reduced cost
+        """
+
+        pass
+
 
     def set_objective(self):
 
