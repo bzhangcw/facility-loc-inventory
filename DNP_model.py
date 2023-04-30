@@ -371,7 +371,7 @@ class DNP:
 
     def update_objective(self, dual_variables):
         """
-        Use dual variables to update the calculate reduced cost
+        Use dual variables to calculate the reduced cost
         """
 
         pass
