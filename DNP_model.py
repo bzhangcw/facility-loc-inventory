@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from typing import List
 import argparse
-from Entity import SKU
+from Entity import SKU, Edge
 from tqdm import tqdm
 import os
 
@@ -41,6 +41,7 @@ class DNP:
         self.open_relationship = open_relationship
         self.capacity = capacity
         self.feasibility = feasibility
+        self.original_obj = 0.0
 
     def modeling(self):
         """
@@ -54,10 +55,8 @@ class DNP:
         self.add_constraints()
 
         print("set objective ...")
-        if self.feasibility:
-            self.model.setObjective(0.0, sense=COPT.MINIMIZE)
-        else:
-            self.set_objective()
+
+        self.set_objective()
 
     def add_vars(self):
         """
@@ -65,20 +64,6 @@ class DNP:
         """
 
         self.var_types = {
-            'select_edge': {
-                'lb': 0,
-                'ub': 1,
-                'vtype': COPT.BINARY,
-                'nameprefix': 'p',
-                'index': '(t, edge)'
-            },
-            'sku_select_edge': {
-                'lb': 0,
-                'ub': 1,
-                'vtype': COPT.BINARY,
-                'nameprefix': 'pk',
-                'index': '(t, edge, k)'
-            },
             'sku_flow': {
                 'lb': 0,
                 'ub': COPT.INFINITY,
@@ -91,20 +76,6 @@ class DNP:
                 'ub': COPT.INFINITY,
                 'vtype': COPT.CONTINUOUS,
                 'nameprefix': 'x',
-                'index': '(t, plant, k)'
-            },
-            'open': {
-                'lb': 0,
-                'ub': 1,
-                'vtype': COPT.BINARY,
-                'nameprefix': 'y',
-                'index': '(t, node)'
-            },
-            'sku_open': {
-                'lb': 0,
-                'ub': 1,
-                'vtype': COPT.BINARY,
-                'nameprefix': 'yk',
                 'index': '(t, plant, k)'
             },
             'sku_inventory': {
@@ -123,6 +94,36 @@ class DNP:
             }
         }
 
+        if self.open_relationship:
+            self.var_types['select_edge'] = {
+                'lb': 0,
+                'ub': 1,
+                'vtype': COPT.BINARY,
+                'nameprefix': 'p',
+                'index': '(t, edge)'
+            }
+            self.var_types['sku_select_edge'] = {
+                'lb': 0,
+                'ub': 1,
+                'vtype': COPT.BINARY,
+                'nameprefix': 'pk',
+                'index': '(t, edge, k)'
+            }
+            self.var_types['open'] = {
+                'lb': 0,
+                'ub': 1,
+                'vtype': COPT.BINARY,
+                'nameprefix': 'y',
+                'index': '(t, node)'
+            }
+            self.var_types['sku_open'] = {
+                'lb': 0,
+                'ub': 1,
+                'vtype': COPT.BINARY,
+                'nameprefix': 'yk',
+                'index': '(t, plant, k)'
+            }
+
         # generate index tuple
         idx = dict()
         for vt in self.var_types.keys():
@@ -135,28 +136,32 @@ class DNP:
                 edge = self.network.edges[e]['object']
 
                 # select edge (i,j) at t
-                idx['select_edge'].append((t, edge))
+                if self.open_relationship:
+                    idx['select_edge'].append((t, edge))
 
                 sku_list = edge.get_edge_sku_list(
                     t, self.full_sku_list)
 
                 for k in sku_list:
                     # sku k select edge (i,j) at t
-                    idx['sku_select_edge'].append((t, edge, k))
+                    if self.open_relationship:
+                        idx['sku_select_edge'].append((t, edge, k))
                     # flow of sku k on edge (i,j) at t
                     idx['sku_flow'].append((t, edge, k))
 
             # nodes
             for node in self.network.nodes:
                 # open node i at t
-                idx['open'].append((t, node))
+                if self.open_relationship:
+                    idx['open'].append((t, node))
 
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
                 for k in sku_list:
                     if node.type == CONST.PLANT:
                         # sku k produced on node i at t
-                        idx['sku_open'].append((t, node, k))
+                        if self.open_relationship:
+                            idx['sku_open'].append((t, node, k))
                         # amount of sku k produced on node i at t
                         idx['sku_production'].append((t, node, k))
                     elif node.type == CONST.WAREHOUSE:
@@ -259,8 +264,8 @@ class DNP:
 
                     if t == 0:
                         if node.initial_inventory is not None:
-                            self.model.addConstr(
-                                self.vars['open'][self.T-1, node] == 1)
+                            if self.open_relationship:
+                                self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
                             last_period_inventory = node.initial_inventory[
                                 k] if k in node.initial_inventory else 0.0
                     else:
@@ -368,14 +373,102 @@ class DNP:
         return
 
 
+    def get_original_objective(self):
+        """
+        Get the original objective value
+        """
+        obj = 0.0
+        t = 0
 
-    def update_objective(self, dual_variables):
+        obj = obj + self.cal_sku_producing_cost(t)
+        obj = obj + self.cal_sku_holding_cost(t)
+
+        if self.arg.backorder is True:
+            obj = obj + self.cal_sku_backorder_cost(t)
+
+        obj = obj + self.cal_sku_transportation_cost(t)
+
+        obj = obj + self.cal_sku_unfulfill_demand_cost(t)
+
+        obj = obj + self.cal_fixed_node_cost()
+        obj = obj + self.cal_fixed_edge_cost()
+
+        if self.arg.end_inventory:
+            obj = obj + self.cal_end_inventory_bias_cost()
+
+        return obj
+
+
+    def update_objective(self, dualvar, dual_index):
         """
         Use dual variables to calculate the reduced cost
         """
+        # Step1. Compute Beta
 
-        pass
+        # obj = 0.0
+        # t = 0
 
+        # obj = obj + self.cal_sku_producing_cost(t)
+        # obj = obj + self.cal_sku_holding_cost(t)
+
+        # if self.arg.backorder is True:
+        #     obj = obj + self.cal_sku_backorder_cost(t)
+
+        # obj = obj + self.cal_sku_transportation_cost(t)
+
+        # obj = obj + self.cal_sku_unfulfill_demand_cost(t)
+
+        # obj = obj + self.cal_fixed_node_cost()
+        # obj = obj + self.cal_fixed_edge_cost()
+
+        # if self.arg.end_inventory:
+        #     obj = obj + self.cal_end_inventory_bias_cost()
+
+        obj = self.get_original_objective()
+
+        self.original_obj = obj
+
+        # Step2. Compute dual variable * corresponding vars
+        # Modify for RMP:
+        # holding_constrs:Dict{Node:'i',Dual_IDX}
+        # production_constrs:Dict {Node:'i',Dual_IDX}
+        # transportation_constrs: {Edge:'i',Dual_IDX}
+        # weights_consrts:[Dual_IDX]
+
+        # for e in self.network.edges:
+        #     edge = self.network.edges[e]['object']
+        #     if edge not in dual_index.keys():
+        #         continue # can be optimized
+        #     obj -= dualvar[dual_index[edge]].value * self.model.vars['sku_flow'].sum(0, edge, '*')
+
+        # for node in self.network.nodes:
+        #     if node not in dual_index.keys():
+        #         continue # can be optimized
+
+        #     if node.type == CONST.PLANT:
+        #         obj -= dualvar[dual_index[node]].value * self.model.vars['sku_production'].sum(0, node, '*')
+        #     elif node.type == CONST.WAREHOUSE:
+        #         obj -= dualvar[dual_index[node]].value * self.model.vars['sku_inventory'].sum(0, node, '*')
+        #     else:
+        #         obj -= dualvar[dual_index[node]].value
+
+        for edge in dual_index['transportation_capacity'].keys():
+            obj -= dualvar[dual_index['transportation_capacity'][edge]] * self.model.vars['sku_flow'].sum(0, edge, '*')
+                
+        for node in dual_index['node_capacity'].keys():
+            if node.type == CONST.PLANT:
+                obj -= dualvar[dual_index['node_capacity'][node]] * self.model.vars['sku_production'].sum(0, node, '*')
+            elif node.type == CONST.WAREHOUSE:
+                obj -= dualvar[dual_index['node_capacity'][node]] * self.model.vars['sku_inventory'].sum(0, node, '*')
+            else:
+                continue
+
+        for node in dual_index['weights_sum'].keys():
+                obj -= dualvar[dual_index['weights_sum'][node]]
+
+
+        # # Step3. Update objective
+        self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
 
@@ -410,24 +503,25 @@ class DNP:
             self.obj[obj] = dict()
 
         obj = 0.0
+        if not self.feasibility:
 
-        for t in tqdm(range(self.T)):
+            for t in tqdm(range(self.T)):
 
-            obj = obj + self.cal_sku_producing_cost(t)
-            obj = obj + self.cal_sku_holding_cost(t)
+                obj = obj + self.cal_sku_producing_cost(t)
+                obj = obj + self.cal_sku_holding_cost(t)
 
-            if self.arg.backorder is True:
-                obj = obj + self.cal_sku_backorder_cost(t)
+                if self.arg.backorder is True:
+                    obj = obj + self.cal_sku_backorder_cost(t)
 
-            obj = obj + self.cal_sku_transportation_cost(t)
+                obj = obj + self.cal_sku_transportation_cost(t)
 
-            obj = obj + self.cal_sku_unfulfill_demand_cost(t)
+                obj = obj + self.cal_sku_unfulfill_demand_cost(t)
 
-        obj = obj + self.cal_fixed_node_cost()
-        obj = obj + self.cal_fixed_edge_cost()
+            obj = obj + self.cal_fixed_node_cost()
+            obj = obj + self.cal_fixed_edge_cost()
 
-        if self.arg.end_inventory:
-            obj = obj + self.cal_end_inventory_bias_cost()
+            if self.arg.end_inventory:
+                obj = obj + self.cal_end_inventory_bias_cost()
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
@@ -447,9 +541,8 @@ class DNP:
 
                     node_sku_producing_cost = 0.0
 
-                    if node.production_sku_fixed_cost is not None:
-                        node_sku_producing_cost = node_sku_producing_cost + node.production_sku_fixed_cost[k] * self.vars['sku_open'][t,
-                                                                                                                                      node, k]
+                    if node.production_sku_fixed_cost is not None and self.open_relationship:
+                        node_sku_producing_cost = node_sku_producing_cost + node.production_sku_fixed_cost[k] * self.vars['sku_open'][t,node, k]
                     if node.production_sku_unit_cost is not None:
                         node_sku_producing_cost = node_sku_producing_cost + \
                             node.production_sku_unit_cost[k] * \
@@ -542,11 +635,12 @@ class DNP:
             sku_list_with_fixed_transportation_cost, sku_list_with_unit_transportation_cost = edge.get_edge_sku_list_with_transportation_cost(
                 t, self.full_sku_list)
 
-            for k in sku_list_with_fixed_transportation_cost:
-                if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
-                    edge_transportation_cost = edge_transportation_cost + \
-                        edge.transportation_sku_fixed_cost[k] * \
-                        self.vars['sku_select_edge'][t, edge, k]
+            if self.open_relationship:
+                for k in sku_list_with_fixed_transportation_cost:
+                    if edge.transportation_sku_fixed_cost is not None and k in edge.transportation_sku_fixed_cost:
+                        edge_transportation_cost = edge_transportation_cost + \
+                            edge.transportation_sku_fixed_cost[k] * \
+                            self.vars['sku_select_edge'][t, edge, k]
 
             for k in sku_list_with_unit_transportation_cost:
                 if edge.transportation_sku_unit_cost is not None and k in edge.transportation_sku_unit_cost:
@@ -597,6 +691,9 @@ class DNP:
 
         fixed_node_cost = 0.0
 
+        if not self.open_relationship:
+            return fixed_node_cost
+        
         for node in self.network.nodes:
 
             if node.type == CONST.PLANT:
@@ -621,7 +718,9 @@ class DNP:
     def cal_fixed_edge_cost(self):
 
         fixed_edge_cost = 0.0
-
+        if not self.open_relationship:
+            return fixed_edge_cost
+        
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
 
@@ -646,8 +745,9 @@ class DNP:
         for node in self.network.nodes:
 
             if node.type == CONST.WAREHOUSE and node.end_inventory is not None:
-
-                self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
+                
+                if self.open_relationship:
+                    self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
 
                 for k in node.end_inventory.index:
 
@@ -685,7 +785,9 @@ class DNP:
             len(self.vars['sku_inventory'])), columns=['node', 'type', 'sku', 't', 'qty'])
         node_sku_t_demand_slack = pd.DataFrame(index=range(
             len(self.vars['sku_demand_slack'])), columns=['node', 'type', 'sku', 't', 'demand', 'slack', 'fulfill'])
-        node_t_open = pd.DataFrame(index=range(len(self.vars['open'])), columns=[
+        
+        if self.open_relationship:
+            node_t_open = pd.DataFrame(index=range(len(self.vars['open'])), columns=[
                                    'node', 'type', 't', 'open'])
 
         # edge output
@@ -700,9 +802,10 @@ class DNP:
 
         for node in self.network.nodes:
             for t in range(self.T):
-                node_t_open.iloc[node_open_index] = {
-                    'node': node.idx, 'type': node.type, 't': t, 'open': self.vars['open'][(t, node)].x}
-                node_open_index += 1
+                if self.open_relationship:
+                    node_t_open.iloc[node_open_index] = {
+                        'node': node.idx, 'type': node.type, 't': t, 'open': self.vars['open'][(t, node)].x}
+                    node_open_index += 1
 
                 if node.type == CONST.PLANT:
                     if node.producible_sku is not None:
@@ -795,8 +898,9 @@ class DNP:
             data_dir, 'warehouse_sku_t_storage.csv'), index=False)
         node_sku_t_demand_slack.to_csv(os.path.join(
             data_dir, 'node_sku_t_demand_slack.csv'), index=False)
-        node_t_open.to_csv(os.path.join(
-            data_dir, 'node_t_open.csv'), index=False)
+        if self.open_relationship:
+            node_t_open.to_csv(os.path.join(
+                data_dir, 'node_t_open.csv'), index=False)
         edge_sku_t_flow.to_csv(os.path.join(
             data_dir, 'edge_sku_t_flow.csv'), index=False)
 

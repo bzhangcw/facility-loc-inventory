@@ -42,7 +42,9 @@ def prune(graph,ratio):
     graph.remove_edges_from(edges_to_remove)
     return graph
 
-def get_pred_reachable_nodes(network,node, pred_reachable_nodes):
+def get_pred_reachable_nodes(network, node, pred_reachable_nodes):
+    if node.type == CONST.CUSTOMER:
+        return 
     if node.type == CONST.PLANT:
         pred_reachable_nodes.add(node)
         return

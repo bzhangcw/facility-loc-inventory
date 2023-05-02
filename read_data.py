@@ -7,7 +7,8 @@ def read_data(data_dir,
               sku_num=np.inf,
               plant_num=np.inf,
               warehouse_num=np.inf,
-              customer_num=np.inf,):
+              customer_num=np.inf,
+              one_period=False):
     """
     > The function reads the data from the excel file and constructs the corresponding objects
 
@@ -104,8 +105,9 @@ def read_data(data_dir,
                            production_sku_rate=sku_rate,
                            production_sku_unit_cost=sku_unit_cost
                            )
-        plant_list.append(this_plant)
-        nodes_dict[plant_id] = this_plant
+        if (producible_sku is not None and len(producible_sku) > 0) or not one_period:
+            plant_list.append(this_plant)
+            nodes_dict[plant_id] = this_plant
     # ==================== construct warehouse ============================
     warehouse_df = node_df.query("id.str.startswith('T')", engine="python")[
         ['id', 'total_capacity', 'fixed_cost', 'if_current']]
@@ -184,8 +186,9 @@ def read_data(data_dir,
                                  demand=demand,
                                  demand_sku=demand_sku
                                  )
-        customer_list.append(this_customer)
-        nodes_dict[cst_id] = this_customer
+        if (demand_sku is not None and 0 in demand_sku.index) or not one_period:
+            customer_list.append(this_customer)
+            nodes_dict[cst_id] = this_customer
     # ==================== construct edge ============================
     edge_sku_df_list = list(edge_sku_df.groupby(['start_id', 'end_id']))
 

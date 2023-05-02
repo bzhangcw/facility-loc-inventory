@@ -2,6 +2,7 @@ output/
 *.csv
 *.xlsx
 tem_out/
+data/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -176,11 +176,11 @@ class Warehouse(Node):
 
         demand_flag = False
 
-        if self.demand_sku is not None and t in self.demand_sku:
-            if sku is None:
-                demand_flag = len(self.demand_sku[t]) > 0
-            else:
-                demand_flag = sku in self.demand_sku[t]
+        # if self.demand_sku is not None and t in self.demand_sku:
+        #     if sku is None:
+        #         demand_flag = len(self.demand_sku[t]) > 0
+        #     else:
+        #         demand_flag = sku in self.demand_sku[t]
 
         return demand_flag
 
