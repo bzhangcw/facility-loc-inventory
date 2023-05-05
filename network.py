@@ -5,6 +5,7 @@ import pandas as pd
 from typing import List
 import math
 import CONST
+
 def constuct_network(nodes: List[Node], edges: List[Edge], SKUs: List[SKU]) -> nx.DiGraph:
     """
     construct a graph from given nodes and edges
@@ -43,8 +44,8 @@ def prune(graph,ratio):
     return graph
 
 def get_pred_reachable_nodes(network, node, pred_reachable_nodes):
-    if node.type == CONST.CUSTOMER:
-        return 
+    # if node.type == CONST.CUSTOMER:
+        # return 
     if node.type == CONST.PLANT:
         pred_reachable_nodes.add(node)
         return

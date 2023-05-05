@@ -18,7 +18,13 @@ from Param import Param
 
 class NP_CG:
 
-    def __init__(self, arg: argparse.Namespace, network: nx.DiGraph, customer_list: List[Customer], full_sku_list: List[SKU] = None, open_relationship = False) -> None:
+    def __init__(self, 
+                 arg: argparse.Namespace, 
+                 network: nx.DiGraph, 
+                 customer_list: List[Customer], 
+                 full_sku_list: List[SKU] = None, 
+                 open_relationship = False,
+                 max_iter = 500) -> None:
         self.arg = arg
         self.network = network
         self.full_sku_list = full_sku_list if full_sku_list is not None else self.network.graph['sku_list']
@@ -33,24 +39,27 @@ class NP_CG:
         self.dual_index = dict()
         self.vars = dict()  # variables
         self.num_cols = 0
+        self.max_iter = max_iter
+        self.red_cost = np.zeros((max_iter, len(customer_list)))
 
     def get_subgraph(self):
         """
         Get a subgraph for each customer from the original graph
         """
         for customer in self.customer_list:
+            cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
             pred_reachable_nodes = set()
             get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
             related_nodes = pred_reachable_nodes.copy()
             for node in pred_reachable_nodes:
                 if bool(node.get_node_sku_list(0, sku_list)):
-                    if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(customer.get_node_sku_list(0, self.full_sku_list)):
+                    if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(cus_sku_list):
                         related_nodes.remove(node)
                 else:
                     related_nodes.remove(node)
             related_nodes.add(customer)
             self.subgraph[customer] = self.network.subgraph(related_nodes)
-
+            self.subgraph[customer].graph['sku_list'] = cus_sku_list 
 
     def construct_oracle(self, customer: Customer):
         """
@@ -63,7 +72,9 @@ class NP_CG:
         env_name = customer.idx + '_oracle_env'
         model_name = customer.idx + '_oracle'
 
-        return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, True)
+        return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, True, len(self.customer_list)) # for initial column, set obj = 0
+        # return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, False) # for initial column, set obj to be the original obj 
+
 
 
     def init_cols(self, customer: Customer):
@@ -74,10 +85,13 @@ class NP_CG:
         oracle = self.oracles[customer]
         oracle.modeling()
         oracle.solve()
-        # beta = oracle.model.getObjective().getValue()
-        beta = oracle.get_original_objective().getExpr().getValue()
-
-        self.columns[customer] = [(oracle.vars, beta)]
+        init_col = {
+                    'beta': 0,
+                    'sku_flow_sum':{},
+                    'sku_production_sum':{},
+                    'sku_inventory_sum':{},
+                    }
+        self.columns[customer] = [init_col]
 
     def init_RMP(self):
         """
@@ -145,17 +159,19 @@ class NP_CG:
         # edge transportation capacity
         for e in self.network.edges:
             edge = self.network.edges[e]['object']
-
+            if edge.capacity == np.inf:
+                continue
             transportation = 0.0
             for customer in self.customer_list:
                 if e in self.subgraph[customer].edges: #can we do better?
+                    self.columns[customer][len(self.columns[customer]) - 1]['sku_flow_sum'][edge] = self.oracles[customer].vars['sku_flow'].sum(0, edge, '*').getValue()
                     for number in range(len(self.columns[customer])):
-                        transportation += self.vars['column_weights'][customer, number] * self.columns[customer][number][0]['sku_flow'].sum(0, edge, '*').getValue()
+                        transportation += self.vars['column_weights'][customer, number] * self.columns[customer][number]['sku_flow_sum'][edge]
 
-            if transportation == 0.0:
+            if type(transportation) == float:
                     continue
 
-            constr = self.RMP_model.addConstr(transportation <= edge.capacity)
+            constr = self.RMP_model.addConstr(transportation <= edge.capacity, name=f"transportation_capacity_{edge.idx}")
             constrs['transportation_capacity'][edge] = constr
             self.dual_index['transportation_capacity'][edge] = index
             index += 1
@@ -163,29 +179,35 @@ class NP_CG:
         for node in self.network.nodes:
             # node production capacity
             if node.type == CONST.PLANT:
-
+                if node.production_capacity == np.inf:
+                    continue
                 production = 0.0
                 for customer in self.customer_list:
                     if node in self.subgraph[customer].nodes:
+                        self.columns[customer][len(self.columns[customer]) - 1]['sku_production_sum'][node] = self.oracles[customer].vars['sku_production'].sum(0, node, '*').getValue()
                         for number in range(len(self.columns[customer])):
-                            production += self.vars['column_weights'][customer, number] * self.columns[customer][number][0]['sku_production'].sum(0, node, '*').getValue()
-                if production == 0.0:
+                            production += self.vars['column_weights'][customer, number] * self.columns[customer][number]['sku_production_sum'][node]
+
+                if type(production) == float:
                     continue
-                constr = self.RMP_model.addConstr(production <= node.production_capacity)
+                constr = self.RMP_model.addConstr(production <= node.production_capacity, name=f"production_capacity_{node.idx}")
                 constrs['production_capacity'][node] = constr
 
             elif node.type == CONST.WAREHOUSE:
                 # node holding capacity
+                if node.inventory_capacity == np.inf:
+                    continue
                 holding = 0.0
                 for customer in self.customer_list:
                     if node in self.subgraph[customer].nodes:
+                        self.columns[customer][len(self.columns[customer]) - 1]['sku_inventory_sum'][node] = self.oracles[customer].vars['sku_inventory'].sum(0, node, '*').getValue()
                         for number in range(len(self.columns[customer])):
-                            holding += self.vars['column_weights'][customer, number] * self.columns[customer][number][0]['sku_inventory'].sum(0, node, '*').getValue()
+                            holding += self.vars['column_weights'][customer, number] * self.columns[customer][number]['sku_inventory_sum'][node]
                 
-                if holding == 0.0:
+                if type(holding) == float:
                     continue
 
-                constr = self.RMP_model.addConstr(holding <= node.inventory_capacity)
+                constr = self.RMP_model.addConstr(holding <= node.inventory_capacity, name=f"inventory_capacity_{node.idx}")
                 constrs['holding_capacity'][node] = constr
             else:
                 continue
@@ -195,7 +217,7 @@ class NP_CG:
 
         for customer in self.customer_list:
             # weights sum to 1
-            constr = self.RMP_model.addConstr(self.vars['column_weights'].sum(customer, '*') == 1)
+            constr = self.RMP_model.addConstr(self.vars['column_weights'].sum(customer, '*') == 1, name=f"weights_sum_{customer.idx}")
             constrs['weights_sum'][customer] = constr
 
             self.dual_index['weights_sum'][customer] = index
@@ -204,8 +226,9 @@ class NP_CG:
         ################# set objective #################
         obj = 0
         for customer in self.customer_list:
+            self.columns[customer][len(self.columns[customer]) - 1]['beta'] = self.oracles[customer].original_obj.getExpr().getValue()
             for number in range(len(self.columns[customer])):
-                obj += self.vars['column_weights'][customer, number] * self.columns[customer][number][1]
+                obj += self.vars['column_weights'][customer, number] * self.columns[customer][number]['beta']
         
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
 
@@ -224,22 +247,30 @@ class NP_CG:
         self.RMP_model.clear()
         self.init_RMP()
 
-    def subproblem(self, customer: Customer, dual_vars):
+    def subproblem(self, customer: Customer, dual_vars, col_ind):
         """
         Construct and solve the subproblem
         Only need to change the objective function, subject to the same oracle constraints
         """
 
         added = False # whether a new column is added
-        self.oracles[customer].update_objective(dual_vars, self.dual_index)
-        self.oracles[customer].solve()
-        new_column = self.oracles[customer].vars
-        v = self.oracles[customer].model.getObjective().getValue()
+        oracle = self.oracles[customer]
+        oracle.model.reset()
+        oracle.update_objective(dual_vars, self.dual_index)
+        oracle.solve()
+        # new_column = oracle.vars
+        v = oracle.model.objval
+        self.red_cost[self.num_cols, col_ind] = v
 
         if v < 0:
             added = True
-            beta = self.oracles[customer].original_obj.getExpr().getValue()
-            self.columns[customer].append((new_column, beta))
+            new_col = {
+                    'beta': 0,
+                    'sku_flow_sum':{},
+                    'sku_production_sum':{},
+                    'sku_inventory_sum':{},
+                    }
+            self.columns[customer].append(new_col)
 
         return added
     
@@ -252,18 +283,29 @@ class NP_CG:
         for customer in self.customer_list:
             self.oracles[customer] = self.construct_oracle(customer)
             self.init_cols(customer)
+
+            # for test
+            if self.oracles[customer].model.status == COPT.INFEASIBLE:
+                continue
+            else:
+                continue
+
         self.init_RMP()
+        for customer in self.customer_list:
+            self.oracles[customer].del_constr_for_RMP()
 
         while True: # may need to add a termination condition
-            self.num_cols += 1
 
             self.solve_RMP()
 
             added = False
-            for customer in self.customer_list:
-                added = self.subproblem(customer, self.RMP_model.getDuals()) or added
+            for customer, col_ind in zip(self.customer_list, range(len(self.customer_list))):
+                added = self.subproblem(customer, self.RMP_model.getDuals(), col_ind) or added
 
-            if not added:
+            self.num_cols += 1
+
+            if not added or self.num_cols >= self.max_iter:
+                self.red_cost = self.red_cost[:self.num_cols, :]
                 break
 
             self.update_RMP()
@@ -272,19 +314,23 @@ class NP_CG:
         
         cus_col_value = pd.DataFrame(index=range(self.num_cols), columns=[c.idx for c in self.customer_list])
         cus_col_weights = pd.DataFrame(index=range(self.num_cols), columns=[c.idx for c in self.customer_list])
+        reduced_cost = pd.DataFrame(self.red_cost, columns=[c.idx for c in self.customer_list])
 
         for customer in self.customer_list:
-            for number in range(len(self.columns[customer])):
-                cus_col_value.loc[number, customer.idx] = self.columns[customer][number][1]
+            for number in range(self.num_cols):
+                cus_col_value.loc[number, customer.idx] = self.columns[customer][number]['beta']
                 cus_col_weights.loc[number, customer.idx] = self.vars['column_weights'][customer, number].value
+        
+        num_cus = len(self.customer_list)
+        cus_col_value.to_csv(os.path.join(data_dir, 'cus'+str(num_cus)+'_col_cost.csv'), index=False)
+        cus_col_weights.to_csv(os.path.join(data_dir, 'cus'+str(num_cus)+'_col_weight.csv'), index=False)
+        reduced_cost.to_csv(os.path.join(data_dir, 'cus'+str(num_cus)+'_reduced_cost.csv'), index=False)
 
-        cus_col_value.to_csv(os.path.join(data_dir, 'cus_col_cost.csv'), index=False)
-        cus_col_weights.to_csv(os.path.join(data_dir, 'cus_col_weight.csv'), index=False)
 
 if __name__ == "__main__":
     datapath = 'data/data_0401_V3.xlsx'
     # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-    #     data_dir=datapath, sku_num=10, plant_num=20, warehouse_num=10, customer_num=3, one_period=True)
+    #   data_dir=datapath, sku_num=100, plant_num=20, warehouse_num=20, customer_num=20, one_period=True)
     sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(data_dir=datapath, one_period=True)
     
     node_list = plant_list + warehouse_list + customer_list
@@ -292,6 +338,7 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     arg.T = 1
+    arg.backorder = False
     np_cg = NP_CG(arg,network, customer_list, sku_list)
 
     np_cg.CG()

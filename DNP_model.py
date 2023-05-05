@@ -25,7 +25,8 @@ class DNP:
                  model_name: str = "DNP",
                  open_relationship:bool = True,
                  capacity:bool = True,
-                 feasibility:bool = False) -> None:
+                 feasibility:bool = False,
+                 cus_num:int = 1,) -> None:
         self.arg = arg
         self.T = arg.T
         self.network = network
@@ -42,6 +43,7 @@ class DNP:
         self.capacity = capacity
         self.feasibility = feasibility
         self.original_obj = 0.0
+        self.cus_num = cus_num
 
     def modeling(self):
         """
@@ -219,7 +221,10 @@ class DNP:
             },
             'holding_capacity': {
                 'index': '(t, node)'
-            }
+            },
+            'holding_capacity_back_order': {
+                'index': '(t, node)'
+            },
         }
 
         for constr in self.constr_types.keys():
@@ -242,6 +247,15 @@ class DNP:
                 self.add_constr_transportation_capacity(t)
                 self.add_constr_production_capacity(t)
                 self.add_constr_holding_capacity(t)
+            
+            self.add_constr_inventory_capacity_for_RMP(t)
+            self.add_constr_transportation_capacity(t)
+            self.add_constr_production_capacity(t)
+
+    def del_constr_for_RMP(self):
+        for t in tqdm(range(self.T)):
+            self.del_constr_inventory_capacity_for_RMP(t)
+
 
     def add_constr_flow_conservation(self, t: int):
 
@@ -253,33 +267,36 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 out_edges = get_out_edges(self.network, node)
 
+                constr_name = f"flow_conservation_{node.idx}_{k.idx}"
+
                 if node.type == CONST.PLANT:
                     constr = self.model.addConstr(self.vars['sku_production'][t, node, k] - self.vars['sku_flow'].sum(
-                        t, out_edges, k) == 0)
+                        t, out_edges, k) == 0, name=constr_name)
                 elif node.type == CONST.WAREHOUSE:
                     fulfilled_demand = 0
                     if node.has_demand(t, k):
-                        fulfilled_demand = node.demand[t,
-                                                       k] - self.vars['sku_demand_slack'][t, node, k]
+                        fulfilled_demand = node.demand[t,k] - self.vars['sku_demand_slack'][t, node, k]
 
-                    if t == 0:
-                        if node.initial_inventory is not None:
-                            if self.open_relationship:
-                                self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
-                            last_period_inventory = node.initial_inventory[
-                                k] if k in node.initial_inventory else 0.0
-                    else:
-                        last_period_inventory = self.vars['sku_inventory'][t-1, node, k]
+                    last_period_inventory = 0.0
+                    # if t == 0:
+                    #     if node.initial_inventory is not None:
+                    #         if self.open_relationship:
+                    #             self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
+                    #         last_period_inventory = node.initial_inventory[
+                    #             k] if k in node.initial_inventory else 0.0
+                    #     else:
+                    #         last_period_inventory = 0.0
+                    # else:
+                    #     last_period_inventory = self.vars['sku_inventory'][t-1, node, k]
 
                     constr = self.model.addConstr(self.vars['sku_flow'].sum(
                         t, in_edges, k) + last_period_inventory - self.vars['sku_flow'].sum(
-                        t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k])
+                        t, out_edges, k) - fulfilled_demand == self.vars['sku_inventory'][t, node, k], name=constr_name)
 
                 elif node.type == CONST.CUSTOMER:
-                    fulfilled_demand = node.demand[t,
-                                                   k] - self.vars['sku_demand_slack'][t, node, k]
+                    fulfilled_demand = node.demand[t,k] - self.vars['sku_demand_slack'][t, node, k]
                     constr = self.model.addConstr(self.vars['sku_flow'].sum(
-                        t, in_edges, k) - fulfilled_demand == 0)
+                        t, in_edges, k) - fulfilled_demand == 0, name=constr_name)
 
                 self.constrs['flow_conservation'][(t, node, k)] = constr
 
@@ -342,8 +359,9 @@ class DNP:
             # sku_list = get_edge_sku_list(edge,
             #                              t, self.full_sku_list)
 
-            constr = self.model.addConstr(
-                self.vars['sku_flow'].sum(t, edge, '*') <= edge.capacity * self.vars['select_edge'][t, edge])
+            # constr = self.model.addConstr(self.vars['sku_flow'].sum(t, edge, '*') <= edge.capacity * self.vars['select_edge'][t, edge])
+            constr = self.model.addConstr(self.vars['sku_flow'].sum(t, edge, '*') <= edge.capacity)
+
             self.constrs['transportation_capacity'][(t, edge)] = constr
 
         return
@@ -352,9 +370,36 @@ class DNP:
 
         for node in self.network.nodes:
             if node.type == CONST.PLANT:
-                constr = self.model.addConstr(
-                    self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
+                # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
+                constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity)
+
                 self.constrs['production_capacity'][(t, node)] = constr
+
+        return
+
+
+    def add_constr_inventory_capacity_for_RMP(self, t: int):
+
+        for node in self.network.nodes:
+            if node.type == CONST.WAREHOUSE:
+                constr = self.model.addConstr(
+                    self.vars['sku_inventory'].sum(t, node, '*') <= node.inventory_capacity / self.cus_num)
+                self.constrs['holding_capacity'][(t, node)] = constr
+
+                if self.arg.backorder is True:
+                    constr = self.model.addConstr(self.vars['sku_inventory'].sum(t, node, '*') >= - self.arg.M)
+                    self.constrs['holding_capacity_back_order'][(t, node)] = constr
+
+        return
+
+    def del_constr_inventory_capacity_for_RMP(self, t: int):
+
+        for node in self.network.nodes:
+            if node.type == CONST.WAREHOUSE:
+                self.constrs['holding_capacity'][(t, node)].remove()
+
+                # if self.arg.backorder is True:
+                    # self.constrs['holding_capacity_back_order'][(t, node)].remove()
 
         return
 
@@ -378,17 +423,18 @@ class DNP:
         Get the original objective value
         """
         obj = 0.0
-        t = 0
 
-        obj = obj + self.cal_sku_producing_cost(t)
-        obj = obj + self.cal_sku_holding_cost(t)
+        for t in tqdm(range(self.T)):
 
-        if self.arg.backorder is True:
-            obj = obj + self.cal_sku_backorder_cost(t)
+            obj = obj + self.cal_sku_producing_cost(t)
+            obj = obj + self.cal_sku_holding_cost(t)
 
-        obj = obj + self.cal_sku_transportation_cost(t)
+            if self.arg.backorder is True:
+                obj = obj + self.cal_sku_backorder_cost(t)
 
-        obj = obj + self.cal_sku_unfulfill_demand_cost(t)
+            obj = obj + self.cal_sku_transportation_cost(t)
+
+            obj = obj + self.cal_sku_unfulfill_demand_cost(t)
 
         obj = obj + self.cal_fixed_node_cost()
         obj = obj + self.cal_fixed_edge_cost()
@@ -399,75 +445,31 @@ class DNP:
         return obj
 
 
-    def update_objective(self, dualvar, dual_index):
-        """
-        Use dual variables to calculate the reduced cost
-        """
-        # Step1. Compute Beta
-
-        # obj = 0.0
-        # t = 0
-
-        # obj = obj + self.cal_sku_producing_cost(t)
-        # obj = obj + self.cal_sku_holding_cost(t)
-
-        # if self.arg.backorder is True:
-        #     obj = obj + self.cal_sku_backorder_cost(t)
-
-        # obj = obj + self.cal_sku_transportation_cost(t)
-
-        # obj = obj + self.cal_sku_unfulfill_demand_cost(t)
-
-        # obj = obj + self.cal_fixed_node_cost()
-        # obj = obj + self.cal_fixed_edge_cost()
-
-        # if self.arg.end_inventory:
-        #     obj = obj + self.cal_end_inventory_bias_cost()
-
-        obj = self.get_original_objective()
-
-        self.original_obj = obj
-
-        # Step2. Compute dual variable * corresponding vars
-        # Modify for RMP:
-        # holding_constrs:Dict{Node:'i',Dual_IDX}
-        # production_constrs:Dict {Node:'i',Dual_IDX}
-        # transportation_constrs: {Edge:'i',Dual_IDX}
-        # weights_consrts:[Dual_IDX]
-
-        # for e in self.network.edges:
-        #     edge = self.network.edges[e]['object']
-        #     if edge not in dual_index.keys():
-        #         continue # can be optimized
-        #     obj -= dualvar[dual_index[edge]].value * self.model.vars['sku_flow'].sum(0, edge, '*')
-
-        # for node in self.network.nodes:
-        #     if node not in dual_index.keys():
-        #         continue # can be optimized
-
-        #     if node.type == CONST.PLANT:
-        #         obj -= dualvar[dual_index[node]].value * self.model.vars['sku_production'].sum(0, node, '*')
-        #     elif node.type == CONST.WAREHOUSE:
-        #         obj -= dualvar[dual_index[node]].value * self.model.vars['sku_inventory'].sum(0, node, '*')
-        #     else:
-        #         obj -= dualvar[dual_index[node]].value
-
+    def extra_objective(self, dualvar, dual_index):
+        obj = 0.0
         for edge in dual_index['transportation_capacity'].keys():
-            obj -= dualvar[dual_index['transportation_capacity'][edge]] * self.model.vars['sku_flow'].sum(0, edge, '*')
+            obj -= dualvar[dual_index['transportation_capacity'][edge]] * self.vars['sku_flow'].sum(0, edge, '*')
                 
         for node in dual_index['node_capacity'].keys():
             if node.type == CONST.PLANT:
-                obj -= dualvar[dual_index['node_capacity'][node]] * self.model.vars['sku_production'].sum(0, node, '*')
+                obj -= dualvar[dual_index['node_capacity'][node]] * self.vars['sku_production'].sum(0, node, '*')
             elif node.type == CONST.WAREHOUSE:
-                obj -= dualvar[dual_index['node_capacity'][node]] * self.model.vars['sku_inventory'].sum(0, node, '*')
+                obj -= dualvar[dual_index['node_capacity'][node]] * self.vars['sku_inventory'].sum(0, node, '*')
             else:
                 continue
 
         for node in dual_index['weights_sum'].keys():
                 obj -= dualvar[dual_index['weights_sum'][node]]
 
+        return obj
 
-        # # Step3. Update objective
+
+    def update_objective(self, dualvar, dual_index):
+        """
+        Use dual variables to calculate the reduced cost
+        """
+        self.original_obj = self.get_original_objective()
+        obj = self.original_obj + self.extra_objective(dualvar, dual_index)
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
@@ -503,25 +505,10 @@ class DNP:
             self.obj[obj] = dict()
 
         obj = 0.0
+        self.original_obj = self.get_original_objective()
+
         if not self.feasibility:
-
-            for t in tqdm(range(self.T)):
-
-                obj = obj + self.cal_sku_producing_cost(t)
-                obj = obj + self.cal_sku_holding_cost(t)
-
-                if self.arg.backorder is True:
-                    obj = obj + self.cal_sku_backorder_cost(t)
-
-                obj = obj + self.cal_sku_transportation_cost(t)
-
-                obj = obj + self.cal_sku_unfulfill_demand_cost(t)
-
-            obj = obj + self.cal_fixed_node_cost()
-            obj = obj + self.cal_fixed_edge_cost()
-
-            if self.arg.end_inventory:
-                obj = obj + self.cal_end_inventory_bias_cost()
+            obj = self.original_obj
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
