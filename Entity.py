@@ -147,7 +147,8 @@ class Warehouse(Node):
         self.end_inventory = end_inventory
         self.end_inventory_bias_cost = end_inventory_bias_cost
         self.demand = demand
-        self.demand_sku = demand_sku
+        # self.demand_sku = demand_sku
+        self.demand_sku = None
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost
         self.if_current = if_current
         self.type = CONST.WAREHOUSE

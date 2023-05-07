@@ -97,6 +97,7 @@ class NP_CG:
         """
         Initialize the RMP with initial columns
         """
+        self.RMP_model.setParam(COPT.Param.Logging, 0)
 
         ################# add variables #################
         self.var_types = {
@@ -121,7 +122,7 @@ class NP_CG:
         # add variables
         self.vars = dict()
         for vt, param in self.var_types.items():
-            print(f"  - {vt}")
+            # print(f"  - {vt}")
             self.vars[vt] = self.RMP_model.addVars(
                 idx[vt],
                 lb=param['lb'],
@@ -294,6 +295,7 @@ class NP_CG:
         for customer in self.customer_list:
             self.oracles[customer].del_constr_for_RMP()
 
+        print('Initialization complete, start generating columns...')
         while True: # may need to add a termination condition
 
             self.solve_RMP()
@@ -303,6 +305,8 @@ class NP_CG:
                 added = self.subproblem(customer, self.RMP_model.getDuals(), col_ind) or added
 
             self.num_cols += 1
+
+            print('iteration: ', self.num_cols, '/', self.max_iter, ' min reduced cost: %.4e' % np.min(self.red_cost[self.num_cols - 1, :]))
 
             if not added or self.num_cols >= self.max_iter:
                 self.red_cost = self.red_cost[:self.num_cols, :]
@@ -329,9 +333,9 @@ class NP_CG:
 
 if __name__ == "__main__":
     datapath = 'data/data_0401_V3.xlsx'
-    # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-    #   data_dir=datapath, sku_num=100, plant_num=20, warehouse_num=20, customer_num=20, one_period=True)
-    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(data_dir=datapath, one_period=True)
+    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
+      data_dir=datapath, sku_num=100, plant_num=20, warehouse_num=20, customer_num=20, one_period=True)
+    # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(data_dir=datapath, one_period=True)
     
     node_list = plant_list + warehouse_list + customer_list
     network = constuct_network(node_list, edge_list, sku_list)
@@ -343,4 +347,4 @@ if __name__ == "__main__":
 
     np_cg.CG()
     solpath = '/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output'
-    np_cg.get_solution(solpath)
+    # np_cg.get_solution(solpath)

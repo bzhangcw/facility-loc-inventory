@@ -10,6 +10,7 @@ import argparse
 from Entity import SKU, Edge
 from tqdm import tqdm
 import os
+from read_data import read_data
 
 
 class DNP:
@@ -35,6 +36,8 @@ class DNP:
 
         self.env = cp.Envr(env_name)
         self.model = self.env.createModel(model_name)
+        self.model.setParam(COPT.Param.Logging, 0)
+
         self.vars = dict()  # variables
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
@@ -50,13 +53,13 @@ class DNP:
         build DNP model
         """
 
-        print("add variables ...")
+        # print("add variables ...")
         self.add_vars()
 
-        print("add constraints ...")
+        # print("add constraints ...")
         self.add_constraints()
 
-        print("set objective ...")
+        # print("set objective ...")
 
         self.set_objective()
 
@@ -184,7 +187,7 @@ class DNP:
 
         # add variables
         for vt, param in self.var_types.items():
-            print(f"  - {vt}")
+            # print(f"  - {vt}")
             self.vars[vt] = self.model.addVars(
                 idx[vt],
                 lb=param['lb'],
@@ -233,7 +236,8 @@ class DNP:
         for constr in self.constr_types['open_relationship'].keys():
             self.constrs['open_relationship'][constr] = dict()
 
-        for t in tqdm(range(self.T)):
+        # for t in tqdm(range(self.T)):
+        for t in range(self.T):
 
             # initial status and flow conservation
             self.add_constr_flow_conservation(t)
@@ -253,7 +257,8 @@ class DNP:
             self.add_constr_production_capacity(t)
 
     def del_constr_for_RMP(self):
-        for t in tqdm(range(self.T)):
+        # for t in tqdm(range(self.T)):
+        for t in range(self.T):
             self.del_constr_inventory_capacity_for_RMP(t)
 
 
@@ -424,7 +429,8 @@ class DNP:
         """
         obj = 0.0
 
-        for t in tqdm(range(self.T)):
+        # for t in tqdm(range(self.T)):
+        for t in range(self.T):
 
             obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
@@ -811,7 +817,9 @@ class DNP:
                             warehouse_index += 1
 
             if node.type != CONST.PLANT and node.demand_sku is not None:
-                for t in node.demand_sku.index:
+                t_list = set(range(self.arg.T)) & set(node.demand_sku.index)
+                # for t in node.demand_sku.index:
+                for t in t_list:
                     for k in node.demand_sku[t]:
                         slack = self.vars['sku_demand_slack'][(t, node, k)].x
                         demand = node.demand[t, k]
@@ -900,62 +908,19 @@ if __name__ == "__main__":
 
     param = Param()
     arg = param.arg
+    arg.T = 1
+    arg.backorder = False
 
-    sku = SKU('1')
-    print(sku)
+    datapath = 'data/data_0401_V3.xlsx'
 
-    sku_list = [sku]
+    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(data_dir=datapath, one_period=True)
+    # best solution: 1206630185
+    node_list = plant_list + warehouse_list + customer_list
 
-    production_sku_unit_cost = pd.Series({sku: 10.0})
-    plant = Plant('1', np.array([1, 1]), 10,
-                  sku_list, production_sku_unit_cost=production_sku_unit_cost)
-    print(plant)
-
-    holding_sku_unit_cost = pd.Series({sku: 1.0})
-    end_inventory_bias_cost = 100
-    initial_inventory = pd.Series({sku: 0.0})
-    end_inventory = pd.Series({sku: 0.0})
-
-    warehouse = Warehouse('1', np.array(
-        [1, 2]), 1, initial_inventory=initial_inventory, end_inventory=end_inventory, holding_sku_unit_cost=holding_sku_unit_cost, end_inventory_bias_cost=end_inventory_bias_cost)
-    print(warehouse)
-
-    demand = pd.Series({(0, sku): 5})
-    demand_sku = pd.Series({0: [sku]})
-    unfulfill_sku_unit_cost = pd.Series({(0, sku): 1000})
-    customer = Customer('1', np.array(
-        [2, 3]), demand, demand_sku, unfulfill_sku_unit_cost=unfulfill_sku_unit_cost)
-    print(customer)
-
-    nodes = [plant, warehouse, customer]
-
-    transportation_sku_unit_cost = pd.Series({sku: 1})
-
-    edges = [
-        Edge('e1', plant, warehouse, 10,
-             transportation_sku_unit_cost=transportation_sku_unit_cost),
-        Edge('e2', warehouse, customer, 10,
-             transportation_sku_unit_cost=transportation_sku_unit_cost)
-    ]
-    for e in edges:
-        print(e)
-
-    network = constuct_network(nodes, edges, sku_list)
+    network = constuct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()
     model.solve()
-    # model.model.write("./output/solution.sol")
-    # model.model.write("./output/toy.lp")
 
-    for t in range(arg.T):
-        for edge in edges:
-            temp_sku_list = edge.get_edge_sku_list(
-                t, model.full_sku_list)
-            for k in temp_sku_list:
-                print(
-                    f"Flow on {edge}: {model.vars['sku_flow'][(t, edge, k)].x}")
-
-        print(
-            f"Unfulfill {customer} demand is {model.vars['sku_demand_slack'][(t, customer, sku)].x}")
-        print(
-            f"Inventory {warehouse} is {model.vars['sku_inventory'][(t, warehouse, sku)].x}")
+    solpath = '/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output'
+    model.get_solution(solpath)
