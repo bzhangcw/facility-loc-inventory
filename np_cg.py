@@ -19,6 +19,9 @@ from read_data import read_data
 from dnp_model import DNP
 from param import Param
 
+# macro for debugging
+CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
+
 
 class NP_CG:
     def __init__(
@@ -62,7 +65,9 @@ class NP_CG:
             get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
             related_nodes = pred_reachable_nodes.copy()
             for node in pred_reachable_nodes:
-                if bool(node.get_node_sku_list(0, sku_list)):
+                # todo, previous
+                # if bool(node.get_node_sku_list(0, sku_list)):
+                if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
                             cus_sku_list
                     ):
@@ -336,7 +341,22 @@ class NP_CG:
                 "sku_inventory_sum": {},
             }
             self.columns[customer].append(new_col)
-
+        if CG_EXTRA_VERBOSITY:
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                for t in range(1):
+                    edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                    for k in edge_sku_list:
+                        if oracle.vars["sku_flow"][(t, edge, k)].x != 0:
+                            data = {
+                                "id": edge.idx,
+                                "start": edge.start.idx,
+                                "end": edge.end.idx,
+                                "sku": k.idx,
+                                "t": t,
+                                "qty": self.vars["sku_flow"][(t, edge, k)].x,
+                            }
+                            print(data)
         return added
 
     def CG(self):
@@ -386,7 +406,7 @@ class NP_CG:
                     "{:5d}".format(self.num_cols),
                     "/",
                     "{:d}".format(self.max_iter),
-                    " f: {:.4e}".format(self.RMP_model.objval),
+                    " f: {:.6e}".format(self.RMP_model.objval),
                     " c': %.4e" % np.min(self.red_cost[self.num_cols - 1, :]),
                 )
 
@@ -439,57 +459,5 @@ class NP_CG:
         )
 
 
-def dump_cfg_tofname(cfg):
-    """
-    create a signiture to dump data
-    :param cfg:
-    """
-    import json
-    infostr = json.dumps(cfg, indent=2, sort_keys=True)
-    utils.logger.info("generating the signature of this problem")
-    utils.logger.info(infostr)
-    keys = sorted(cfg.keys())
-    return "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
-
-
 if __name__ == "__main__":
-    datapath = "data/data_0401_V3.xlsx"
-    cfg = dict(
-        data_dir=datapath,
-        sku_num=100,
-        plant_num=20,
-        warehouse_num=20,
-        customer_num=20,
-        one_period=True
-    )
-    sig = dump_cfg_tofname(cfg)
-    fp = f"{utils.CONF.DEFAULT_SOL_PATH}/{sig}.pk"
-    if os.path.exists(fp):
-        utils.logger.info("current data has been generated before")
-        utils.logger.info(f"reading from cache: {fp}")
-        (sku_list, plant_list, warehouse_list, customer_list, edge_list,
-         network, node_list, *_) = pickle.load(open(fp, 'rb'))
-    else:
-        utils.logger.info("current data has not been generated before")
-        utils.logger.info(f"creating a temporary cache @{fp}")
-        sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-            **cfg
-        )
-
-        node_list = plant_list + warehouse_list + customer_list
-        network = constuct_network(node_list, edge_list, sku_list)
-        package = (
-            sku_list, plant_list, warehouse_list, customer_list, edge_list,
-            network, node_list
-        )
-        utils.logger.info(f"dumping a temporary cache @{fp}")
-        with open(fp, 'wb') as _fo:
-            pickle.dump(package, _fo)
-
-    param = Param()
-    arg = param.arg
-    arg.T = 1
-    arg.backorder = False
-    np_cg = NP_CG(arg, network, customer_list, sku_list)
-
-    np_cg.CG()
+    pass
