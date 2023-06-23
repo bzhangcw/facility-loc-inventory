@@ -74,7 +74,6 @@ class Plant(Node):
         production_sku_fixed_cost: "pd.Series[SKU, float]" = None,
         production_sku_unit_cost: "pd.Series[SKU, float]" = None,
     ) -> None:
-
         super().__init__(idx, location)
         self.production_capacity = production_capacity
         self.producible_sku = producible_sku
@@ -139,7 +138,6 @@ class Warehouse(Node):
         demand_sku: "pd.Series[int, List[SKU]]" = None,
         unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
     ) -> None:
-
         super().__init__(idx, location)
         self.inventory_capacity = inventory_capacity
         self.inventory_sku_capacity = inventory_sku_capacity
@@ -218,7 +216,6 @@ class Customer(Node):
         demand_sku: "pd.Series[int, List[SKU]]",
         unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
     ) -> None:
-
         super().__init__(idx, location)
         self.demand = demand
         self.demand_sku = demand_sku
@@ -285,16 +282,17 @@ class Edge:
         start: Node,
         end: Node,
         capacity: float,
+        variable_lb: float,
         distance: float = None,
         transportation_fixed_cost: float = 0.0,
         transportation_sku_fixed_cost: "pd.Series[SKU, float]" = None,
         transportation_sku_unit_cost: "pd.Series[SKU, float]" = None,
     ) -> None:
-
         self.idx = idx
         self.start = start
         self.end = end
         self.capacity = capacity
+        self.variable_lb = variable_lb
         self.distance = distance if distance is not None else self.cal_distance()
         self.transportation_fixed_cost = transportation_fixed_cost
         self.transportation_sku_fixed_cost = transportation_sku_fixed_cost
@@ -348,7 +346,6 @@ class Edge:
     def get_edge_sku_list_with_transportation_cost(
         self, t: int, full_sku_list: List[SKU]
     ):
-
         sku_list = self.get_edge_sku_list(t, full_sku_list)
 
         sku_list_with_fixed_transportation_cost = (

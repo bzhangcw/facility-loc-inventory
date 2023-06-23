@@ -107,7 +107,6 @@ def read_data(
     )
 
     for p in plant_df.index:
-
         items = plant_df.loc[p].values.tolist()
         plant_id = items[0]
         capacity = items[1]
@@ -238,7 +237,6 @@ def read_data(
     edge_sku_df_list = list(edge_sku_df.groupby(["start_id", "end_id"]))
 
     for edge in edge_sku_df_list:
-
         if edge[0][0] not in nodes_dict.keys() or edge[0][1] not in nodes_dict.keys():
             continue
 

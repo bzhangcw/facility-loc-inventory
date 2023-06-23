@@ -1,9 +1,10 @@
-from read_data import read_data
-from network import constuct_network
-from dnp_model import DNP
-from param import Param
-import os
+import numpy as np
+import pandas as pd
+
 import utils
+from dnp_model import DNP
+from network import constuct_network
+from param import Param
 
 if __name__ == "__main__":
     param = Param()
@@ -17,22 +18,15 @@ if __name__ == "__main__":
     #     warehouse_num=5,
     #     customer_num=5,
     # )
+    cfg = dict(data_dir=datapath, one_period=True)
     # cfg = dict(
     #     data_dir=datapath,
-    #     sku_num=100,
-    #     plant_num=20,
-    #     warehouse_num=20,
-    #     customer_num=20,
+    #     sku_num=2,
+    #     plant_num=2,
+    #     warehouse_num=13,
+    #     customer_num=2,
     #     one_period=True
     # )
-    cfg = dict(
-        data_dir=datapath,
-        sku_num=2,
-        plant_num=2,
-        warehouse_num=13,
-        customer_num=2,
-        one_period=True,
-    )
 
     (
         sku_list,
@@ -44,9 +38,13 @@ if __name__ == "__main__":
         node_list,
         *_,
     ) = utils.get_data_from_cfg(cfg)
-    # node_list = plant_list + warehouse_list + customer_list
-
+    # use external capacity, todo, move internals
+    cap = pd.read_csv("./data/random_capacity.csv").set_index("id")
+    for e in edge_list:
+        e.capacity = cap["qty"].get(e.idx, np.inf)
+        e.variable_lb = cap["lb"].get(e.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
+
     model = DNP(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)
