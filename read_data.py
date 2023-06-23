@@ -253,6 +253,7 @@ def read_data(
             start=start,
             end=end,
             capacity=capacity,
+            variable_lb=np.inf,
             transportation_sku_unit_cost=unit_cost,
         )
         edge_list.append(this_edge)
