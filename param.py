@@ -37,7 +37,8 @@ class Param:
         parser.add_argument(
             "--M",
             type=float,
-            default=1e10,
+            # default=1e10,
+            default=1e6,
             help="""
             big M for modeling
             """,
@@ -94,6 +95,15 @@ class Param:
             default=True,
             help="""
             whether to consider end inventory level
+            """,
+        )
+
+        parser.add_argument(
+            "--total_cus_num",
+            type=int,
+            default=472,
+            help="""
+            total customer number
             """,
         )
 

@@ -1,9 +1,15 @@
 output/
+out/
 *.csv
 *.xlsx
 tem_out/
 data/
 lp/
+tmp/
+oracle_lp/
+oracle_sol/
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

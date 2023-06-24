@@ -55,6 +55,9 @@ class DNP:
         self.feasibility = feasibility
         self.original_obj = 0.0
         self.cus_num = cus_num
+        self.total_cus_num = arg.total_cus_num
+        self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
+        # self.cus_ratio = 1.0
 
     def modeling(self):
         """
@@ -242,14 +245,42 @@ class DNP:
                 self.add_constr_production_capacity(t)
                 self.add_constr_holding_capacity(t)
 
-            self.add_constr_inventory_capacity_for_RMP(t)
-            self.add_constr_transportation_capacity(t)
-            self.add_constr_production_capacity(t)
+            # self.add_constr_inventory_capacity_for_RMP(t)
+            # self.add_constr_transportation_capacity(t)
+            # self.add_constr_production_capacity(t)
 
     def del_constr_for_RMP(self):
         # for t in tqdm(range(self.T)):
         for t in range(self.T):
-            self.del_constr_inventory_capacity_for_RMP(t)
+            # self.del_constr_inventory_capacity_for_RMP(t)
+            self.del_constr_transportation_capacity(t)
+            self.del_constr_production_capacity(t)
+            self.del_constr_holding_capacity(t)
+
+    def del_constr_transportation_capacity(self, t: int):
+        for e in self.network.edges:
+            edge = self.network.edges[e]["object"]
+            self.constrs["transportation_capacity"][(t, edge)].remove()
+
+    def del_constr_production_capacity(self, t: int):
+        for node in self.network.nodes:
+            if node.type == const.PLANT:
+                self.constrs["production_capacity"][(t, node)].remove()
+
+    def del_constr_holding_capacity(self, t: int):
+        for node in self.network.nodes:
+            if node.type == const.WAREHOUSE:
+                self.constrs["holding_capacity"][(t, node)].remove()
+
+    def del_constr_inventory_capacity_for_RMP(self, t: int):
+        for node in self.network.nodes:
+            if node.type == const.WAREHOUSE:
+                self.constrs["holding_capacity"][(t, node)].remove()
+
+                # if self.arg.backorder is True:
+                # self.constrs['holding_capacity_back_order'][(t, node)].remove()
+
+        return
 
     def add_constr_flow_conservation(self, t: int):
         for node in self.network.nodes:
@@ -377,13 +408,22 @@ class DNP:
                 ] = self.model.addConstr(
                     flow_sum >= edge.variable_lb * self.vars["select_edge"][t, edge]
                 )
-                self.constrs["transportation_capacity"][(t, edge)] = self.model.addConstr(
-                    flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                self.constrs["transportation_capacity"][
+                    (t, edge)
+                ] = self.model.addConstr(
+                    # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                    # multiply by customer ratio to force feasibliity of first column of cg
+                    flow_sum
+                    <= edge.capacity
+                    * self.vars["select_edge"][t, edge]
+                    * self.cus_ratio
                 )
             else:
-                self.constrs["transportation_capacity"][(t, edge)] = self.model.addConstr(
-                    flow_sum <= edge.capacity
-                )
+                self.constrs["transportation_capacity"][
+                    (t, edge)
+                    # ] = self.model.addConstr(flow_sum <= edge.capacity)
+                    # multiply by customer ratio to force feasibliity of first column of cg
+                ] = self.model.addConstr(flow_sum <= edge.capacity * self.cus_ratio)
 
         return
 
@@ -393,7 +433,9 @@ class DNP:
                 # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
                 constr = self.model.addConstr(
                     self.vars["sku_production"].sum(t, node, "*")
-                    <= node.production_capacity
+                    # <= node.production_capacity
+                    # multiply by customer ratio to force feasibliity of first column of cg
+                    <= node.production_capacity * self.cus_ratio
                 )
 
                 self.constrs["production_capacity"][(t, node)] = constr
@@ -417,22 +459,16 @@ class DNP:
 
         return
 
-    def del_constr_inventory_capacity_for_RMP(self, t: int):
-        for node in self.network.nodes:
-            if node.type == const.WAREHOUSE:
-                self.constrs["holding_capacity"][(t, node)].remove()
-
-                # if self.arg.backorder is True:
-                # self.constrs['holding_capacity_back_order'][(t, node)].remove()
-
-        return
-
     def add_constr_holding_capacity(self, t: int):
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
                 constr = self.model.addConstr(
                     self.vars["sku_inventory"].sum(t, node, "*")
-                    <= node.inventory_capacity * self.vars["open"][t, node]
+                    # <= node.inventory_capacity * self.vars["open"][t, node]
+                    # multiply by customer ratio to force feasibliity of first column of cg
+                    <= node.inventory_capacity
+                    * self.vars["open"][t, node]
+                    * self.cus_ratio
                 )
                 self.constrs["holding_capacity"][(t, node)] = constr
 

@@ -96,9 +96,11 @@ class NP_CG:
             env_name,
             model_name,
             self.open_relationship,
-            False,
+            # False,
             True,
-            len(self.customer_list),
+            True,
+            # len(self.customer_list),
+            1,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
         # return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, False) # for initial column, set obj to be the original obj
@@ -199,6 +201,11 @@ class NP_CG:
 
             if type(transportation) == float:
                 continue
+            sumcoef = 0
+            for i in range(transportation.getSize()):
+                sumcoef += transportation.getCoeff(i)
+            if sumcoef == 0:
+                continue
 
             constr = self.RMP_model.addConstr(
                 transportation <= edge.capacity,
@@ -234,6 +241,12 @@ class NP_CG:
 
                 if type(production) == float:
                     continue
+                sumcoef = 0
+                for i in range(production.getSize()):
+                    sumcoef += production.getCoeff(i)
+                if sumcoef == 0:
+                    continue
+
                 constr = self.RMP_model.addConstr(
                     production <= node.production_capacity,
                     name=f"production_capacity_{node.idx}",
@@ -264,6 +277,11 @@ class NP_CG:
                             )
 
                 if type(holding) == float:
+                    continue
+                sumcoef = 0
+                for i in range(holding.getSize()):
+                    sumcoef += holding.getCoeff(i)
+                if sumcoef == 0:
                     continue
 
                 constr = self.RMP_model.addConstr(
@@ -436,7 +454,8 @@ class NP_CG:
         )
 
         for customer in self.customer_list:
-            for number in range(self.num_cols):
+            # for number in range(self.num_cols):
+            for number in range(len(self.columns[customer])):
                 cus_col_value.loc[number, customer.idx] = self.columns[customer][
                     number
                 ]["beta"]
