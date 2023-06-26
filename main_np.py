@@ -57,7 +57,7 @@ if __name__ == "__main__":
     #         v.setType(COPT.CONTINUOUS)
     ######################
     model.model.setParam("Logging", 1)
-    model.model.setParam("RelGap", 1.0)
+    # model.model.setParam("RelGap", 1.3)
 
     model.solve()
 

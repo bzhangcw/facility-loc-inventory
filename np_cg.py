@@ -54,6 +54,7 @@ class NP_CG:
         self.num_cols = 0
         self.max_iter = max_iter
         self.red_cost = np.zeros((max_iter, len(customer_list)))
+        self.full_network = self.network.copy()
 
     def get_subgraph(self):
         """
@@ -78,7 +79,7 @@ class NP_CG:
             self.subgraph[customer] = self.network.subgraph(related_nodes)
             self.subgraph[customer].graph["sku_list"] = cus_sku_list
 
-    def construct_oracle(self, customer: Customer):
+    def construct_oracle(self, customer: Customer, cus_num: int):
         """
         Construct oracles for each customer
         """
@@ -88,8 +89,7 @@ class NP_CG:
         arg.T = 1
         env_name = customer.idx + "_oracle_env"
         model_name = customer.idx + "_oracle"
-
-        return DNP(
+        oracle = DNP(
             arg,
             subgraph,
             full_sku_list,
@@ -98,11 +98,15 @@ class NP_CG:
             self.open_relationship,
             # False,
             True,
-            True,
+            # True, # feasibility
+            False,  # feasibility
             # len(self.customer_list),
-            1,
+            cus_num=cus_num,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
+        oracle.modeling()
+
+        return oracle
         # return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, False) # for initial column, set obj to be the original obj
 
     def init_cols(self, customer: Customer):
@@ -111,7 +115,7 @@ class NP_CG:
         """
 
         oracle = self.oracles[customer]
-        oracle.modeling()
+        # oracle.modeling()
         oracle.solve()
         init_col = {
             "beta": 0,
@@ -120,6 +124,183 @@ class NP_CG:
             "sku_inventory_sum": {},
         }
         self.columns[customer] = [init_col]
+
+    def init_cols_from_primal_feas_sol(self):
+        full_model = DNP(self.arg, self.full_network, cus_num=472)
+        full_model.modeling()
+        # get the LP relaxation
+        # vars = model.model.getVars()
+        # binary_vars_index = []
+        # for v in vars:
+        #     if v.getType() == COPT.BINARY:
+        #         binary_vars_index.append(v.getIdx())
+        #         v.setType(COPT.CONTINUOUS)
+        ######################
+        full_model.model.setParam("Logging", 1)
+        full_model.model.setParam("RelGap", 1.3)
+        full_model.solve()
+
+        t = 0  # one time period
+        init_col = {}
+        for customer in tqdm(self.customer_list, desc="Customer"):
+            init_col[customer] = self.oracles[customer].var_idx
+
+            # get all paths from customer to each plant node
+            all_paths = {}
+            for node in self.subgraph[customer].nodes:
+                if self.subgraph[customer].in_degree(node) == 0:  # source node
+                    all_paths[node] = nx.all_simple_paths(
+                        self.subgraph[customer],
+                        node,
+                        customer,
+                        cutoff=20,
+                        # self.subgraph[customer].reverse(), customer, node # find all paths start from customer to source node
+                    )
+
+            customer_in_edges = get_in_edges(self.subgraph[customer], customer)
+            customer_pre_node_egdes = []
+            for edge in customer_in_edges:
+                customer_pre_node = edge.start
+                customer_pre_node_egdes += get_out_edges(
+                    self.network, customer_pre_node
+                )
+
+            for source, paths in tqdm(all_paths.items(), desc="Paths"):
+                for path in tqdm(paths, desc="Path"):
+                    for sku in self.subgraph[customer].graph["sku_list"]:
+                        total_sku_flow_sum = full_model.vars["sku_flow"].sum(
+                            t, customer_pre_node_egdes, sku
+                        )
+                        customer_sku_flow = full_model.vars["sku_flow"].sum(
+                            t, customer_in_edges, sku
+                        )
+
+                        if type(total_sku_flow_sum) != float:
+                            total_sku_flow_sum = total_sku_flow_sum.getValue()
+                        if type(customer_sku_flow) != float:
+                            customer_sku_flow = customer_sku_flow.getValue()
+
+                        sku_flow_ratio = (
+                            customer_sku_flow / total_sku_flow_sum
+                            if total_sku_flow_sum != 0
+                            else 0
+                        )
+
+                        # for node in path:
+                        for i in range(len(path)):
+                            node = path[i]
+                            node_sku_list = node.get_node_sku_list(
+                                t, self.subgraph[customer].graph["sku_list"]
+                            )
+
+                            if self.open_relationship:
+                                init_col[customer]["open"][(t, node)] = full_model.vars[
+                                    "open"
+                                ][t, node].x
+
+                            if isinstance(node, Customer):
+                                this_edge = self.subgraph[customer].edges[
+                                    path[i - 1], node
+                                ]["object"]
+
+                                edge_sku_list = edge.get_edge_sku_list(
+                                    t,
+                                    self.subgraph[customer].graph["sku_list"],
+                                )
+
+                                if sku in node_sku_list:
+                                    init_col[customer]["sku_demand_slack"][
+                                        (t, node, sku)
+                                    ] = (
+                                        node.demand[t, sku]
+                                        - init_col[customer]["sku_flow"][
+                                            (t, this_edge, sku)
+                                        ]
+                                    )
+
+                                if self.open_relationship:
+                                    init_col[customer]["select_edge"][
+                                        (t, this_edge)
+                                    ] = full_model.vars["select_edge"][t, this_edge].x
+
+                                    if sku in edge_sku_list:
+                                        init_col[customer]["sku_select_edge"][
+                                            (t, this_edge, sku)
+                                        ] = full_model.vars["sku_select_edge"][
+                                            t, this_edge, sku
+                                        ].x
+
+                            else:
+                                this_edge = self.subgraph[customer].edges[
+                                    node, path[i + 1]
+                                ]["object"]
+
+                                edge_sku_list = edge.get_edge_sku_list(
+                                    t,
+                                    self.subgraph[customer].graph["sku_list"],
+                                )
+
+                                if self.open_relationship:
+                                    init_col[customer]["select_edge"][
+                                        (t, this_edge)
+                                    ] = full_model.vars["select_edge"][t, this_edge].x
+
+                                    if sku in edge_sku_list:
+                                        init_col[customer]["sku_select_edge"][
+                                            (t, this_edge, sku)
+                                        ] = full_model.vars["sku_select_edge"][
+                                            t, this_edge, sku
+                                        ].x
+
+                                if isinstance(node, Warehouse):
+                                    if sku in node_sku_list:
+                                        init_col[customer]["sku_inventory"][
+                                            (t, node, sku)
+                                        ] = (
+                                            sku_flow_ratio
+                                            * full_model.vars["sku_inventory"][
+                                                t, node, sku
+                                            ].x
+                                        )
+                                    if sku in edge_sku_list:
+                                        init_col[customer]["sku_flow"][
+                                            (t, this_edge, sku)
+                                        ] = (
+                                            sku_flow_ratio
+                                            * full_model.vars["sku_flow"][
+                                                t, this_edge, sku
+                                            ].x
+                                        )
+                                        # init_col[customer]["init_inventory"][node, sku] = sku_flow_ratio * node.initial_inventory[sku] if sku in node.initial_inventory else 0.0
+                                elif isinstance(node, Plant):
+                                    if sku in node_sku_list:
+                                        init_col[customer]["sku_production"][
+                                            (t, node, sku)
+                                        ] += (
+                                            sku_flow_ratio
+                                            * full_model.vars["sku_production"][
+                                                t, node, sku
+                                            ].x
+                                        )
+
+                                        if self.open_relationship:
+                                            init_col[customer]["sku_open"][
+                                                (t, node, sku)
+                                            ] = full_model.vars["sku_open"][
+                                                t, node, sku
+                                            ].x
+
+                                    if sku in edge_sku_list:
+                                        init_col[customer]["sku_flow"][
+                                            (t, this_edge, sku)
+                                        ] = (
+                                            sku_flow_ratio
+                                            * full_model.vars["sku_flow"][
+                                                t, this_edge, sku
+                                            ].x
+                                        )
+
+        return init_col
 
     def init_RMP(self):
         """
@@ -385,7 +566,7 @@ class NP_CG:
         self.get_subgraph()
 
         for customer in tqdm(self.customer_list):
-            self.oracles[customer] = self.construct_oracle(customer)
+            self.oracles[customer] = self.construct_oracle(customer, 1)
             self.init_cols(customer)
 
             # for test
@@ -395,7 +576,15 @@ class NP_CG:
                 continue
 
         self.init_RMP()
+
+        self.init_cols_from_feas_sol()
         for customer in self.customer_list:
+            # change the cus_ratio to 1.0 for all oracles
+            self.oracles[customer] = self.construct_oracle(
+                customer, len(self.customer_list)
+            )
+            #############################################
+
             self.oracles[customer].del_constr_for_RMP()
 
         self._logger.info("Initialization complete, start generating columns...")

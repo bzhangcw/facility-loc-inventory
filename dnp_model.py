@@ -58,6 +58,7 @@ class DNP:
         self.total_cus_num = arg.total_cus_num
         self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
         # self.cus_ratio = 1.0
+        self.var_idx = None
 
     def modeling(self):
         """
@@ -196,7 +197,11 @@ class DNP:
                             self.var_types["sku_demand_slack"]["ub"].append(
                                 node.demand[t, k]
                             )
-
+        # for initializaiton in CG
+        self.var_idx = {}
+        for var in idx.keys():
+            self.var_idx[var] = {key: 0 for key in idx[var]}
+        ##########################
         # add variables
         for vt, param in self.var_types.items():
             # print(f"  - {vt}")
@@ -311,13 +316,21 @@ class DNP:
                     # if t == 0:
                     #     if node.initial_inventory is not None:
                     #         if self.open_relationship:
-                    #             self.model.addConstr(self.vars['open'][self.T-1, node] == 1)
-                    #         last_period_inventory = node.initial_inventory[
-                    #             k] if k in node.initial_inventory else 0.0
+                    #             self.model.addConstr(
+                    #                 self.vars["open"][self.T - 1, node] == 1
+                    #             )
+                    #         last_period_inventory = (
+                    #             node.initial_inventory[k]
+                    #             if k in node.initial_inventory
+                    #             else 0.0
+                    #         )
                     #     else:
                     #         last_period_inventory = 0.0
                     # else:
-                    #     last_period_inventory = self.vars['sku_inventory'][t-1, node, k]
+                    #     last_period_inventory = self.vars["sku_inventory"][
+                    #         t - 1, node, k
+                    #     ]
+                    # last_period_inventory *= self.cus_ratio
 
                     constr = self.model.addConstr(
                         self.vars["sku_flow"].sum(t, in_edges, k)
