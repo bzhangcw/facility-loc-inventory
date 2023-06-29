@@ -30,6 +30,7 @@ if __name__ == "__main__":
         e.capacity = cap["qty"].get(e.idx, np.inf)
         e.variable_lb = cap["lb"].get(e.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
+    ###############################################################
 
     param = Param()
     arg = param.arg
@@ -38,8 +39,17 @@ if __name__ == "__main__":
     # max_iter = 15
     max_iter = 500
 
+    # pd = "primal"  # the way to initialize columns
+    pd = None  # the way to initialize columns
+
     np_cg = NP_CG(
-        arg, network, customer_list, sku_list, max_iter=max_iter, open_relationship=True
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        open_relationship=True,
+        pd=pd,
     )
 
     np_cg.CG()

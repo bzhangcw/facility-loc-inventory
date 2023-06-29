@@ -92,7 +92,8 @@ class Param:
         parser.add_argument(
             "--end_inventory",
             type=bool,
-            default=True,
+            # default=True,
+            default=False,
             help="""
             whether to consider end inventory level
             """,

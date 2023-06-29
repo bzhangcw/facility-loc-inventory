@@ -45,6 +45,7 @@ if __name__ == "__main__":
         e.capacity = cap["qty"].get(e.idx, np.inf)
         e.variable_lb = cap["lb"].get(e.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
+    ###############################################################
 
     model = DNP(arg, network, cus_num=472)
     model.modeling()

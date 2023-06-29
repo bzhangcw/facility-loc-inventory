@@ -59,6 +59,11 @@ class DNP:
         self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
         # self.cus_ratio = 1.0
         self.var_idx = None
+        self.dual_index_for_RMP = {
+            "transportation_capacity": dict(),
+            "node_capacity": dict(),
+            # "weights_sum": dict(),
+        }
 
     def modeling(self):
         """
@@ -409,6 +414,7 @@ class DNP:
         return
 
     def add_constr_transportation_capacity(self, t: int):
+        index = 0
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 
@@ -434,13 +440,23 @@ class DNP:
             else:
                 self.constrs["transportation_capacity"][
                     (t, edge)
-                    # ] = self.model.addConstr(flow_sum <= edge.capacity)
-                    # multiply by customer ratio to force feasibliity of first column of cg
-                ] = self.model.addConstr(flow_sum <= edge.capacity * self.cus_ratio)
+                ] = self.model.addConstr(
+                    flow_sum
+                    <= edge.capacity
+                    * self.vars["select_edge"][t, edge]
+                    * self.cus_ratio
+                )
+
+            self.dual_index_for_RMP["transportation_capacity"][edge] = index
+            index += 1
 
         return
 
     def add_constr_production_capacity(self, t: int):
+        index = (
+            list(self.dual_index_for_RMP["transportation_capacity"].values())[-1] + 1
+        )
+
         for node in self.network.nodes:
             if node.type == const.PLANT:
                 # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
@@ -452,6 +468,9 @@ class DNP:
                 )
 
                 self.constrs["production_capacity"][(t, node)] = constr
+
+            self.dual_index_for_RMP["node_capacity"][node] = index
+            index += 1
 
         return
 
@@ -473,6 +492,8 @@ class DNP:
         return
 
     def add_constr_holding_capacity(self, t: int):
+        index = list(self.dual_index_for_RMP["node_capacity"].values())[-1] + 1
+
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
                 constr = self.model.addConstr(
@@ -490,6 +511,9 @@ class DNP:
                         self.vars["sku_inventory"].sum(t, node, "*")
                         >= -self.arg.M * self.vars["open"][t, node]
                     )
+
+            self.dual_index_for_RMP["node_capacity"][node] = index
+            index += 1
 
         return
 
