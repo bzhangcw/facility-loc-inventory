@@ -25,14 +25,14 @@ CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
 
 class NP_CG:
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        open_relationship=False,
-        max_iter=500,
-        pd=None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            open_relationship=False,
+            max_iter=500,
+            pd=None,
     ) -> None:
         self._logger = utils.logger
         self.arg = arg
@@ -73,7 +73,7 @@ class NP_CG:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                        cus_sku_list
+                            cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -231,8 +231,8 @@ class NP_CG:
                     elif isinstance(node, Plant):
                         if sku in node_sku_list:
                             init_col[customer]["sku_production"][(t, node, sku)] = (
-                                full_model.vars["sku_production"][t, node, sku].x
-                                * sku_flow_ratio
+                                    full_model.vars["sku_production"][t, node, sku].x
+                                    * sku_flow_ratio
                             )
 
                             constr = self.oracles[customer].model.addConstr(
@@ -248,8 +248,8 @@ class NP_CG:
                     else:
                         if sku in node_sku_list:
                             init_col[customer]["sku_inventory"][(t, node, sku)] = (
-                                full_model.vars["sku_inventory"][t, node, sku].x
-                                * sku_flow_ratio
+                                    full_model.vars["sku_inventory"][t, node, sku].x
+                                    * sku_flow_ratio
                             )
 
                             constr = self.oracles[customer].model.addConstr(
@@ -284,8 +284,8 @@ class NP_CG:
 
                         else:
                             init_col[customer]["sku_flow"][(t, edge, sku)] = (
-                                full_model.vars["sku_flow"][t, edge, sku].x
-                                * sku_flow_ratio
+                                    full_model.vars["sku_flow"][t, edge, sku].x
+                                    * sku_flow_ratio
                             )
 
                             constr = self.oracles[customer].model.addConstr(
@@ -372,8 +372,8 @@ class NP_CG:
                     )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                            self.vars["column_weights"][customer, number]
-                            * self.columns[customer][number]["sku_flow_sum"][edge]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -410,10 +410,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_production_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_production_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(production) == float:
@@ -447,10 +447,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_inventory_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_inventory_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(holding) == float:
@@ -491,8 +491,8 @@ class NP_CG:
             )
             for number in range(len(self.columns[customer])):
                 obj += (
-                    self.vars["column_weights"][customer, number]
-                    * self.columns[customer][number]["beta"]
+                        self.vars["column_weights"][customer, number]
+                        * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -501,6 +501,9 @@ class NP_CG:
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
+        self.RMP_model.setParam("LpMethod", 2)
+        self.RMP_model.setParam("Crossover", 0)
+
         self.RMP_model.solve()
 
     def update_RMP(self):
@@ -637,11 +640,11 @@ class NP_CG:
 
                 added = False
                 for customer, col_ind in zip(
-                    self.customer_list, range(len(self.customer_list))
+                        self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                        self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
-                        or added
+                            self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
+                            or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True
