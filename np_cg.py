@@ -298,6 +298,47 @@ class NP_CG:
 
         return init_col
 
+    def solve_lp_relaxation(self):
+        full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
+        full_lp_relaxation.modeling()
+        # get the LP relaxation
+        vars = full_lp_relaxation.model.getVars()
+        binary_vars_index = []
+        for v in vars:
+            if v.getType() == COPT.BINARY:
+                binary_vars_index.append(v.getIdx())
+                v.setType(COPT.CONTINUOUS)
+        ######################
+        full_lp_relaxation.model.setParam("Logging", 1)
+        full_lp_relaxation.solve()
+        lp_dual = full_lp_relaxation.model.getDuals()
+        dual_index = full_lp_relaxation.dual_index_for_RMP
+
+        return lp_dual, dual_index
+
+    def init_cols_from_dual_feas_sol(self, dual_vars):
+        full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
+        full_lp_relaxation.modeling()
+        # get the LP relaxation
+        vars = full_lp_relaxation.model.getVars()
+        binary_vars_index = []
+        for v in vars:
+            if v.getType() == COPT.BINARY:
+                binary_vars_index.append(v.getIdx())
+                v.setType(COPT.CONTINUOUS)
+        ######################
+        full_lp_relaxation.model.setParam("Logging", 1)
+        full_lp_relaxation.solve()
+        lp_dual = full_lp_relaxation.model.getDuals()
+        dual_index = full_lp_relaxation.dual_index_for_RMP
+        dual_index["weights_sum"] = self.dual_index["weights_sum"]
+
+        for customer in self.customer_list:
+            index = dual_index["weights_sum"][customer]
+            lp_dual[index] = dual_vars[index]
+
+        return lp_dual, dual_index
+
     def init_RMP(self):
         """
         Initialize the RMP with initial columns
@@ -512,16 +553,25 @@ class NP_CG:
         self.RMP_model.clear()
         self.init_RMP()
 
-    def subproblem(self, customer: Customer, dual_vars, col_ind):
+    # def subproblem(self, customer: Customer, RMP_dual_vars, col_ind):
+    def subproblem(self, customer: Customer, dual_vars, dual_index, col_ind):
         """
         Construct and solve the subproblem
         Only need to change the objective function, subject to the same oracle constraints
         """
 
+        # if self.num_cols == 0 and self.pd == "dual":
+        #     dual_vars, dual_index = self.init_cols_from_dual_feas_sol(RMP_dual_vars)
+        # else:
+        #     dual_vars = RMP_dual_vars
+        #     dual_index = self.dual_index
+
         added = False  # whether a new column is added
         oracle = self.oracles[customer]
         oracle.model.reset()
-        oracle.update_objective(dual_vars, self.dual_index)
+        # oracle.update_objective(dual_vars, self.dual_index)
+        oracle.update_objective(dual_vars, dual_index)
+
         oracle.solve()
         # new_column = oracle.vars
         v = oracle.model.objval
@@ -561,7 +611,7 @@ class NP_CG:
 
         self.get_subgraph()
 
-        if self.pd is None:
+        if self.pd is None or self.pd == "dual":
             # initialize cols form the oracle
 
             for customer in tqdm(self.customer_list):
@@ -622,10 +672,10 @@ class NP_CG:
                 ###############################################################################
             self.init_RMP()
 
-        elif self.pd == "dual":
-            # initialize cols form the dual feasible solution of LP relaxation of the full problem
-            raise NotImplementedError
-
+        # elif self.pd == "dual":
+        #     # initialize cols form the dual feasible solution of LP relaxation of the full problem
+        #     # raise NotImplementedError
+        #     pass
         else:
             raise ("pd should be None, primal or dual")
 
@@ -635,12 +685,24 @@ class NP_CG:
                 bool_early_stop = False
                 self.solve_RMP()
 
+                ######################################
+                RMP_dual_vars = self.RMP_model.getDuals()
+                if self.num_cols == 0 and self.pd == "dual":
+                    dual_vars, dual_index = self.init_cols_from_dual_feas_sol(
+                        RMP_dual_vars
+                    )
+                else:
+                    dual_vars = RMP_dual_vars
+                    dual_index = self.dual_index
+                ######################################
+
                 added = False
                 for customer, col_ind in zip(
                     self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                        self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
+                        # self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
+                        self.subproblem(customer, dual_vars, dual_index, col_ind)
                         or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:

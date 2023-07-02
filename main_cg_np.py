@@ -40,7 +40,8 @@ if __name__ == "__main__":
     max_iter = 500
 
     # pd = "primal"  # the way to initialize columns
-    pd = None  # the way to initialize columns
+    # pd = None  # the way to initialize columns
+    pd = "dual"  # the way to initialize columns
 
     np_cg = NP_CG(
         arg,

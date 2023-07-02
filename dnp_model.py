@@ -443,7 +443,7 @@ class DNP:
                 ] = self.model.addConstr(
                     flow_sum
                     <= edge.capacity
-                    * self.vars["select_edge"][t, edge]
+                    # * self.vars["select_edge"][t, edge] # cause infeasibility of LP relaxation
                     * self.cus_ratio
                 )
 
