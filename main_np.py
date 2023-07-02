@@ -50,15 +50,16 @@ if __name__ == "__main__":
     model = DNP(arg, network, cus_num=472)
     model.modeling()
     # get the LP relaxation
-    # vars = model.model.getVars()
-    # binary_vars_index = []
-    # for v in vars:
-    #     if v.getType() == COPT.BINARY:
-    #         binary_vars_index.append(v.getIdx())
-    #         v.setType(COPT.CONTINUOUS)
+    vars = model.model.getVars()
+    binary_vars_index = []
+    for v in vars:
+        if v.getType() == COPT.BINARY:
+            binary_vars_index.append(v.getIdx())
+            v.setType(COPT.CONTINUOUS)
     ######################
     model.model.setParam("Logging", 1)
     # model.model.setParam("RelGap", 1.3)
+    # model.model.setParam("LpMethod", 2)  # interior point method
 
     model.solve()
 
