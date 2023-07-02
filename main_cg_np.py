@@ -1,4 +1,11 @@
 from np_cg import *
+import numpy as np
+import pandas as pd
+
+import utils
+from dnp_model import DNP
+from network import constuct_network
+from param import Param
 
 if __name__ == "__main__":
     datapath = "data/data_0401_V3.xlsx"
@@ -7,7 +14,7 @@ if __name__ == "__main__":
         sku_num=2,
         plant_num=2,
         warehouse_num=13,
-        customer_num=5,
+        customer_num=2,
         one_period=True,
     )
 
@@ -29,7 +36,7 @@ if __name__ == "__main__":
     # for e in edge_list:
     #     e.capacity = cap["qty"].get(e.idx, np.inf)
     #     e.variable_lb = cap["lb"].get(e.idx, np.inf)
-    network = constuct_network(node_list, edge_list, sku_list)
+    # network = constuct_network(node_list, edge_list, sku_list)
     ###############################################################
 
     param = Param()

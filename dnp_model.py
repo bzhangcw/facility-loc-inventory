@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 from typing import List
 import numpy as np
@@ -10,7 +11,7 @@ from coptpy import COPT
 import const
 from entity import SKU
 from read_data import read_data
-from utils import get_in_edges, get_out_edges
+from utils import get_in_edges, get_out_edges, logger
 
 
 class DNP:
@@ -1064,13 +1065,19 @@ class DNP:
         else:
             total_fullfill_sku_rate = node_sku_t_demand_slack[["demand", "slack"]]
             total_fullfill_rate = 1
-
-        warehouse_avg_inventory_t = (
-            warehouse_sku_t_storage.groupby("node").sum()["qty"] / self.T
-        )
-        warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
-            warehouse_avg_inventory_t
-        )
+        
+        try:
+            warehouse_avg_inventory_t = (
+                warehouse_sku_t_storage.groupby("node").sum()["qty"] / self.T
+            )
+            warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
+                warehouse_avg_inventory_t
+            )
+        except Exception as e:
+            logger.warn(f"table warehouse_total_avg_inventory failed")
+            # logger.exception(e)
+            warehouse_total_avg_inventory = 0
+            warehouse_avg_inventory_t = None
 
         overall_kpi = {
             "customer_fullfill_rate": customer_fullfill_total_rate,
@@ -1090,7 +1097,7 @@ class DNP:
             total_fullfill_sku_rate.to_excel(
                 writer, sheet_name="node_fullfill_sku_rate"
             )
-            warehouse_avg_inventory_t.to_excel(
+            if warehouse_avg_inventory_t: warehouse_avg_inventory_t.to_excel(
                 writer, sheet_name="warehouse_avg_inventory"
             )
             overall_kpi.to_excel(writer, sheet_name="overall_kpi")
@@ -1109,6 +1116,7 @@ class DNP:
         edge_sku_t_flow.to_csv(
             os.path.join(data_dir, "edge_sku_t_flow.csv"), index=False
         )
+        logger.info("saving finished")
 
 
 if __name__ == "__main__":
