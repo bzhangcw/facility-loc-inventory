@@ -32,7 +32,7 @@ if __name__ == "__main__":
         sku_num=2,
         plant_num=2,
         warehouse_num=13,
-        customer_num=10,
+        customer_num=2,
         one_period=True,
     )
     # cfg = dict(data_dir=datapath, one_period=True)
@@ -57,12 +57,12 @@ if __name__ == "__main__":
     model = DNP(arg, network, cus_num=472)
     model.modeling()
     # get the LP relaxation
-    # variables = model.model.getVars()
-    # binary_vars_index = []
-    # for v in variables:
-    #     if v.getType() == COPT.BINARY:
-    #         binary_vars_index.append(v.getIdx())
-    #         v.setType(COPT.CONTINUOUS)
+    variables = model.model.getVars()
+    binary_vars_index = []
+    for v in variables:
+        if v.getType() == COPT.BINARY:
+            binary_vars_index.append(v.getIdx())
+            v.setType(COPT.CONTINUOUS)
     ######################
     model.model.setParam("Logging", 1)
     # model.model.setParam("RelGap", 1.3)

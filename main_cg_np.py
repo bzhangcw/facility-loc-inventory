@@ -14,7 +14,7 @@ if __name__ == "__main__":
         sku_num=2,
         plant_num=2,
         warehouse_num=13,
-        customer_num=10,
+        customer_num=2,
         one_period=True,
     )
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     # max_iter = 15
     max_iter = 15
     init_primal = None
-    init_dual = None # 'dual'
+    init_dual = None  # 'dual'
 
     np_cg = NP_CG(
         arg,

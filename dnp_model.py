@@ -349,10 +349,12 @@ class DNP:
 
                 elif node.type == const.CUSTOMER:
                     fulfilled_demand = (
-                        node.demand[t, k] - self.variables["sku_demand_slack"][t, node, k]
+                        node.demand[t, k]
+                        - self.variables["sku_demand_slack"][t, node, k]
                     )
                     constr = self.model.addConstr(
-                        self.variables["sku_flow"].sum(t, in_edges, k) - fulfilled_demand
+                        self.variables["sku_flow"].sum(t, in_edges, k)
+                        - fulfilled_demand
                         == 0,
                         name=constr_name,
                     )
@@ -368,7 +370,8 @@ class DNP:
             sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
             constr = self.model.addConstr(
-                self.variables["select_edge"][t, edge] <= self.variables["open"][t, edge.start]
+                self.variables["select_edge"][t, edge]
+                <= self.variables["open"][t, edge.start]
             )
 
             self.constrs["open_relationship"]["select_edge"][
@@ -378,7 +381,8 @@ class DNP:
             self.constrs["open_relationship"]["select_edge"][
                 (t, edge, edge.end)
             ] = constr = self.model.addConstr(
-                self.variables["select_edge"][t, edge] <= self.variables["open"][t, edge.end]
+                self.variables["select_edge"][t, edge]
+                <= self.variables["open"][t, edge.end]
             )
 
             for k in sku_list:
@@ -407,7 +411,8 @@ class DNP:
             for k in sku_list:
                 if node.type == const.PLANT:
                     constr = self.model.addConstr(
-                        self.variables["sku_open"][t, node, k] <= self.variables["open"][t, node]
+                        self.variables["sku_open"][t, node, k]
+                        <= self.variables["open"][t, node]
                     )
 
                 self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
@@ -426,7 +431,8 @@ class DNP:
                 self.constrs["transportation_variable_lb"][
                     (t, edge)
                 ] = self.model.addConstr(
-                    flow_sum >= edge.variable_lb * self.variables["select_edge"][t, edge]
+                    flow_sum
+                    >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
                 self.constrs["transportation_capacity"][
                     (t, edge)
@@ -547,9 +553,9 @@ class DNP:
     def extra_objective(self, dualvar, dual_index):
         obj = 0.0
         for edge in dual_index["transportation_capacity"].keys():
-            obj -= dualvar[dual_index["transportation_capacity"][edge]] * self.variables[
-                "sku_flow"
-            ].sum(0, edge, "*")
+            obj -= dualvar[
+                dual_index["transportation_capacity"][edge]
+            ] * self.variables["sku_flow"].sum(0, edge, "*")
 
         for node in dual_index["node_capacity"].keys():
             if node.type == const.PLANT:
@@ -735,7 +741,8 @@ class DNP:
 
                 edge_transportation_cost = (
                     edge_transportation_cost
-                    + transportation_sku_unit_cost * self.variables["sku_flow"][t, edge, k]
+                    + transportation_sku_unit_cost
+                    * self.variables["sku_flow"][t, edge, k]
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -823,6 +830,8 @@ class DNP:
         return fixed_edge_cost
 
     def cal_end_inventory_bias_cost(self):
+        raise ValueError("you should not set this, incur errors")
+        # todo, remove later
         end_inventory_cost = 0.0
 
         for node in self.network.nodes:
@@ -922,7 +931,9 @@ class DNP:
                                     "type": node.type,
                                     "sku": k.idx,
                                     "t": t,
-                                    "qty": self.variables["sku_production"][(t, node, k)].x,
+                                    "qty": self.variables["sku_production"][
+                                        (t, node, k)
+                                    ].x,
                                 }
                                 plant_index += 1
 
@@ -966,7 +977,10 @@ class DNP:
             for t in range(self.T):
                 edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
                 for k in edge_sku_list:
-                    if preserve_zeros or self.variables["sku_flow"][(t, edge, k)].x != 0:
+                    if (
+                        preserve_zeros
+                        or self.variables["sku_flow"][(t, edge, k)].x != 0
+                    ):
                         edge_sku_t_flow.iloc[edge_index] = {
                             "id": edge.idx,
                             "start": edge.start.idx,

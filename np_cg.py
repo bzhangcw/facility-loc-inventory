@@ -25,15 +25,15 @@ CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 1)
 
 class NP_CG:
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            open_relationship=False,
-            max_iter=500,
-            init_primal=None,
-            init_dual=None,
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        open_relationship=False,
+        max_iter=500,
+        init_primal=None,
+        init_dual=None,
     ) -> None:
         self._logger = utils.logger
         self.arg = arg
@@ -75,7 +75,7 @@ class NP_CG:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                            cus_sku_list
+                        cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -125,7 +125,6 @@ class NP_CG:
         oracle.modeling()
 
         return oracle
-        # return DNP(arg, subgraph, full_sku_list, env_name, model_name, self.open_relationship, False, False) # for initial column, set obj to be the original obj
 
     def init_cols(self, customer: Customer):
         """
@@ -160,8 +159,6 @@ class NP_CG:
         dual_index = full_lp_relaxation.dual_index_for_RMP
 
         return lp_dual, dual_index
-
-
 
     def init_RMP(self):
         """
@@ -237,8 +234,8 @@ class NP_CG:
                     )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_flow_sum"][edge]
+                            self.vars["column_weights"][customer, number]
+                            * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -275,10 +272,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_production_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_production_sum"][
+                                    node
+                                ]
                             )
 
                 if type(production) == float:
@@ -312,10 +309,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_inventory_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_inventory_sum"][
+                                    node
+                                ]
                             )
 
                 if type(holding) == float:
@@ -356,8 +353,8 @@ class NP_CG:
             )
             for number in range(len(self.columns[customer])):
                 obj += (
-                        self.vars["column_weights"][customer, number]
-                        * self.columns[customer][number]["beta"]
+                    self.vars["column_weights"][customer, number]
+                    * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -423,17 +420,22 @@ class NP_CG:
                     for k in edge_sku_list:
                         try:
                             if oracle.variables["sku_flow"][(t, edge, k)].x != 0:
-                                data.append({
-                                    "id": edge.idx,
-                                    "start": edge.start.idx,
-                                    "end": edge.end.idx,
-                                    "sku": k.idx,
-                                    "t": t,
-                                    "qty": oracle.variables["sku_flow"][(t, edge, k)].x,
-                                })
+                                data.append(
+                                    {
+                                        "c": customer.idx,
+                                        "col_id": col_ind,
+                                        "start": edge.start.idx,
+                                        "end": edge.end.idx,
+                                        "sku": k.idx,
+                                        "t": t,
+                                        "qty": oracle.variables["sku_flow"][
+                                            (t, edge, k)
+                                        ].x,
+                                    }
+                                )
                         except:
                             pass
-            df = pd.DataFrame.from_records(data)
+            df = pd.DataFrame.from_records(data).set_index(["c", "col_id"])
             print(df)
         return added
 
@@ -481,21 +483,6 @@ class NP_CG:
                 )
 
             cg_init.init_cols_from_primal_feas_sol(self)
-
-        # elif self.pd == "lprounding":
-        #     # initialize cols form the primal feasible solution
-        #
-        #     for customer in self.customer_list:
-        #         # change the cus_ratio to 1.0 for all oracles
-        #         self.oracles[customer] = self.construct_oracle(
-        #             customer, len(self.customer_list)
-        #         )
-        #
-        #     cg_init.init_cols_from_lp_rounding(self)
-        # elif self.pd == "dual":
-        #     # initialize cols form the dual feasible solution of LP relaxation of the full problem
-        #     # raise NotImplementedError
-        #     pass
         else:
             raise ("pd should be None, primal or dual")
 
@@ -518,11 +505,11 @@ class NP_CG:
 
                 added = False
                 for customer, col_ind in zip(
-                        self.customer_list, range(len(self.customer_list))
+                    self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                            self.subproblem(customer, dual_vars, dual_index, col_ind)
-                            or added
+                        self.subproblem(customer, dual_vars, dual_index, col_ind)
+                        or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True

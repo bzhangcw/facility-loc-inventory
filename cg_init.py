@@ -72,9 +72,7 @@ def init_cols_from_primal_feas_sol(self):
         customer_pre_node_egdes = []
         for edge in customer_in_edges:
             customer_pre_node = edge.start
-            customer_pre_node_egdes += get_out_edges(
-                self.network, customer_pre_node
-            )
+            customer_pre_node_egdes += get_out_edges(self.network, customer_pre_node)
 
         # for sku in tqdm(self.subgraph[customer].graph["sku_list"], desc="SKU"):
         for sku in self.subgraph[customer].graph["sku_list"]:
@@ -91,9 +89,7 @@ def init_cols_from_primal_feas_sol(self):
                 customer_sku_flow = customer_sku_flow.getValue()
 
             sku_flow_ratio = (
-                customer_sku_flow / total_sku_flow_sum
-                if total_sku_flow_sum != 0
-                else 0
+                customer_sku_flow / total_sku_flow_sum if total_sku_flow_sum != 0 else 0
             )
 
             init_col[customer]["sku_flow_ratio"][sku] = sku_flow_ratio
@@ -122,8 +118,8 @@ def init_cols_from_primal_feas_sol(self):
                 elif isinstance(node, Plant):
                     if sku in node_sku_list:
                         init_col[customer]["sku_production"][(t, node, sku)] = (
-                                full_model.variables["sku_production"][t, node, sku].x
-                                * sku_flow_ratio
+                            full_model.variables["sku_production"][t, node, sku].x
+                            * sku_flow_ratio
                         )
 
                         constr = self.oracles[customer].model.addConstr(
@@ -139,8 +135,8 @@ def init_cols_from_primal_feas_sol(self):
                 else:
                     if sku in node_sku_list:
                         init_col[customer]["sku_inventory"][(t, node, sku)] = (
-                                full_model.variables["sku_inventory"][t, node, sku].x
-                                * sku_flow_ratio
+                            full_model.variables["sku_inventory"][t, node, sku].x
+                            * sku_flow_ratio
                         )
 
                         constr = self.oracles[customer].model.addConstr(
@@ -175,8 +171,8 @@ def init_cols_from_primal_feas_sol(self):
 
                     else:
                         init_col[customer]["sku_flow"][(t, edge, sku)] = (
-                                full_model.variables["sku_flow"][t, edge, sku].x
-                                * sku_flow_ratio
+                            full_model.variables["sku_flow"][t, edge, sku].x
+                            * sku_flow_ratio
                         )
 
                         constr = self.oracles[customer].model.addConstr(
