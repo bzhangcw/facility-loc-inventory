@@ -3,7 +3,7 @@ import coptpy as cp
 from coptpy import COPT
 import const
 import utils
-from cg_init import init_cols_from_primal_feas_sol
+import cg_init
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -21,14 +21,14 @@ CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
 
 class NP_CG:
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            open_relationship=False,
-            max_iter=500,
-            pd=None,
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        open_relationship=False,
+        max_iter=500,
+        pd=None,
     ) -> None:
         self._logger = utils.logger
         self.arg = arg
@@ -69,7 +69,7 @@ class NP_CG:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                            cus_sku_list
+                        cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -136,7 +136,7 @@ class NP_CG:
             "sku_inventory_sum": {},
         }
         self.columns[customer] = [init_col]
-    
+
     def init_RMP(self):
         """
         Initialize the RMP with initial columns
@@ -211,8 +211,8 @@ class NP_CG:
                     )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_flow_sum"][edge]
+                            self.vars["column_weights"][customer, number]
+                            * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -249,10 +249,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_production_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_production_sum"][
+                                    node
+                                ]
                             )
 
                 if type(production) == float:
@@ -286,10 +286,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_inventory_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_inventory_sum"][
+                                    node
+                                ]
                             )
 
                 if type(holding) == float:
@@ -330,8 +330,8 @@ class NP_CG:
             )
             for number in range(len(self.columns[customer])):
                 obj += (
-                        self.vars["column_weights"][customer, number]
-                        * self.columns[customer][number]["beta"]
+                    self.vars["column_weights"][customer, number]
+                    * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -439,9 +439,17 @@ class NP_CG:
                     customer, len(self.customer_list)
                 )
 
-            init_cols_from_primal_feas_sol(self)
+            cg_init.init_cols_from_primal_feas_sol(self)
+        elif self.pd == "lprounding":
+            # initialize cols form the primal feasible solution
 
+            for customer in self.customer_list:
+                # change the cus_ratio to 1.0 for all oracles
+                self.oracles[customer] = self.construct_oracle(
+                    customer, len(self.customer_list)
+                )
 
+            cg_init.init_cols_from_lp_rounding(self)
 
         elif self.pd == "dual":
             # initialize cols form the dual feasible solution of LP relaxation of the full problem
@@ -458,11 +466,11 @@ class NP_CG:
 
                 added = False
                 for customer, col_ind in zip(
-                        self.customer_list, range(len(self.customer_list))
+                    self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                            self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
-                            or added
+                        self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
+                        or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True

@@ -26,7 +26,7 @@ if __name__ == "__main__":
         plant_num=2,
         warehouse_num=13,
         customer_num=2,
-        one_period=True
+        one_period=True,
     )
 
     (

@@ -1065,7 +1065,7 @@ class DNP:
         else:
             total_fullfill_sku_rate = node_sku_t_demand_slack[["demand", "slack"]]
             total_fullfill_rate = 1
-        
+
         try:
             warehouse_avg_inventory_t = (
                 warehouse_sku_t_storage.groupby("node").sum()["qty"] / self.T
@@ -1097,9 +1097,10 @@ class DNP:
             total_fullfill_sku_rate.to_excel(
                 writer, sheet_name="node_fullfill_sku_rate"
             )
-            if warehouse_avg_inventory_t: warehouse_avg_inventory_t.to_excel(
-                writer, sheet_name="warehouse_avg_inventory"
-            )
+            if warehouse_avg_inventory_t:
+                warehouse_avg_inventory_t.to_excel(
+                    writer, sheet_name="warehouse_avg_inventory"
+                )
             overall_kpi.to_excel(writer, sheet_name="overall_kpi")
 
         plant_sku_t_production.to_csv(
