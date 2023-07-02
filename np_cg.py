@@ -5,13 +5,13 @@ import coptpy as cp
 from coptpy import COPT
 import const
 import utils
-from utils import get_in_edges, get_out_edges
+import cg_init
 import networkx as nx
 import numpy as np
 import pandas as pd
 from typing import List
 import argparse
-from entity import SKU, Customer, Warehouse, Plant, Edge
+from entity import SKU, Customer
 from tqdm import tqdm
 import os
 from network import constuct_network, get_pred_reachable_nodes
@@ -20,19 +20,20 @@ from dnp_model import DNP
 from param import Param
 
 # macro for debugging
-CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
+CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 1)
 
 
 class NP_CG:
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        open_relationship=False,
-        max_iter=500,
-        pd=None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            open_relationship=False,
+            max_iter=500,
+            init_primal=None,
+            init_dual=None,
     ) -> None:
         self._logger = utils.logger
         self.arg = arg
@@ -57,7 +58,8 @@ class NP_CG:
         self.red_cost = np.zeros((max_iter, len(customer_list)))
         self.full_network = self.network.copy()
         self.fix_val_constr = {}
-        self.pd = pd
+        self.init_primal = init_primal
+        self.init_dual = init_dual
 
     def get_subgraph(self):
         """
@@ -73,7 +75,7 @@ class NP_CG:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                        cus_sku_list
+                            cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -141,163 +143,6 @@ class NP_CG:
         }
         self.columns[customer] = [init_col]
 
-    def init_cols_from_primal_feas_sol(self):
-        full_model = DNP(self.arg, self.full_network, cus_num=472)
-        full_model.modeling()
-        # get the LP relaxation
-        # vars = model.model.getVars()
-        # binary_vars_index = []
-        # for v in vars:
-        #     if v.getType() == COPT.BINARY:
-        #         binary_vars_index.append(v.getIdx())
-        #         v.setType(COPT.CONTINUOUS)
-        ######################
-        full_model.model.setParam("Logging", 1)
-        full_model.model.setParam("RelGap", 1.3)
-        full_model.solve()
-
-        t = 0  # one time period
-        init_col = {}
-        # for customer in tqdm(self.customer_list, desc="Customer"):
-        for customer in self.customer_list:
-            init_col[customer] = self.oracles[customer].var_idx
-            init_col[customer]["sku_flow_ratio"] = {}
-
-            self.fix_val_constr[customer] = []
-
-            # get all paths from customer to each plant node
-            # all_paths = {}
-            # for node in self.subgraph[customer].nodes:
-            #     if self.subgraph[customer].in_degree(node) == 0:  # source node
-            #         all_paths[node] = nx.all_simple_paths(
-            #             self.subgraph[customer],
-            #             node,
-            #             customer,
-            #             cutoff=20,
-            #             # self.subgraph[customer].reverse(), customer, node # find all paths start from customer to source node
-            #         )
-
-            customer_in_edges = get_in_edges(self.subgraph[customer], customer)
-            customer_pre_node_egdes = []
-            for edge in customer_in_edges:
-                customer_pre_node = edge.start
-                customer_pre_node_egdes += get_out_edges(
-                    self.network, customer_pre_node
-                )
-
-            # for sku in tqdm(self.subgraph[customer].graph["sku_list"], desc="SKU"):
-            for sku in self.subgraph[customer].graph["sku_list"]:
-                total_sku_flow_sum = full_model.vars["sku_flow"].sum(
-                    t, customer_pre_node_egdes, sku
-                )
-                customer_sku_flow = full_model.vars["sku_flow"].sum(
-                    t, customer_in_edges, sku
-                )
-
-                if type(total_sku_flow_sum) != float:
-                    total_sku_flow_sum = total_sku_flow_sum.getValue()
-                if type(customer_sku_flow) != float:
-                    customer_sku_flow = customer_sku_flow.getValue()
-
-                sku_flow_ratio = (
-                    customer_sku_flow / total_sku_flow_sum
-                    if total_sku_flow_sum != 0
-                    else 0
-                )
-
-                init_col[customer]["sku_flow_ratio"][sku] = sku_flow_ratio
-
-                # for node in tqdm(self.subgraph[customer].nodes, desc="Nodes"):
-                for node in self.subgraph[customer].nodes:
-                    node_sku_list = node.get_node_sku_list(
-                        t, self.subgraph[customer].graph["sku_list"]
-                    )
-
-                    if isinstance(node, Customer):
-                        if sku in node_sku_list:
-                            init_col[customer]["sku_demand_slack"][
-                                (t, node, sku)
-                            ] = full_model.vars["sku_demand_slack"][t, node, sku].x
-
-                            constr = self.oracles[customer].model.addConstr(
-                                self.oracles[customer].vars["sku_demand_slack"][
-                                    t, node, sku
-                                ]
-                                == full_model.vars["sku_demand_slack"][t, node, sku].x
-                            )
-
-                            self.fix_val_constr[customer].append(constr)
-
-                    elif isinstance(node, Plant):
-                        if sku in node_sku_list:
-                            init_col[customer]["sku_production"][(t, node, sku)] = (
-                                full_model.vars["sku_production"][t, node, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            constr = self.oracles[customer].model.addConstr(
-                                self.oracles[customer].vars["sku_production"][
-                                    t, node, sku
-                                ]
-                                == full_model.vars["sku_production"][t, node, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            self.fix_val_constr[customer].append(constr)
-
-                    else:
-                        if sku in node_sku_list:
-                            init_col[customer]["sku_inventory"][(t, node, sku)] = (
-                                full_model.vars["sku_inventory"][t, node, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            constr = self.oracles[customer].model.addConstr(
-                                self.oracles[customer].vars["sku_inventory"][
-                                    t, node, sku
-                                ]
-                                == full_model.vars["sku_inventory"][t, node, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            self.fix_val_constr[customer].append(constr)
-
-                # for e in tqdm(self.subgraph[customer].edges, desc="Edges"):
-                for e in self.subgraph[customer].edges:
-                    edge = self.subgraph[customer].edges[e]["object"]
-                    edge_sku_list = edge.get_edge_sku_list(
-                        t, self.subgraph[customer].graph["sku_list"]
-                    )
-
-                    if sku in edge_sku_list:
-                        if isinstance(edge.end, Customer):
-                            init_col[customer]["sku_flow"][
-                                (t, edge, sku)
-                            ] = full_model.vars["sku_flow"][t, edge, sku].x
-
-                            constr = self.oracles[customer].model.addConstr(
-                                self.oracles[customer].vars["sku_flow"][t, edge, sku]
-                                == full_model.vars["sku_flow"][t, edge, sku].x
-                            )
-
-                            self.fix_val_constr[customer].append(constr)
-
-                        else:
-                            init_col[customer]["sku_flow"][(t, edge, sku)] = (
-                                full_model.vars["sku_flow"][t, edge, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            constr = self.oracles[customer].model.addConstr(
-                                self.oracles[customer].vars["sku_flow"][t, edge, sku]
-                                == full_model.vars["sku_flow"][t, edge, sku].x
-                                * sku_flow_ratio
-                            )
-
-                            self.fix_val_constr[customer].append(constr)
-
-        return init_col
-
     def solve_lp_relaxation(self):
         full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
         full_lp_relaxation.modeling()
@@ -316,28 +161,7 @@ class NP_CG:
 
         return lp_dual, dual_index
 
-    def init_cols_from_dual_feas_sol(self, dual_vars):
-        full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
-        full_lp_relaxation.modeling()
-        # get the LP relaxation
-        vars = full_lp_relaxation.model.getVars()
-        binary_vars_index = []
-        for v in vars:
-            if v.getType() == COPT.BINARY:
-                binary_vars_index.append(v.getIdx())
-                v.setType(COPT.CONTINUOUS)
-        ######################
-        full_lp_relaxation.model.setParam("Logging", 1)
-        full_lp_relaxation.solve()
-        lp_dual = full_lp_relaxation.model.getDuals()
-        dual_index = full_lp_relaxation.dual_index_for_RMP
-        dual_index["weights_sum"] = self.dual_index["weights_sum"]
 
-        for customer in self.customer_list:
-            index = dual_index["weights_sum"][customer]
-            lp_dual[index] = dual_vars[index]
-
-        return lp_dual, dual_index
 
     def init_RMP(self):
         """
@@ -407,14 +231,14 @@ class NP_CG:
                         "sku_flow_sum"
                     ][edge] = (
                         self.oracles[customer]
-                        .vars["sku_flow"]
+                        .variables["sku_flow"]
                         .sum(0, edge, "*")
                         .getValue()
                     )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                            self.vars["column_weights"][customer, number]
-                            * self.columns[customer][number]["sku_flow_sum"][edge]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -445,16 +269,16 @@ class NP_CG:
                             "sku_production_sum"
                         ][node] = (
                             self.oracles[customer]
-                            .vars["sku_production"]
+                            .variables["sku_production"]
                             .sum(0, node, "*")
                             .getValue()
                         )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_production_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_production_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(production) == float:
@@ -482,16 +306,16 @@ class NP_CG:
                             "sku_inventory_sum"
                         ][node] = (
                             self.oracles[customer]
-                            .vars["sku_inventory"]
+                            .variables["sku_inventory"]
                             .sum(0, node, "*")
                             .getValue()
                         )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_inventory_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_inventory_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(holding) == float:
@@ -532,8 +356,8 @@ class NP_CG:
             )
             for number in range(len(self.columns[customer])):
                 obj += (
-                    self.vars["column_weights"][customer, number]
-                    * self.columns[customer][number]["beta"]
+                        self.vars["column_weights"][customer, number]
+                        * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -542,6 +366,9 @@ class NP_CG:
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
+        self.RMP_model.setParam("LpMethod", 2)
+        self.RMP_model.setParam("Crossover", 0)
+
         self.RMP_model.solve()
 
     def update_RMP(self):
@@ -577,7 +404,7 @@ class NP_CG:
         v = oracle.model.objval
         self.red_cost[self.num_cols, col_ind] = v
 
-        if v < 0:
+        if v < -1e-6:
             added = True
             new_col = {
                 "beta": 0,
@@ -587,31 +414,37 @@ class NP_CG:
             }
             self.columns[customer].append(new_col)
         if CG_EXTRA_VERBOSITY:
+            # visualize this column
+            data = []
             for e in self.network.edges:
                 edge = self.network.edges[e]["object"]
                 for t in range(1):
                     edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
                     for k in edge_sku_list:
-                        if oracle.vars["sku_flow"][(t, edge, k)].x != 0:
-                            data = {
-                                "id": edge.idx,
-                                "start": edge.start.idx,
-                                "end": edge.end.idx,
-                                "sku": k.idx,
-                                "t": t,
-                                "qty": oracle.vars["sku_flow"][(t, edge, k)].x,
-                            }
-                            print(data)
+                        try:
+                            if oracle.variables["sku_flow"][(t, edge, k)].x != 0:
+                                data.append({
+                                    "id": edge.idx,
+                                    "start": edge.start.idx,
+                                    "end": edge.end.idx,
+                                    "sku": k.idx,
+                                    "t": t,
+                                    "qty": oracle.variables["sku_flow"][(t, edge, k)].x,
+                                })
+                        except:
+                            pass
+            df = pd.DataFrame.from_records(data)
+            print(df)
         return added
 
-    def CG(self):
+    def run(self):
         """
         The main loop of column generation algorithm
         """
 
         self.get_subgraph()
 
-        if self.pd is None or self.pd == "dual":
+        if self.init_primal is None:
             # initialize cols form the oracle
 
             for customer in tqdm(self.customer_list):
@@ -638,7 +471,7 @@ class NP_CG:
                 #############################################
                 # self.oracles[customer].del_constr_for_RMP()
 
-        elif self.pd == "primal":
+        elif self.init_primal == "primal":
             # initialize cols form the primal feasible solution
 
             for customer in self.customer_list:
@@ -647,31 +480,18 @@ class NP_CG:
                     customer, len(self.customer_list)
                 )
 
-            self.init_cols_from_primal_feas_sol()
+            cg_init.init_cols_from_primal_feas_sol(self)
 
-            num_infeas_col = 0
-            for customer in self.customer_list:
-                ##### check if the columns generated by full feasible solution is feasible #####
-                self.oracles[customer].model.reset()
-                self.oracles[customer].model.solve()
-                if self.oracles[customer].model.status == COPT.INFEASIBLE:
-                    num_infeas_col += 1
-                    print(num_infeas_col, ": ", customer.idx, " column is infeasible")
-
-                # remove the constraints for the fixed variables
-                for constr in self.fix_val_constr[customer]:
-                    constr.remove()
-
-                init_col = {
-                    "beta": 0,
-                    "sku_flow_sum": {},
-                    "sku_production_sum": {},
-                    "sku_inventory_sum": {},
-                }
-                self.columns[customer] = [init_col]
-                ###############################################################################
-            self.init_RMP()
-
+        # elif self.pd == "lprounding":
+        #     # initialize cols form the primal feasible solution
+        #
+        #     for customer in self.customer_list:
+        #         # change the cus_ratio to 1.0 for all oracles
+        #         self.oracles[customer] = self.construct_oracle(
+        #             customer, len(self.customer_list)
+        #         )
+        #
+        #     cg_init.init_cols_from_lp_rounding(self)
         # elif self.pd == "dual":
         #     # initialize cols form the dual feasible solution of LP relaxation of the full problem
         #     # raise NotImplementedError
@@ -687,9 +507,9 @@ class NP_CG:
 
                 ######################################
                 RMP_dual_vars = self.RMP_model.getDuals()
-                if self.num_cols == 0 and self.pd == "dual":
-                    dual_vars, dual_index = self.init_cols_from_dual_feas_sol(
-                        RMP_dual_vars
+                if self.num_cols == 0 and self.init_dual == "dual":
+                    dual_vars, dual_index = cg_init.init_cols_from_dual_feas_sol(
+                        self, RMP_dual_vars
                     )
                 else:
                     dual_vars = RMP_dual_vars
@@ -698,12 +518,11 @@ class NP_CG:
 
                 added = False
                 for customer, col_ind in zip(
-                    self.customer_list, range(len(self.customer_list))
+                        self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                        # self.subproblem(customer, self.RMP_model.getDuals(), col_ind)
-                        self.subproblem(customer, dual_vars, dual_index, col_ind)
-                        or added
+                            self.subproblem(customer, dual_vars, dual_index, col_ind)
+                            or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True
@@ -748,7 +567,7 @@ class NP_CG:
 
         for customer in self.customer_list:
             # for number in range(self.num_cols):
-            for number in range(len(self.columns[customer])):
+            for number in range(self.num_cols):
                 cus_col_value.loc[number, customer.idx] = self.columns[customer][
                     number
                 ]["beta"]
