@@ -1111,7 +1111,7 @@ class DNP:
             total_fullfill_sku_rate.to_excel(
                 writer, sheet_name="node_fullfill_sku_rate"
             )
-            if warehouse_avg_inventory_t:
+            if warehouse_avg_inventory_t is not None:
                 warehouse_avg_inventory_t.to_excel(
                     writer, sheet_name="warehouse_avg_inventory"
                 )

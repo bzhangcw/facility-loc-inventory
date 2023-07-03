@@ -14,7 +14,7 @@ if __name__ == "__main__":
         sku_num=2,
         plant_num=2,
         warehouse_num=13,
-        customer_num=2,
+        customer_num=5,
         one_period=True,
     )
 

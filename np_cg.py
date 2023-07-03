@@ -1,3 +1,4 @@
+import json
 import pickle
 
 import coptpy
@@ -20,20 +21,21 @@ from dnp_model import DNP
 from param import Param
 
 # macro for debugging
-CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 1)
+CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
+CG_EXTRA_DEBUGGING = os.environ.get("CG_EXTRA_DEBUGGING", 1)
 
 
 class NP_CG:
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        open_relationship=False,
-        max_iter=500,
-        init_primal=None,
-        init_dual=None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            open_relationship=False,
+            max_iter=500,
+            init_primal=None,
+            init_dual=None,
     ) -> None:
         self._logger = utils.logger
         self.arg = arg
@@ -75,7 +77,7 @@ class NP_CG:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                        cus_sku_list
+                            cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -217,6 +219,9 @@ class NP_CG:
         index = 0
 
         # edge transportation capacity
+        # todo, change to the following?
+        # for customer
+        #   for e in self.subgraph[customer].edges:
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
             if edge.capacity == np.inf:
@@ -234,8 +239,8 @@ class NP_CG:
                     )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                            self.vars["column_weights"][customer, number]
-                            * self.columns[customer][number]["sku_flow_sum"][edge]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -272,10 +277,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_production_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_production_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(production) == float:
@@ -309,10 +314,10 @@ class NP_CG:
                         )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_inventory_sum"][
-                                    node
-                                ]
+                                    self.vars["column_weights"][customer, number]
+                                    * self.columns[customer][number]["sku_inventory_sum"][
+                                        node
+                                    ]
                             )
 
                 if type(holding) == float:
@@ -353,8 +358,8 @@ class NP_CG:
             )
             for number in range(len(self.columns[customer])):
                 obj += (
-                    self.vars["column_weights"][customer, number]
-                    * self.columns[customer][number]["beta"]
+                        self.vars["column_weights"][customer, number]
+                        * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -393,26 +398,24 @@ class NP_CG:
         added = False  # whether a new column is added
         oracle = self.oracles[customer]
         oracle.model.reset()
-        # oracle.update_objective(dual_vars, self.dual_index)
         oracle.update_objective(dual_vars, dual_index)
 
         oracle.solve()
-        # new_column = oracle.vars
         v = oracle.model.objval
         self.red_cost[self.num_cols, col_ind] = v
 
-        if v < -1e-6:
-            added = True
-            new_col = {
-                "beta": 0,
-                "sku_flow_sum": {},
-                "sku_production_sum": {},
-                "sku_inventory_sum": {},
-            }
-            self.columns[customer].append(new_col)
-        if CG_EXTRA_VERBOSITY:
-            # visualize this column
-            data = []
+        # todo, move query columns here
+        added = v < -1e-6
+        new_col = {
+            "beta": 0,
+            "sku_flow_sum": {},
+            "sku_production_sum": {},
+            "sku_inventory_sum": {},
+            "bool_added": added
+        }
+        # visualize this column
+        if CG_EXTRA_DEBUGGING:
+            flow_records = []
             for e in self.network.edges:
                 edge = self.network.edges[e]["object"]
                 for t in range(1):
@@ -420,7 +423,7 @@ class NP_CG:
                     for k in edge_sku_list:
                         try:
                             if oracle.variables["sku_flow"][(t, edge, k)].x != 0:
-                                data.append(
+                                flow_records.append(
                                     {
                                         "c": customer.idx,
                                         "col_id": col_ind,
@@ -435,8 +438,12 @@ class NP_CG:
                                 )
                         except:
                             pass
-            df = pd.DataFrame.from_records(data).set_index(["c", "col_id"])
-            print(df)
+
+                new_col["records"] = flow_records
+                if CG_EXTRA_VERBOSITY:
+                    df = pd.DataFrame.from_records(flow_records).set_index(["c", "col_id"])
+                    print(df)
+        self.columns[customer].append(new_col)
         return added
 
     def run(self):
@@ -505,11 +512,11 @@ class NP_CG:
 
                 added = False
                 for customer, col_ind in zip(
-                    self.customer_list, range(len(self.customer_list))
+                        self.customer_list, range(len(self.customer_list))
                 ):
                     added = (
-                        self.subproblem(customer, dual_vars, dual_index, col_ind)
-                        or added
+                            self.subproblem(customer, dual_vars, dual_index, col_ind)
+                            or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True
@@ -574,6 +581,14 @@ class NP_CG:
             os.path.join(data_dir, "cus" + str(num_cus) + "_reduced_cost.csv"),
             index=False,
         )
+
+        with open(os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), 'w') as f:
+            for customer in self.customer_list:
+                for col in self.columns[customer]:
+                    f.write(json.dumps(col, skipkeys=True))
+                    f.write("\n")
+
+
 
 
 if __name__ == "__main__":
