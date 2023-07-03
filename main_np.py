@@ -48,25 +48,25 @@ if __name__ == "__main__":
     ) = utils.get_data_from_cfg(cfg)
     # # use external capacity, todo, move internals
     cap = pd.read_csv("./data/random_capacity.csv").set_index("id")
-    # for e in edge_list:
-    #     e.capacity = cap["qty"].get(e.idx, np.inf)
-    #     e.variable_lb = cap["lb"].get(e.idx, np.inf)
+    for e in edge_list:
+        e.capacity = cap["qty"].get(e.idx, np.inf)
+        # e.variable_lb = cap["lb"].get(e.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
     ###############################################################
 
-    model = DNP(arg, network, cus_num=472)
+    model = DNP(arg, network, cus_num=1)
     model.modeling()
     # get the LP relaxation
-    variables = model.model.getVars()
-    binary_vars_index = []
-    for v in variables:
-        if v.getType() == COPT.BINARY:
-            binary_vars_index.append(v.getIdx())
-            v.setType(COPT.CONTINUOUS)
+    # variables = model.model.getVars()
+    # binary_vars_index = []
+    # for v in variables:
+    #     if v.getType() == COPT.BINARY:
+    #         binary_vars_index.append(v.getIdx())
+    #         v.setType(COPT.CONTINUOUS)
     ######################
     model.model.setParam("Logging", 1)
     # model.model.setParam("RelGap", 1.3)
-    model.model.setParam("LpMethod", 2)  # interior point method
+    # model.model.setParam("LpMethod", 2)  # interior point method
 
     model.solve()
 

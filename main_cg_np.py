@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     # use external capacity, todo, move internals
     cap = pd.read_csv("./data/random_capacity.csv").set_index("id")
-    # for e in edge_list:
-    #     e.capacity = cap["qty"].get(e.idx, np.inf)
+    for e in edge_list:
+        e.capacity = cap["qty"].get(e.idx, np.inf)
     #     e.variable_lb = cap["lb"].get(e.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
     ###############################################################
