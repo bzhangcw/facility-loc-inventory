@@ -14,7 +14,10 @@ class Param:
         """
         add or change default args here
         """
-        parser = argparse.ArgumentParser("Dynamic Network Problem")
+        parser = argparse.ArgumentParser(
+            "Dynamic Network Problem",
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        )
 
         parser.add_argument(
             "--T",

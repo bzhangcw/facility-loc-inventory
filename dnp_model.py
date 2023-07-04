@@ -26,9 +26,9 @@ class DNP:
         full_sku_list: List[SKU] = None,
         env_name: str = "DNP_env",
         model_name: str = "DNP",
-        open_relationship: bool = True,
-        capacity: bool = True,
-        feasibility: bool = False,
+        bool_covering: bool = True,
+        bool_capacity: bool = True,
+        bool_feasibility: bool = False,
         cus_num: int = 1,
         env=None,
     ) -> None:
@@ -51,13 +51,15 @@ class DNP:
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
 
-        self.open_relationship = open_relationship
-        self.capacity = capacity
-        self.feasibility = feasibility
+        self.bool_covering = bool_covering
+        self.bool_capacity = bool_capacity
+        self.bool_feasibility = bool_feasibility
         self.original_obj = 0.0
         self.cus_num = cus_num
         self.total_cus_num = arg.total_cus_num
-        self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
+        # todo, remove this
+        # self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
+        self.cus_ratio = 1.0
         # self.cus_ratio = 1.0
         self.var_idx = None
         self.dual_index_for_RMP = {
@@ -117,7 +119,7 @@ class DNP:
             },
         }
 
-        if self.open_relationship:
+        if self.bool_covering:
             self.var_types["select_edge"] = {
                 "lb": 0,
                 "ub": 1,
@@ -159,14 +161,14 @@ class DNP:
                 edge = self.network.edges[e]["object"]
 
                 # select edge (i,j) at t
-                if self.open_relationship:
+                if self.bool_covering:
                     idx["select_edge"].append((t, edge))
 
                 sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
                 for k in sku_list:
                     # sku k select edge (i,j) at t
-                    if self.open_relationship:
+                    if self.bool_covering:
                         idx["sku_select_edge"].append((t, edge, k))
                     # flow of sku k on edge (i,j) at t
                     idx["sku_flow"].append((t, edge, k))
@@ -174,7 +176,7 @@ class DNP:
             # nodes
             for node in self.network.nodes:
                 # open node i at t
-                if self.open_relationship:
+                if self.bool_covering:
                     idx["open"].append((t, node))
 
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
@@ -182,7 +184,7 @@ class DNP:
                 for k in sku_list:
                     if node.type == const.PLANT:
                         # sku k produced on node i at t
-                        if self.open_relationship:
+                        if self.bool_covering:
                             idx["sku_open"].append((t, node, k))
                         # amount of sku k produced on node i at t
                         idx["sku_production"].append((t, node, k))
@@ -210,7 +212,6 @@ class DNP:
         ##########################
         # add variables
         for vt, param in self.var_types.items():
-            # print(f"  - {vt}")
             self.variables[vt] = self.model.addVars(
                 idx[vt],
                 lb=param["lb"],
@@ -246,11 +247,11 @@ class DNP:
             # initial status and flow conservation
             self.add_constr_flow_conservation(t)
 
-            if self.open_relationship:
+            if self.bool_covering:
                 # node status and open relationship
                 self.add_constr_open_relationship(t)
 
-            if self.capacity:
+            if self.bool_capacity:
                 # transportation/production/holding capacity
                 self.add_constr_transportation_capacity(t)
                 self.add_constr_production_capacity(t)
@@ -444,14 +445,14 @@ class DNP:
                     * self.variables["select_edge"][t, edge]
                     * self.cus_ratio
                 )
-            else:
+            elif edge.capacity < np.inf:
                 self.constrs["transportation_capacity"][
                     (t, edge)
                 ] = self.model.addConstr(
-                    flow_sum
-                    <= edge.capacity
+                    flow_sum <= edge.capacity
                     # * self.vars["select_edge"][t, edge] # cause infeasibility of LP relaxation
-                    * self.cus_ratio
+                    * self.cus_ratio,
+                    name=f"edge_capacity{t,edge}",
                 )
 
             self.dual_index_for_RMP["transportation_capacity"][edge] = index
@@ -467,11 +468,15 @@ class DNP:
         for node in self.network.nodes:
             if node.type == const.PLANT:
                 # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
-                constr = self.model.addConstr(
-                    self.variables["sku_production"].sum(t, node, "*")
-                    # <= node.production_capacity
-                    # multiply by customer ratio to force feasibliity of first column of cg
-                    <= node.production_capacity * self.cus_ratio
+                constr = (
+                    self.model.addConstr(
+                        self.variables["sku_production"].sum(t, node, "*")
+                        # <= node.production_capacity
+                        # multiply by customer ratio to force feasibliity of first column of cg
+                        <= node.production_capacity * self.cus_ratio
+                    )
+                    if node.production_capacity < np.inf
+                    else None
                 )
 
                 self.constrs["production_capacity"][(t, node)] = constr
@@ -508,7 +513,7 @@ class DNP:
                     # <= node.inventory_capacity * self.vars["open"][t, node]
                     # multiply by customer ratio to force feasibliity of first column of cg
                     <= node.inventory_capacity
-                    * self.variables["open"][t, node]
+                    * self.variables.get("open", {}).get((t, node), 0)
                     * self.cus_ratio
                 )
                 self.constrs["holding_capacity"][(t, node)] = constr
@@ -550,8 +555,10 @@ class DNP:
 
         return obj
 
-    def extra_objective(self, dualvar, dual_index):
+    def extra_objective(self, customer, dualvar=None, dual_index=None):
         obj = 0.0
+        if dualvar is None:
+            return obj
         for edge in dual_index["transportation_capacity"].keys():
             obj -= dualvar[
                 dual_index["transportation_capacity"][edge]
@@ -569,17 +576,18 @@ class DNP:
             else:
                 continue
 
-        for node in dual_index["weights_sum"].keys():
-            obj -= dualvar[dual_index["weights_sum"][node]]
+        # for node in dual_index["weights_sum"].keys():
+        #     obj -= dualvar[dual_index["weights_sum"][node]]
+        obj -= dualvar[dual_index["weights_sum"][customer]]
 
         return obj
 
-    def update_objective(self, dualvar, dual_index):
+    def update_objective(self, customer, dualvar, dual_index):
         """
         Use dual variables to calculate the reduced cost
         """
         self.original_obj = self.get_original_objective()
-        obj = self.original_obj + self.extra_objective(dualvar, dual_index)
+        obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
@@ -602,7 +610,7 @@ class DNP:
         obj = 0.0
         self.original_obj = self.get_original_objective()
 
-        if not self.feasibility:
+        if not self.bool_feasibility:
             obj = self.original_obj
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
@@ -621,7 +629,7 @@ class DNP:
 
                     if (
                         node.production_sku_fixed_cost is not None
-                        and self.open_relationship
+                        and self.bool_covering
                     ):
                         node_sku_producing_cost = (
                             node_sku_producing_cost
@@ -718,7 +726,7 @@ class DNP:
                 sku_list_with_unit_transportation_cost,
             ) = edge.get_edge_sku_list_with_transportation_cost(t, self.full_sku_list)
 
-            if self.open_relationship:
+            if self.bool_covering:
                 for k in sku_list_with_fixed_transportation_cost:
                     if (
                         edge.transportation_sku_fixed_cost is not None
@@ -785,7 +793,7 @@ class DNP:
     def cal_fixed_node_cost(self):
         fixed_node_cost = 0.0
 
-        if not self.open_relationship:
+        if not self.bool_covering:
             return fixed_node_cost
 
         for node in self.network.nodes:
@@ -810,7 +818,7 @@ class DNP:
 
     def cal_fixed_edge_cost(self):
         fixed_edge_cost = 0.0
-        if not self.open_relationship:
+        if not self.bool_covering:
             return fixed_edge_cost
 
         for e in self.network.edges:
@@ -832,45 +840,45 @@ class DNP:
     def cal_end_inventory_bias_cost(self):
         raise ValueError("you should not set this, incur errors")
         # todo, remove later
-        end_inventory_cost = 0.0
-
-        for node in self.network.nodes:
-            if node.type == const.WAREHOUSE and node.end_inventory is not None:
-                if self.open_relationship:
-                    self.model.addConstr(self.variables["open"][self.T - 1, node] == 1)
-
-                for k in node.end_inventory.index:
-                    node_end_inventory_cost = 0.0
-
-                    end_inventory_bias = self.model.addVar(name=f"end_I_bias_{node}")
-
-                    self.model.addConstr(
-                        end_inventory_bias
-                        >= node.end_inventory[k]
-                        - self.variables["sku_inventory"].sum(self.T - 1, node, "*")
-                    )
-                    self.model.addConstr(
-                        end_inventory_bias
-                        >= self.variables["sku_inventory"].sum(self.T - 1, node, "*")
-                        - node.end_inventory[k]
-                    )
-
-                    end_inventory_bias_cost = (
-                        node.end_inventory_bias_cost
-                        if node.end_inventory_bias_cost > 0
-                        else self.arg.end_inventory_bias_cost
-                    )
-
-                    node_end_inventory_cost = (
-                        node_end_inventory_cost
-                        + end_inventory_bias_cost * end_inventory_bias
-                    )
-
-                    end_inventory_cost = end_inventory_cost + node_end_inventory_cost
-
-                    self.obj["end_inventory_cost"][(node, k)] = node_end_inventory_cost
-
-        return end_inventory_cost
+        # end_inventory_cost = 0.0
+        #
+        # for node in self.network.nodes:
+        #     if node.type == const.WAREHOUSE and node.end_inventory is not None:
+        #         if self.bool_covering:
+        #             self.model.addConstr(self.variables["open"][self.T - 1, node] == 1)
+        #
+        #         for k in node.end_inventory.index:
+        #             node_end_inventory_cost = 0.0
+        #
+        #             end_inventory_bias = self.model.addVar(name=f"end_I_bias_{node}")
+        #
+        #             self.model.addConstr(
+        #                 end_inventory_bias
+        #                 >= node.end_inventory[k]
+        #                 - self.variables["sku_inventory"].sum(self.T - 1, node, "*")
+        #             )
+        #             self.model.addConstr(
+        #                 end_inventory_bias
+        #                 >= self.variables["sku_inventory"].sum(self.T - 1, node, "*")
+        #                 - node.end_inventory[k]
+        #             )
+        #
+        #             end_inventory_bias_cost = (
+        #                 node.end_inventory_bias_cost
+        #                 if node.end_inventory_bias_cost > 0
+        #                 else self.arg.end_inventory_bias_cost
+        #             )
+        #
+        #             node_end_inventory_cost = (
+        #                     node_end_inventory_cost
+        #                     + end_inventory_bias_cost * end_inventory_bias
+        #             )
+        #
+        #             end_inventory_cost = end_inventory_cost + node_end_inventory_cost
+        #
+        #             self.obj["end_inventory_cost"][(node, k)] = node_end_inventory_cost
+        #
+        # return end_inventory_cost
 
     def solve(self):
         self.model.solve()
@@ -890,7 +898,7 @@ class DNP:
             columns=["node", "type", "sku", "t", "demand", "slack", "fulfill"],
         )
 
-        if self.open_relationship:
+        if self.bool_covering:
             node_t_open = pd.DataFrame(
                 index=range(len(self.variables["open"])),
                 columns=["node", "type", "t", "open"],
@@ -910,7 +918,7 @@ class DNP:
 
         for node in self.network.nodes:
             for t in range(self.T):
-                if self.open_relationship:
+                if self.bool_covering:
                     node_t_open.iloc[node_open_index] = {
                         "node": node.idx,
                         "type": node.type,
@@ -1126,7 +1134,7 @@ class DNP:
         node_sku_t_demand_slack.to_csv(
             os.path.join(data_dir, "node_sku_t_demand_slack.csv"), index=False
         )
-        if self.open_relationship:
+        if self.bool_covering:
             node_t_open.to_csv(os.path.join(data_dir, "node_t_open.csv"), index=False)
         edge_sku_t_flow.to_csv(
             os.path.join(data_dir, "edge_sku_t_flow.csv"), index=False
