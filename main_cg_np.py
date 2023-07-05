@@ -14,7 +14,7 @@ if __name__ == "__main__":
         sku_num=2,
         plant_num=2,
         warehouse_num=13,
-        customer_num=4,
+        customer_num=5,
         one_period=True,
     )
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # use external capacity
     cap = pd.read_csv("./data/random_capacity.csv").set_index("id")
     for e in edge_list:
-        # e.capacity = cap["qty"].get(e.idx, np.inf)
+        e.capacity = cap["qty"].get(e.idx, np.inf)
         # e.variable_lb = cap["lb"].get(e.idx, np.inf)
         pass
     network = constuct_network(node_list, edge_list, sku_list)
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     init_primal = None
     init_dual = None  # 'dual'
 
-    np_cg = NP_CG(
+    np_cg = NetworkColumnGeneration(
         arg,
         network,
         customer_list,

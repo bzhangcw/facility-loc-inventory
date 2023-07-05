@@ -61,4 +61,5 @@ def get_pred_reachable_nodes(network, node, pred_reachable_nodes):
         for n in set(network.predecessors(node)):
             pred_reachable_nodes.add(n)
             get_pred_reachable_nodes(network, n, pred_reachable_nodes)
+
     return
