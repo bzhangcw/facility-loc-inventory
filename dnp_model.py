@@ -601,7 +601,6 @@ class DNP:
         """
         Use dual variables to calculate the reduced cost
         """
-        # self.original_obj = self.get_original_objective()
         obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
