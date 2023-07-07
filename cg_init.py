@@ -23,13 +23,27 @@ def init_cols_from_dual_feas_sol(self, dual_vars):
     full_lp_relaxation.solve()
     lp_dual = full_lp_relaxation.model.getDuals()
     dual_index = full_lp_relaxation.dual_index_for_RMP
-    dual_index["weights_sum"] = self.dual_index["weights_sum"]
 
-    for customer in self.customer_list:
-        index = dual_index["weights_sum"][customer]
-        lp_dual[index] = dual_vars[index]
+    # dual_index["weights_sum"] = self.dual_index["weights_sum"]
 
-    return lp_dual, dual_index
+    # for customer in self.customer_list:
+    #     index = dual_index["weights_sum"][customer]
+    #     lp_dual[index] = dual_vars[index]
+
+    # return lp_dual, dual_index
+    init_dual = dual_vars.copy()
+    for edge in self.dual_index["transportation_capacity"].keys():
+        init_dual[self.dual_index["transportation_capacity"][edge]] = lp_dual[
+            dual_index["transportation_capacity"][edge]
+        ]
+
+    for node in self.dual_index["node_capacity"].keys():
+        init_dual[self.dual_index["node_capacity"][node]] = lp_dual[
+            dual_index["node_capacity"][node]
+        ]
+
+    init_dual_index = self.dual_index.copy()
+    return init_dual, init_dual_index
 
 
 def init_cols_from_primal_feas_sol(self):

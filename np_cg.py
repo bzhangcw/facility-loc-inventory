@@ -31,19 +31,21 @@ CG_EXTRA_DEBUGGING = os.environ.get("CG_EXTRA_DEBUGGING", 1)
 
 class NetworkColumnGeneration:
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            bool_covering=False,
-            max_iter=500,
-            init_primal=None,
-            init_dual=None,
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        bool_covering=False,
+        max_iter=500,
+        init_primal=None,
+        init_dual=None,
     ) -> None:
         self._logger = utils.logger
         self._logger.setLevel(logging.DEBUG if CG_EXTRA_VERBOSITY else logging.INFO)
-        self._logger.info(f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {CG_EXTRA_DEBUGGING}")
+        self._logger.info(
+            f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {CG_EXTRA_DEBUGGING}"
+        )
         self.arg = arg
         self.network = network
         self.full_sku_list = (
@@ -80,7 +82,8 @@ class NetworkColumnGeneration:
             get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
             # @note: reset visited status
             # @update: 070523
-            for k in pred_reachable_nodes: k.visited = False
+            for k in pred_reachable_nodes:
+                k.visited = False
             related_nodes = pred_reachable_nodes.copy()
             # todo: what does this mean? add comment
             for node in pred_reachable_nodes:
@@ -88,7 +91,7 @@ class NetworkColumnGeneration:
                 # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                            cus_sku_list
+                        cus_sku_list
                     ):
                         related_nodes.remove(node)
                 else:
@@ -226,8 +229,8 @@ class NetworkColumnGeneration:
                     # )
                     for number in range(len(self.columns[customer])):
                         transportation += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_flow_sum"][edge]
+                            self.vars["column_weights"][customer, number]
+                            * self.columns[customer][number]["sku_flow_sum"][edge]
                         )
 
             if type(transportation) == float:
@@ -264,10 +267,10 @@ class NetworkColumnGeneration:
                         # )
                         for number in range(len(self.columns[customer])):
                             production += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_production_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_production_sum"][
+                                    node
+                                ]
                             )
 
                 if type(production) == float:
@@ -301,10 +304,10 @@ class NetworkColumnGeneration:
                         # )
                         for number in range(len(self.columns[customer])):
                             holding += (
-                                    self.vars["column_weights"][customer, number]
-                                    * self.columns[customer][number]["sku_inventory_sum"][
-                                        node
-                                    ]
+                                self.vars["column_weights"][customer, number]
+                                * self.columns[customer][number]["sku_inventory_sum"][
+                                    node
+                                ]
                             )
 
                 if type(holding) == float:
@@ -342,8 +345,8 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             for number in range(len(self.columns[customer])):
                 obj += (
-                        self.vars["column_weights"][customer, number]
-                        * self.columns[customer][number]["beta"]
+                    self.vars["column_weights"][customer, number]
+                    * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -386,7 +389,9 @@ class NetworkColumnGeneration:
         self.columns[customer].append(new_col)
         if CG_EXTRA_VERBOSITY:
             _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
-            _cost = pd.Series({v.name: v.obj for v in oracle.model.getVars() if v.x > 0})
+            _cost = pd.Series(
+                {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
+            )
             column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
             print(column_debugger)
 
@@ -404,6 +409,7 @@ class NetworkColumnGeneration:
             self.oracles[customer] = self.construct_oracle(
                 customer, len(self.customer_list)
             )
+
         cg_col_helper.init_col_helpers(self)
         for col_ind, customer in enumerate(self.customer_list):
             self.subproblem(customer, col_ind)
@@ -451,6 +457,9 @@ class NetworkColumnGeneration:
                 bool_early_stop = False
                 self.solve_RMP()
 
+                if self.RMP_model.status == COPT.INFEASIBLE:
+                    self._logger.info("Initial column of RMP is infeasible")
+                    break
                 ######################################
                 rmp_dual_vars = self.RMP_model.getDuals()
                 if self.num_cols == 0 and self.init_dual == "dual":
@@ -465,8 +474,8 @@ class NetworkColumnGeneration:
                 added = False
                 for col_ind, customer in enumerate(self.customer_list):
                     added = (
-                            self.subproblem(customer, col_ind, dual_vars, dual_index)
-                            or added
+                        self.subproblem(customer, col_ind, dual_vars, dual_index)
+                        or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
                         bool_early_stop = True
@@ -533,7 +542,7 @@ class NetworkColumnGeneration:
         )
 
         with open(
-                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:
