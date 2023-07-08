@@ -53,6 +53,7 @@ def prune(graph, ratio):
 def get_pred_reachable_nodes(network, node, pred_reachable_nodes):
     # if node.type == const.CUSTOMER:
     # return
+    # Comment: Use  DFS recursively to find all the forward nodes of the customer without hierarchical restrictions
     if node.type == const.PLANT:
         pred_reachable_nodes.add(node)
         return

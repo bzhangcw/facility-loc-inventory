@@ -232,7 +232,9 @@ class DNP:
             "transportation_capacity": {"index": "(t, edge)"},
             "transportation_variable_lb": {"index": "(t, edge)"},
             "production_capacity": {"index": "(t, node)"},
+            "production_variable_lb": {"index": "(t, node)"},
             "holding_capacity": {"index": "(t, node)"},
+            "holding_variable_lb": {"index": "(t, node)"},
             "holding_capacity_back_order": {"index": "(t, node)"},
         }
 
@@ -467,19 +469,43 @@ class DNP:
 
         for node in self.network.nodes:
             if node.type == const.PLANT:
-                # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
-                constr = (
-                    self.model.addConstr(
-                        self.variables["sku_production"].sum(t, node, "*")
-                        # <= node.production_capacity
+                node_sum = self.variables["sku_production"].sum(t, node, "*")
+                if node.production_lb < np.inf:
+                    self.constrs["production_variable_lb"][
+                        (t, node)
+                    ] = self.model.addConstr(
+                        node_sum
+                        >= node.production_lb * self.variables["open"][t, node]
+                    )
+                    self.constrs["production_capacity"][
+                        (t, node)
+                    ] = self.model.addConstr(
+                        # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
                         # multiply by customer ratio to force feasibliity of first column of cg
+                        node_sum
                         <= node.production_capacity * self.cus_ratio
                     )
-                    if node.production_capacity < np.inf
-                    else None
+                elif node.production_capacity < np.inf:
+                    self.constrs["production_capacity"][
+                        (t, node)
+                    ] = self.model.addConstr(
+                        node_sum <= node.production_capacity * self.cus_ratio,
+                        name=f"node_capacity{t, node}"
                 )
 
-                self.constrs["production_capacity"][(t, node)] = constr
+                # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
+                # constr = (
+                #     self.model.addConstr(
+                #         self.variables["sku_production"].sum(t, node, "*")
+                #         # <= node.production_capacity
+                #         # multiply by customer ratio to force feasibliity of first column of cg
+                #         <= node.production_capacity * self.cus_ratio
+                #     )
+                #     if node.production_capacity < np.inf
+                #     else None
+                # )
+
+                # self.constrs["production_capacity"][(t, node)] = constr
 
             self.dual_index_for_RMP["node_capacity"][node] = index
             index += 1
@@ -508,15 +534,44 @@ class DNP:
 
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
-                constr = self.model.addConstr(
-                    self.variables["sku_inventory"].sum(t, node, "*")
-                    # <= node.inventory_capacity * self.vars["open"][t, node]
-                    # multiply by customer ratio to force feasibliity of first column of cg
-                    <= node.inventory_capacity
-                    * self.variables.get("open", {}).get((t, node), 0)
-                    * self.cus_ratio
-                )
-                self.constrs["holding_capacity"][(t, node)] = constr
+                node_sum = self.variables["sku_inventory"].sum(t, node, "*")
+                if node.inventory_lb < np.inf:
+                    self.constrs["holding_variable_lb"][
+                        (t, node)
+                    ] = self.model.addConstr(
+                        node_sum
+                        >= node.warehouse_lb * self.variables.get("open", {}).get((t, node), 0)*self.cus_ratio
+                    )
+                    self.constrs["holding_capacity"][
+                        (t, node)
+                    ] = self.model.addConstr(
+                        self.variables["sku_inventory"].sum(t, node, "*")
+                        # <= node.inventory_capacity * self.vars["open"][t, node]
+                        # multiply by customer ratio to force feasibliity of first column of cg
+                        <= node.inventory_capacity
+                        * self.variables.get("open", {}).get((t, node), 0)
+                        * self.cus_ratio
+                    )
+                elif node.inventory_capacity < np.inf:
+                    constr = self.model.addConstr(
+                        self.variables["sku_inventory"].sum(t, node, "*")
+                        # <= node.inventory_capacity * self.vars["open"][t, node]
+                        # multiply by customer ratio to force feasibliity of first column of cg
+                        <= node.inventory_capacity
+                        * self.variables.get("open", {}).get((t, node), 0)
+                        * self.cus_ratio
+                    )
+                    self.constrs["holding_capacity"][(t, node)] = constr
+
+                # constr = self.model.addConstr(
+                #     self.variables["sku_inventory"].sum(t, node, "*")
+                #     # <= node.inventory_capacity * self.vars["open"][t, node]
+                #     # multiply by customer ratio to force feasibliity of first column of cg
+                #     <= node.inventory_capacity
+                #     * self.variables.get("open", {}).get((t, node), 0)
+                #     * self.cus_ratio
+                # )
+                # self.constrs["holding_capacity"][(t, node)] = constr
 
                 if self.arg.backorder is True:
                     self.model.addConstr(
@@ -882,7 +937,8 @@ class DNP:
 
     def solve(self):
         self.model.solve()
-
+    def write(self, name):
+        self.model.write(name)
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         # node output
         plant_sku_t_production = pd.DataFrame(
@@ -1090,13 +1146,13 @@ class DNP:
 
         try:
             warehouse_avg_inventory_t = (
-                warehouse_sku_t_storage.groupby("node").sum()["qty"] / self.T
+                    warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"] / self.T
             )
             warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
                 warehouse_avg_inventory_t
             )
         except Exception as e:
-            logger.warn(f"table warehouse_total_avg_inventory failed")
+            logger.warning(f"table warehouse_total_avg_inventory failed")
             # logger.exception(e)
             warehouse_total_avg_inventory = 0
             warehouse_avg_inventory_t = None
@@ -1146,7 +1202,9 @@ if __name__ == "__main__":
     from param import Param
     from network import constuct_network
     import pandas as pd
+    import datetime
 
+    starttime = datetime.datetime.now()
     param = Param()
     arg = param.arg
     arg.T = 1
@@ -1159,11 +1217,23 @@ if __name__ == "__main__":
     )
     # best solution: 1206630185
     node_list = plant_list + warehouse_list + customer_list
+    cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
+    for e in edge_list:
+        e.capacity = cap["qty"].get(e.idx, np.inf)
+        e.variable_lb = cap["lb"].get(e.idx, np.inf)
 
+    lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
+    for n in node_list:
+        if n.type == const.PLANT:
+            n.production_lb = lb_df["lb"].get(n.idx, np.inf)
+        if n.type == const.WAREHOUSE:
+            n.warehouse_lb = lb_df["lb"].get(n.idx,  np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()
     model.solve()
 
-    solpath = "/Users/liu/Desktop/MyRepositories/facility-loc-inventory/output"
+    solpath = "output"
     model.get_solution(solpath)
+    endtime = datetime.datetime.now()
+    print(endtime - starttime)

@@ -83,6 +83,8 @@ class NetworkColumnGeneration:
             for k in pred_reachable_nodes: k.visited = False
             related_nodes = pred_reachable_nodes.copy()
             # todo: what does this mean? add comment
+            # note: use "node.visted = Bool" to avoid the excessive recursive times
+            # in the situation that two nodes can reach each other
             for node in pred_reachable_nodes:
                 # todo, previous
                 # if bool(node.get_node_sku_list(0, sku_list)):
@@ -90,8 +92,10 @@ class NetworkColumnGeneration:
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
                             cus_sku_list
                     ):
+                        # If the sku_list associated with a pred_node doesn't have any same element with the cus_sku_list, then remove the pred_node
                         related_nodes.remove(node)
                 else:
+                    # If a pred_node doesn't store or produce any SKU in period 0, then remove it
                     related_nodes.remove(node)
             related_nodes.add(customer)
 

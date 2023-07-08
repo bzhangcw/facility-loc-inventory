@@ -4,34 +4,30 @@ from dnp_model import DNP
 from param import Param
 import os
 import utils
+import pandas as pd
+import numpy as np
+import datetime
+from np_cg import *
 
 if __name__ == "__main__":
+    starttime = datetime.datetime.now()
     param = Param()
     arg = param.arg
 
     datapath = "data/data_0401_V3.xlsx"
-    # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-    #     data_dir=f"{utils.CONF.DEFAULT_DATA_PATH}/{fpath}",
-    #     sku_num=5,
-    #     plant_num=5,
-    #     warehouse_num=5,
-    #     customer_num=5,
-    # )
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=100,
-    #     plant_num=20,
-    #     warehouse_num=20,
-    #     customer_num=20,
-    #     one_period=True
-    # )
+    arg.T = 7
     cfg = dict(
         data_dir=datapath,
-        sku_num=2,
-        plant_num=2,
-        warehouse_num=13,
-        customer_num=2,
-        one_period=True,
+        sku_num=140,
+        plant_num=23,
+        warehouse_num=28,
+        customer_num=519,
+        one_period=False,
+        # sku_num=10,
+        # plant_num=3,
+        # warehouse_num=8,
+        # customer_num=9,
+        # one_period=True,
     )
 
     (
@@ -45,7 +41,17 @@ if __name__ == "__main__":
         *_,
     ) = utils.get_data_from_cfg(cfg)
     # node_list = plant_list + warehouse_list + customer_list
+    cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
+    for e in edge_list:
+        e.capacity = cap["qty"].get(e.idx, np.inf)
+        e.variable_lb = cap["lb"].get(e.idx, np.inf)
 
+    lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
+    for n in node_list:
+        if n.type == const.PLANT:
+            n.production_lb = lb_df["lb"].get(n.idx, np.inf)
+        # if n.type == const.WAREHOUSE:
+        #     n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()
@@ -53,3 +59,6 @@ if __name__ == "__main__":
     model.solve()
 
     model.get_solution(data_dir=utils.CONF.DEFAULT_SOL_PATH)
+    endtime = datetime.datetime.now()
+    print(endtime - starttime)
+    model.write("test_7_f.mps")
