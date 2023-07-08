@@ -474,8 +474,7 @@ class DNP:
                     self.constrs["production_variable_lb"][
                         (t, node)
                     ] = self.model.addConstr(
-                        node_sum
-                        >= node.production_lb * self.variables["open"][t, node]
+                        node_sum >= node.production_lb * self.variables["open"][t, node]
                     )
                     self.constrs["production_capacity"][
                         (t, node)
@@ -490,8 +489,8 @@ class DNP:
                         (t, node)
                     ] = self.model.addConstr(
                         node_sum <= node.production_capacity * self.cus_ratio,
-                        name=f"node_capacity{t, node}"
-                )
+                        name=f"node_capacity{t, node}",
+                    )
 
                 # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
                 # constr = (
@@ -540,11 +539,11 @@ class DNP:
                         (t, node)
                     ] = self.model.addConstr(
                         node_sum
-                        >= node.warehouse_lb * self.variables.get("open", {}).get((t, node), 0)*self.cus_ratio
+                        >= node.warehouse_lb
+                        * self.variables.get("open", {}).get((t, node), 0)
+                        * self.cus_ratio
                     )
-                    self.constrs["holding_capacity"][
-                        (t, node)
-                    ] = self.model.addConstr(
+                    self.constrs["holding_capacity"][(t, node)] = self.model.addConstr(
                         self.variables["sku_inventory"].sum(t, node, "*")
                         # <= node.inventory_capacity * self.vars["open"][t, node]
                         # multiply by customer ratio to force feasibliity of first column of cg
@@ -937,8 +936,10 @@ class DNP:
 
     def solve(self):
         self.model.solve()
+
     def write(self, name):
         self.model.write(name)
+
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         # node output
         plant_sku_t_production = pd.DataFrame(
@@ -1146,7 +1147,8 @@ class DNP:
 
         try:
             warehouse_avg_inventory_t = (
-                    warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"] / self.T
+                warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"]
+                / self.T
             )
             warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
                 warehouse_avg_inventory_t
@@ -1227,7 +1229,7 @@ if __name__ == "__main__":
         if n.type == const.PLANT:
             n.production_lb = lb_df["lb"].get(n.idx, np.inf)
         if n.type == const.WAREHOUSE:
-            n.warehouse_lb = lb_df["lb"].get(n.idx,  np.inf)
+            n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()
