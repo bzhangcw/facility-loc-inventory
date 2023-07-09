@@ -71,6 +71,7 @@ class NetworkColumnGeneration:
         self.fix_val_constr = {}
         self.init_primal = init_primal
         self.init_dual = init_dual
+        self.RMP_constrs = dict()
 
     def get_subgraph(self):
         """
@@ -197,13 +198,14 @@ class NetworkColumnGeneration:
         ################# add constraints #################
         constr_types = {
             "transportation_capacity": {"index": "(edge)"},
-            "production_capacity": {"index": "(node)"},
-            "holding_capacity": {"index": "(node)"},
+            # "production_capacity": {"index": "(node)"},
+            # "holding_capacity": {"index": "(node)"},
+            "node_capacity": {"index": "(node)"},
             "weights_sum": {"index": "(customer)"},
         }
-        constrs = dict()
+
         for constr in constr_types.keys():
-            constrs[constr] = dict()
+            self.RMP_constrs[constr] = dict()
 
         self.dual_index = {
             "transportation_capacity": dict(),
@@ -218,34 +220,36 @@ class NetworkColumnGeneration:
                 continue
             transportation = 0.0
             for customer in self.customer_list:
-                if e in self.subgraph[customer].edges:  # todo: can we do better?
-                    # self.columns[customer][len(self.columns[customer]) - 1][
-                    #     "sku_flow_sum"
-                    # ][edge] = (
-                    #     self.oracles[customer]
-                    #     .variables["sku_flow"]
-                    #     .sum(0, edge, "*")
-                    #     .getValue()
-                    # )
-                    for number in range(len(self.columns[customer])):
-                        transportation += (
-                            self.vars["column_weights"][customer, number]
-                            * self.columns[customer][number]["sku_flow_sum"][edge]
-                        )
+                # if e in self.subgraph[customer].edges:  # todo: can we do better?
+                #     for number in range(len(self.columns[customer])):
+                #         transportation += (
+                #             self.vars["column_weights"][customer, number]
+                #             * self.columns[customer][number]["sku_flow_sum"][edge]
+                #         )
+
+                # todo: can we do better?
+                for number in range(len(self.columns[customer])):
+                    transportation += self.vars["column_weights"][customer, number] * (
+                        self.columns[customer][number]["sku_flow_sum"][edge]
+                        if e in self.subgraph[customer].edges
+                        else 0.0
+                    )
 
             if type(transportation) == float:
-                continue
+                # continue
+                transportation = 0 * self.vars["column_weights"].sum(customer, "*")
             sumcoef = 0
             for i in range(transportation.getSize()):
                 sumcoef += transportation.getCoeff(i)
             if sumcoef == 0:
-                continue
+                # continue
+                transportation = 0 * self.vars["column_weights"].sum(customer, "*")
 
             constr = self.RMP_model.addConstr(
                 transportation <= edge.capacity,
                 name=f"transportation_capacity_{edge.idx}",
             )
-            constrs["transportation_capacity"][edge] = constr
+            self.RMP_constrs["transportation_capacity"][edge] = constr
             self.dual_index["transportation_capacity"][edge] = index
             index += 1
 
@@ -256,36 +260,39 @@ class NetworkColumnGeneration:
                     continue
                 production = 0.0
                 for customer in self.customer_list:
-                    if node in self.subgraph[customer].nodes:
-                        # self.columns[customer][len(self.columns[customer]) - 1][
-                        #     "sku_production_sum"
-                        # ][node] = (
-                        #     self.oracles[customer]
-                        #     .variables["sku_production"]
-                        #     .sum(0, node, "*")
-                        #     .getValue()
-                        # )
-                        for number in range(len(self.columns[customer])):
-                            production += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_production_sum"][
-                                    node
-                                ]
-                            )
+                    # if node in self.subgraph[customer].nodes:
+                    #     for number in range(len(self.columns[customer])):
+                    #         production += (
+                    #             self.vars["column_weights"][customer, number]
+                    #             * self.columns[customer][number]["sku_production_sum"][
+                    #                 node
+                    #             ]
+                    #         )
+
+                    for number in range(len(self.columns[customer])):
+                        production += self.vars["column_weights"][customer, number] * (
+                            self.columns[customer][number]["sku_production_sum"][node]
+                            if node in self.subgraph[customer].nodes
+                            else 0.0
+                        )
 
                 if type(production) == float:
-                    continue
+                    # continue
+                    production = 0 * self.vars["column_weights"].sum(customer, "*")
+
                 sumcoef = 0
                 for i in range(production.getSize()):
                     sumcoef += production.getCoeff(i)
                 if sumcoef == 0:
-                    continue
+                    # continue
+                    production = 0 * self.vars["column_weights"].sum(customer, "*")
 
                 constr = self.RMP_model.addConstr(
                     production <= node.production_capacity,
                     name=f"production_capacity_{node.idx}",
                 )
-                constrs["production_capacity"][node] = constr
+                # self.RMP_constrs["production_capacity"][node] = constr
+                self.RMP_constrs["node_capacity"][node] = constr
 
             elif node.type == const.WAREHOUSE:
                 # node holding capacity
@@ -293,36 +300,40 @@ class NetworkColumnGeneration:
                     continue
                 holding = 0.0
                 for customer in self.customer_list:
-                    if node in self.subgraph[customer].nodes:
-                        # self.columns[customer][len(self.columns[customer]) - 1][
-                        #     "sku_inventory_sum"
-                        # ][node] = (
-                        #     self.oracles[customer]
-                        #     .variables["sku_inventory"]
-                        #     .sum(0, node, "*")
-                        #     .getValue()
-                        # )
-                        for number in range(len(self.columns[customer])):
-                            holding += (
-                                self.vars["column_weights"][customer, number]
-                                * self.columns[customer][number]["sku_inventory_sum"][
-                                    node
-                                ]
-                            )
+                    # if node in self.subgraph[customer].nodes:
+                    #     for number in range(len(self.columns[customer])):
+                    #         holding += (
+                    #             self.vars["column_weights"][customer, number]
+                    #             * self.columns[customer][number]["sku_inventory_sum"][
+                    #                 node
+                    #             ]
+                    #         )
+
+                    for number in range(len(self.columns[customer])):
+                        holding += self.vars["column_weights"][customer, number] * (
+                            self.columns[customer][number]["sku_inventory_sum"][node]
+                            if node in self.subgraph[customer].nodes
+                            else 0.0
+                        )
 
                 if type(holding) == float:
-                    continue
+                    # continue
+                    holding = 0 * self.vars["column_weights"].sum(customer, "*")
+
                 sumcoef = 0
                 for i in range(holding.getSize()):
                     sumcoef += holding.getCoeff(i)
                 if sumcoef == 0:
-                    continue
+                    # continue
+                    holding = 0 * self.vars["column_weights"].sum(customer, "*")
 
                 constr = self.RMP_model.addConstr(
                     holding <= node.inventory_capacity,
                     name=f"inventory_capacity_{node.idx}",
                 )
-                constrs["holding_capacity"][node] = constr
+                # self.RMP_constrs["holding_capacity"][node] = constr
+                self.RMP_constrs["node_capacity"][node] = constr
+
             else:
                 continue
 
@@ -335,7 +346,7 @@ class NetworkColumnGeneration:
                 self.vars["column_weights"].sum(customer, "*") == 1,
                 name=f"weights_sum_{customer.idx}",
             )
-            constrs["weights_sum"][customer] = constr
+            self.RMP_constrs["weights_sum"][customer] = constr
 
             self.dual_index["weights_sum"][customer] = index
             index += 1
@@ -365,9 +376,67 @@ class NetworkColumnGeneration:
         Update the RMP with new columns
         """
 
-        # can incrementally update the RMP?
         self.RMP_model.clear()
         self.init_RMP()
+
+    def update_RMP_by_cols(self):
+        """
+        Incrementally update the RMP with new columns
+        """
+
+        self.RMP_model.clear()
+
+        for customer in self.customer_list:
+            capacity_cons_coef = []
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                if edge.capacity < np.inf:
+                    capacity_cons_coef.append(
+                        (
+                            self.columns[customer][-1]["sku_flow_sum"][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0
+                        )
+                    )
+
+            for node in self.network.nodes:
+                if node.type == const.PLANT:
+                    if node.production_capacity < np.inf:
+                        capacity_cons_coef.append(
+                            (
+                                self.columns[customer][-1]["sku_production_sum"][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
+                        )
+                elif node.type == const.WAREHOUSE:
+                    if node.inventory_capacity < np.inf:
+                        capacity_cons_coef.append(
+                            (
+                                self.columns[customer][-1]["sku_inventory_sum"][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
+                        )
+
+            capacity_cnstr = []
+            capacity_cnstr.append(self.RMP_constrs["transportation_capacity"].values())
+            capacity_cnstr.append(self.RMP_constrs["node_capacity"].values())
+
+            new_col = cp.Column(
+                capacity_cnstr + [self.RMP_constrs["weights_sum"][customer]],
+                capacity_cons_coef + [1.0],
+            )
+
+            self.vars["column_weights"].append(
+                self.RMP_model.addVar(
+                    obj=1.0,
+                    name=f"lambda_{customer.idx}_{len(self.columns[customer])}",
+                    lb=0.0,
+                    ub=1.0,
+                    column=new_col,
+                )
+            )
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         """
@@ -500,7 +569,9 @@ class NetworkColumnGeneration:
                 if bool_early_stop:
                     self._logger.info("early terminated")
                     break
-                self.update_RMP()
+                # self.update_RMP()
+                self.update_RMP_by_cols()
+
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")
                 break
