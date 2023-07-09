@@ -37,6 +37,8 @@ class NetworkColumnGeneration:
         customer_list: List[Customer],
         full_sku_list: List[SKU] = None,
         bool_covering=False,
+        bool_edge_lb=False,
+        bool_node_lb=False,
         max_iter=500,
         init_primal=None,
         init_dual=None,
@@ -62,6 +64,8 @@ class NetworkColumnGeneration:
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, DNP] = {}  #
         self.bool_covering = bool_covering
+        self.bool_edge_lb = bool_edge_lb
+        self.bool_node_lb = bool_node_lb
         self.dual_index = dict()
         self.vars = dict()  # variables
         self.num_cols = 0
@@ -80,13 +84,16 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
             pred_reachable_nodes = set()
-            get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
+            get_pred_reachable_nodes(
+                self.network, customer, pred_reachable_nodes)
             # @note: reset visited status
             # @update: 070523
             for k in pred_reachable_nodes:
                 k.visited = False
             related_nodes = pred_reachable_nodes.copy()
             # todo: what does this mean? add comment
+            # note: use "node.visted = Bool" to avoid the excessive recursive times
+            # in the situation that two nodes can reach each other
             for node in pred_reachable_nodes:
                 # todo, previous
                 # if bool(node.get_node_sku_list(0, sku_list)):
@@ -94,8 +101,10 @@ class NetworkColumnGeneration:
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
                         cus_sku_list
                     ):
+                        # If the sku_list associated with a pred_node doesn't have any same element with the cus_sku_list, then remove the pred_node
                         related_nodes.remove(node)
                 else:
+                    # If a pred_node doesn't store or produce any SKU in period 0, then remove it
                     related_nodes.remove(node)
             related_nodes.add(customer)
 
@@ -104,8 +113,10 @@ class NetworkColumnGeneration:
 
             # can we do better?
             this_subgraph = self.network.subgraph(related_nodes)
-            self.subgraph[customer].add_nodes_from(this_subgraph.nodes(data=True))
-            self.subgraph[customer].add_edges_from(this_subgraph.edges(data=True))
+            self.subgraph[customer].add_nodes_from(
+                this_subgraph.nodes(data=True))
+            self.subgraph[customer].add_edges_from(
+                this_subgraph.edges(data=True))
             self.subgraph[customer].graph["sku_list"] = cus_sku_list
 
             self._logger.debug(f"{cus_sku_list}")
@@ -132,6 +143,8 @@ class NetworkColumnGeneration:
             bool_covering=self.bool_covering,
             bool_capacity=True,
             bool_feasibility=False,
+            bool_edge_lb=self.bool_edge_lb,
+            bool_node_lb=self.bool_node_lb,
             cus_num=cus_num,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
@@ -220,6 +233,7 @@ class NetworkColumnGeneration:
                 continue
             transportation = 0.0
             for customer in self.customer_list:
+
                 # if e in self.subgraph[customer].edges:  # todo: can we do better?
                 #     for number in range(len(self.columns[customer])):
                 #         transportation += (
@@ -260,6 +274,7 @@ class NetworkColumnGeneration:
                     continue
                 production = 0.0
                 for customer in self.customer_list:
+
                     # if node in self.subgraph[customer].nodes:
                     #     for number in range(len(self.columns[customer])):
                     #         production += (
@@ -300,6 +315,7 @@ class NetworkColumnGeneration:
                     continue
                 holding = 0.0
                 for customer in self.customer_list:
+
                     # if node in self.subgraph[customer].nodes:
                     #     for number in range(len(self.columns[customer])):
                     #         holding += (
@@ -519,7 +535,8 @@ class NetworkColumnGeneration:
         else:
             raise Exception("unknown primal initialization")
 
-        self._logger.info("Initialization complete, start generating columns...")
+        self._logger.info(
+            "Initialization complete, start generating columns...")
         self.init_RMP()
         while True:  # may need to add a termination condition
             try:

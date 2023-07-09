@@ -68,6 +68,7 @@ class Plant(Node):
         location: np.ndarray,
         production_capacity: float,
         producible_sku: List[SKU],
+        production_lb: float = np.inf,
         production_sku_rate: "pd.Series[SKU, float]" = None,
         production_sku_capacity: "pd.Series[SKU, float]" = None,
         production_fixed_cost: float = 0.0,
@@ -76,6 +77,7 @@ class Plant(Node):
     ) -> None:
         super().__init__(idx, location)
         self.production_capacity = production_capacity
+        self.production_lb = production_lb
         self.producible_sku = producible_sku
         self.production_sku_rate = production_sku_rate
         self.production_sku_capacity = production_sku_capacity
@@ -126,6 +128,7 @@ class Warehouse(Node):
         idx: str,
         location: np.ndarray,
         inventory_capacity: float,
+        inventory_lb: float = np.inf,
         if_current: bool = False,
         inventory_sku_capacity: "pd.Series[SKU, float]" = None,
         holding_fixed_cost: float = 0.0,
@@ -140,6 +143,7 @@ class Warehouse(Node):
     ) -> None:
         super().__init__(idx, location)
         self.inventory_capacity = inventory_capacity
+        self.inventory_lb = inventory_lb
         self.inventory_sku_capacity = inventory_sku_capacity
         self.holding_fixed_cost = holding_fixed_cost
         # self.holding_sku_fixed_cost = holding_sku_fixed_cost
