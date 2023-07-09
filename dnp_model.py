@@ -1307,7 +1307,7 @@ if __name__ == "__main__":
         if n.type == const.WAREHOUSE:
             n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
-    model = DNP(arg, network, bool_covering=False, logging=1)
+    model = DNP(arg, network, bool_covering=True, logging=1)
     model.modeling()
     model.solve()
 
