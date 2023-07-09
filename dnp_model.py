@@ -29,7 +29,10 @@ class DNP:
         bool_covering: bool = True,
         bool_capacity: bool = True,
         bool_feasibility: bool = False,
+        bool_edge_lb: bool = True,
+        bool_node_lb: bool = True,
         cus_num: int = 1,
+        logging: int = 0,
         env=None,
     ) -> None:
         self.arg = arg
@@ -45,7 +48,7 @@ class DNP:
         else:
             self.env = env
         self.model = self.env.createModel(model_name)
-        self.model.setParam(COPT.Param.Logging, 0)
+        self.model.setParam(COPT.Param.Logging, logging)
 
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
@@ -54,6 +57,24 @@ class DNP:
         self.bool_covering = bool_covering
         self.bool_capacity = bool_capacity
         self.bool_feasibility = bool_feasibility
+        # whether to add edge lower bound constraints
+        if bool_covering:
+            self.bool_edge_lb = bool_edge_lb
+        else:
+            if bool_edge_lb:
+                logger.warning(
+                    "bool_edge_lb is set to False because bool_covering is False."
+                )
+            self.bool_edge_lb = False
+        # whether to add node lower bound constraints
+        if bool_covering:
+            self.bool_node_lb = bool_node_lb
+        else:
+            if bool_node_lb:
+                logger.warning(
+                    "bool_node_lb is set to False because bool_covering is False."
+                )
+            self.bool_node_lb = False
         self.original_obj = 0.0
         self.cus_num = cus_num
         self.total_cus_num = arg.total_cus_num
@@ -230,13 +251,21 @@ class DNP:
                 "sku_open": {"index": "(t, node, k)"},
             },
             "transportation_capacity": {"index": "(t, edge)"},
-            "transportation_variable_lb": {"index": "(t, edge)"},
+            # "transportation_variable_lb": {"index": "(t, edge)"},
             "production_capacity": {"index": "(t, node)"},
-            "production_variable_lb": {"index": "(t, node)"},
+            # "production_variable_lb": {"index": "(t, node)"},
             "holding_capacity": {"index": "(t, node)"},
-            "holding_variable_lb": {"index": "(t, node)"},
+            # "holding_variable_lb": {"index": "(t, node)"},
             "holding_capacity_back_order": {"index": "(t, node)"},
         }
+
+        if self.bool_edge_lb:
+            self.constr_types["transportation_variable_lb"] = {
+                "index": "(t, edge)"}
+        if self.bool_node_lb:
+            self.constr_types["production_variable_lb"] = {
+                "index": "(t, node)"}
+            self.constr_types["holding_variable_lb"] = {"index": "(t, node)"}
 
         for constr in self.constr_types.keys():
             self.constrs[constr] = dict()
@@ -405,10 +434,12 @@ class DNP:
                 and node.has_demand(t)
                 and len(node.demand_sku[t]) > 0
             ):
-                constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                constr = self.model.addConstr(
+                    self.variables["open"][t, node] == 1)
                 self.constrs["open_relationship"]["open"][(t, node)] = constr
             elif node.type == const.CUSTOMER:
-                constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                constr = self.model.addConstr(
+                    self.variables["open"][t, node] == 1)
                 self.constrs["open_relationship"]["open"][(t, node)] = constr
 
             for k in sku_list:
@@ -418,7 +449,8 @@ class DNP:
                         <= self.variables["open"][t, node]
                     )
 
-                self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
+                self.constrs["open_relationship"]["sku_open"][(
+                    t, node, k)] = constr
 
         return
 
@@ -430,67 +462,84 @@ class DNP:
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
 
             # variable lower bound
-            if edge.variable_lb < np.inf:
+            if self.bool_edge_lb and edge.variable_lb < np.inf:
                 self.constrs["transportation_variable_lb"][
                     (t, edge)
                 ] = self.model.addConstr(
                     flow_sum
                     >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
-                self.constrs["transportation_capacity"][
-                    (t, edge)
-                ] = self.model.addConstr(
-                    # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
-                    # multiply by customer ratio to force feasibliity of first column of cg
-                    flow_sum
-                    <= edge.capacity
-                    * self.variables["select_edge"][t, edge]
-                    * self.cus_ratio
-                )
-            elif edge.capacity < np.inf:
-                self.constrs["transportation_capacity"][
-                    (t, edge)
-                ] = self.model.addConstr(
-                    flow_sum <= edge.capacity
-                    # * self.vars["select_edge"][t, edge] # cause infeasibility of LP relaxation
-                    * self.cus_ratio,
-                    name=f"edge_capacity{t,edge}",
-                )
+                index += 1
 
-            self.dual_index_for_RMP["transportation_capacity"][edge] = index
-            index += 1
+            # capacity constraint
+            if edge.capacity < np.inf:
+                if self.bool_covering:
+                    self.constrs["transportation_capacity"][
+                        (t, edge)
+                    ] = self.model.addConstr(
+                        # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                        # multiply by customer ratio to force feasibliity of first column of cg
+                        flow_sum
+                        <= edge.capacity
+                        * self.variables["select_edge"][t, edge]
+                        * self.cus_ratio,
+                        name=f"edge_capacity{t,edge}",
+                    )
+                else:
+                    self.constrs["transportation_capacity"][
+                        (t, edge)
+                    ] = self.model.addConstr(
+                        flow_sum <= edge.capacity
+                        # * self.vars["select_edge"][t, edge] # cause infeasibility of LP relaxation
+                        * self.cus_ratio,
+                        name=f"edge_capacity{t,edge}",
+                    )
+
+                self.dual_index_for_RMP["transportation_capacity"][edge] = index
+                index += 1
 
         return
 
     def add_constr_production_capacity(self, t: int):
         index = (
-            list(self.dual_index_for_RMP["transportation_capacity"].values())[-1] + 1
+            list(
+                self.dual_index_for_RMP["transportation_capacity"].values())[-1] + 1
         )
 
         for node in self.network.nodes:
             if node.type == const.PLANT:
                 node_sum = self.variables["sku_production"].sum(t, node, "*")
-                if node.production_lb < np.inf:
+
+                # lower bound constraint
+                if self.bool_edge_lb and node.production_lb < np.inf:
                     self.constrs["production_variable_lb"][
                         (t, node)
                     ] = self.model.addConstr(
-                        node_sum >= node.production_lb * self.variables["open"][t, node]
+                        node_sum >= node.production_lb *
+                        self.variables["open"][t, node],
+                        name=f"node_lb{t, node}",
                     )
-                    self.constrs["production_capacity"][
-                        (t, node)
-                    ] = self.model.addConstr(
-                        # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
-                        # multiply by customer ratio to force feasibliity of first column of cg
-                        node_sum
-                        <= node.production_capacity * self.cus_ratio
-                    )
-                elif node.production_capacity < np.inf:
-                    self.constrs["production_capacity"][
-                        (t, node)
-                    ] = self.model.addConstr(
-                        node_sum <= node.production_capacity * self.cus_ratio,
-                        name=f"node_capacity{t, node}",
-                    )
+                    index += 1
+
+                # capacity constraint
+                if node.production_capacity < np.inf:
+                    if self.bool_covering:
+                        self.constrs["production_capacity"][
+                            (t, node)
+                        ] = self.model.addConstr(
+                            # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                            # multiply by customer ratio to force feasibliity of first column of cg
+                            node_sum
+                            <= node.production_capacity * self.variables["open"][t, node] * self.cus_ratio,
+                            name=f"node_capacity{t, node}",
+                        )
+                    else:
+                        self.constrs["production_capacity"][
+                            (t, node)
+                        ] = self.model.addConstr(
+                            node_sum <= node.production_capacity * self.cus_ratio,
+                            name=f"node_capacity{t, node}",
+                        )
 
                 # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
                 # constr = (
@@ -506,8 +555,8 @@ class DNP:
 
                 # self.constrs["production_capacity"][(t, node)] = constr
 
-            self.dual_index_for_RMP["node_capacity"][node] = index
-            index += 1
+                    self.dual_index_for_RMP["node_capacity"][node] = index
+                    index += 1
 
         return
 
@@ -522,9 +571,11 @@ class DNP:
 
                 if self.arg.backorder is True:
                     constr = self.model.addConstr(
-                        self.variables["sku_inventory"].sum(t, node, "*") >= -self.arg.M
+                        self.variables["sku_inventory"].sum(
+                            t, node, "*") >= -self.arg.M
                     )
-                    self.constrs["holding_capacity_back_order"][(t, node)] = constr
+                    self.constrs["holding_capacity_back_order"][(
+                        t, node)] = constr
 
         return
 
@@ -534,32 +585,40 @@ class DNP:
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
                 node_sum = self.variables["sku_inventory"].sum(t, node, "*")
-                if node.inventory_lb < np.inf:
+
+                # lower bound constraint
+                if self.bool_node_lb and node.inventory_lb < np.inf:
                     self.constrs["holding_variable_lb"][
                         (t, node)
                     ] = self.model.addConstr(
                         node_sum
                         >= node.warehouse_lb
-                        * self.variables.get("open", {}).get((t, node), 0)
+                        # * self.variables.get("open", {}).get((t, node), 0)
+                        * self.variables["open"][(t, node)]
                         * self.cus_ratio
                     )
-                    self.constrs["holding_capacity"][(t, node)] = self.model.addConstr(
-                        self.variables["sku_inventory"].sum(t, node, "*")
-                        # <= node.inventory_capacity * self.vars["open"][t, node]
-                        # multiply by customer ratio to force feasibliity of first column of cg
-                        <= node.inventory_capacity
-                        * self.variables.get("open", {}).get((t, node), 0)
-                        * self.cus_ratio
-                    )
-                elif node.inventory_capacity < np.inf:
-                    constr = self.model.addConstr(
-                        self.variables["sku_inventory"].sum(t, node, "*")
-                        # <= node.inventory_capacity * self.vars["open"][t, node]
-                        # multiply by customer ratio to force feasibliity of first column of cg
-                        <= node.inventory_capacity
-                        * self.variables.get("open", {}).get((t, node), 0)
-                        * self.cus_ratio
-                    )
+
+                # capacity constraint
+                if node.inventory_capacity < np.inf:
+                    if self.bool_node_lb:
+                        constr = self.model.addConstr(
+                            self.variables["sku_inventory"].sum(t, node, "*")
+                            # <= node.inventory_capacity * self.vars["open"][t, node]
+                            # multiply by customer ratio to force feasibliity of first column of cg
+                            <= node.inventory_capacity
+                            # * self.variables.get("open", {}).get((t, node), 0)
+                            * self.variables["open"][(t, node)]
+                            * self.cus_ratio
+                        )
+                    else:
+                        constr = self.model.addConstr(
+                            self.variables["sku_inventory"].sum(t, node, "*")
+                            # <= node.inventory_capacity * self.vars["open"][t, node]
+                            # multiply by customer ratio to force feasibliity of first column of cg
+                            <= node.inventory_capacity
+                            # * self.variables.get("open", {}).get((t, node), 0)
+                            * self.cus_ratio
+                        )
                     self.constrs["holding_capacity"][(t, node)] = constr
 
                 # constr = self.model.addConstr(
@@ -572,14 +631,21 @@ class DNP:
                 # )
                 # self.constrs["holding_capacity"][(t, node)] = constr
 
-                if self.arg.backorder is True:
-                    self.model.addConstr(
-                        self.variables["sku_inventory"].sum(t, node, "*")
-                        >= -self.arg.M * self.variables["open"][t, node]
-                    )
+                    self.dual_index_for_RMP["node_capacity"][node] = index
+                    index += 1
 
-            self.dual_index_for_RMP["node_capacity"][node] = index
-            index += 1
+                if self.arg.backorder is True:
+                    if self.bool_covering:
+                        self.model.addConstr(
+                            self.variables["sku_inventory"].sum(t, node, "*")
+                            >= -self.arg.M * self.variables["open"][t, node]
+                        )
+                    else:
+                        self.model.addConstr(
+                            self.variables["sku_inventory"].sum(
+                                t, node, "*") >= -self.arg.M
+                        )
+                    index += 1
 
         return
 
@@ -641,7 +707,8 @@ class DNP:
         Use dual variables to calculate the reduced cost
         """
         self.original_obj = self.get_original_objective()
-        obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
+        obj = self.original_obj + \
+            self.extra_objective(customer, dualvar, dual_index)
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
@@ -731,7 +798,8 @@ class DNP:
 
                     holding_cost = holding_cost + node_sku_holding_cost
 
-                    self.obj["sku_holding_cost"][(t, node, k)] = node_sku_holding_cost
+                    self.obj["sku_holding_cost"][(
+                        t, node, k)] = node_sku_holding_cost
 
         return holding_cost
 
@@ -751,7 +819,8 @@ class DNP:
                         backorder_sku_unit_cost = self.arg.backorder_sku_unit_cost
 
                     # I_tilde = max(-I, 0)
-                    I_tilde = self.model.addVar(name=f"I_tilde_({t},_{node},_{k})")
+                    I_tilde = self.model.addVar(
+                        name=f"I_tilde_({t},_{node},_{k})")
                     self.model.addConstr(
                         I_tilde >= -self.variables["sku_inventory"][t, node, k]
                     )
@@ -809,7 +878,8 @@ class DNP:
 
             transportation_cost = transportation_cost + edge_transportation_cost
 
-            self.obj["sku_transportation_cost"][(t, edge)] = edge_transportation_cost
+            self.obj["sku_transportation_cost"][(
+                t, edge)] = edge_transportation_cost
 
         return transportation_cost
 
@@ -881,7 +951,8 @@ class DNP:
             p = self.model.addVar(vtype=COPT.BINARY, name=f"p_{edge}")
 
             for t in range(self.T):
-                self.model.addConstr(self.variables["select_edge"][(t, edge)] <= p)
+                self.model.addConstr(
+                    self.variables["select_edge"][(t, edge)] <= p)
 
             edge_fixed_edge_cost = edge.transportation_fixed_cost * p
 
@@ -1023,7 +1094,8 @@ class DNP:
                 # for t in node.demand_sku.index:
                 for t in t_list:
                     for k in node.demand_sku[t]:
-                        slack = self.variables["sku_demand_slack"][(t, node, k)].x
+                        slack = self.variables["sku_demand_slack"][(
+                            t, node, k)].x
                         demand = node.demand[t, k]
                         if preserve_zeros or slack != 0 or demand != 0:
                             node_sku_t_demand_slack.iloc[demand_slack_index] = {
@@ -1142,12 +1214,14 @@ class DNP:
                 / total_fullfill_sku_rate["demand"].sum()
             )
         else:
-            total_fullfill_sku_rate = node_sku_t_demand_slack[["demand", "slack"]]
+            total_fullfill_sku_rate = node_sku_t_demand_slack[[
+                "demand", "slack"]]
             total_fullfill_rate = 1
 
         try:
             warehouse_avg_inventory_t = (
-                warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"]
+                warehouse_sku_t_storage.groupby(
+                    "node").sum(numeric_only=True)["qty"]
                 / self.T
             )
             warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
@@ -1193,7 +1267,8 @@ class DNP:
             os.path.join(data_dir, "node_sku_t_demand_slack.csv"), index=False
         )
         if self.bool_covering:
-            node_t_open.to_csv(os.path.join(data_dir, "node_t_open.csv"), index=False)
+            node_t_open.to_csv(os.path.join(
+                data_dir, "node_t_open.csv"), index=False)
         edge_sku_t_flow.to_csv(
             os.path.join(data_dir, "edge_sku_t_flow.csv"), index=False
         )
@@ -1205,6 +1280,7 @@ if __name__ == "__main__":
     from network import constuct_network
     import pandas as pd
     import datetime
+    import utils
 
     starttime = datetime.datetime.now()
     param = Param()
@@ -1231,11 +1307,11 @@ if __name__ == "__main__":
         if n.type == const.WAREHOUSE:
             n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
     network = constuct_network(node_list, edge_list, sku_list)
-    model = DNP(arg, network)
+    model = DNP(arg, network, bool_covering=False, logging=1)
     model.modeling()
     model.solve()
 
-    solpath = "output"
-    model.get_solution(solpath)
+    solpath = utils.CONF.DEFAULT_SOL_PATH
+    model.get_solution(data_dir=solpath)
     endtime = datetime.datetime.now()
     print(endtime - starttime)

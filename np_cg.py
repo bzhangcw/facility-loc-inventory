@@ -37,12 +37,15 @@ class NetworkColumnGeneration:
         customer_list: List[Customer],
         full_sku_list: List[SKU] = None,
         bool_covering=False,
+        bool_edge_lb=False,
+        bool_node_lb=False,
         max_iter=500,
         init_primal=None,
         init_dual=None,
     ) -> None:
         self._logger = utils.logger
-        self._logger.setLevel(logging.DEBUG if CG_EXTRA_VERBOSITY else logging.INFO)
+        self._logger.setLevel(
+            logging.DEBUG if CG_EXTRA_VERBOSITY else logging.INFO)
         self._logger.info(
             f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {CG_EXTRA_DEBUGGING}"
         )
@@ -62,6 +65,8 @@ class NetworkColumnGeneration:
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, DNP] = {}  #
         self.bool_covering = bool_covering
+        self.bool_edge_lb = bool_edge_lb
+        self.bool_node_lb = bool_node_lb
         self.dual_index = dict()
         self.vars = dict()  # variables
         self.num_cols = 0
@@ -79,7 +84,8 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
             pred_reachable_nodes = set()
-            get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
+            get_pred_reachable_nodes(
+                self.network, customer, pred_reachable_nodes)
             # @note: reset visited status
             # @update: 070523
             for k in pred_reachable_nodes:
@@ -107,8 +113,10 @@ class NetworkColumnGeneration:
 
             # can we do better?
             this_subgraph = self.network.subgraph(related_nodes)
-            self.subgraph[customer].add_nodes_from(this_subgraph.nodes(data=True))
-            self.subgraph[customer].add_edges_from(this_subgraph.edges(data=True))
+            self.subgraph[customer].add_nodes_from(
+                this_subgraph.nodes(data=True))
+            self.subgraph[customer].add_edges_from(
+                this_subgraph.edges(data=True))
             self.subgraph[customer].graph["sku_list"] = cus_sku_list
 
             self._logger.debug(f"{cus_sku_list}")
@@ -135,6 +143,8 @@ class NetworkColumnGeneration:
             bool_covering=self.bool_covering,
             bool_capacity=True,
             bool_feasibility=False,
+            bool_edge_lb=self.bool_edge_lb,
+            bool_node_lb=self.bool_node_lb,
             cus_num=cus_num,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
@@ -392,11 +402,13 @@ class NetworkColumnGeneration:
         new_col = cg_col_helper.query_columns(self, customer)
         self.columns[customer].append(new_col)
         if CG_EXTRA_VERBOSITY:
-            _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
+            _xval = pd.Series(
+                {v.name: v.x for v in oracle.model.getVars() if v.x > 0})
             _cost = pd.Series(
                 {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
             )
-            column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
+            column_debugger = pd.DataFrame(
+                {"value": _xval, "objective": _cost})
             print(column_debugger)
 
         return added
@@ -453,7 +465,8 @@ class NetworkColumnGeneration:
         else:
             raise Exception("unknown primal initialization")
 
-        self._logger.info("Initialization complete, start generating columns...")
+        self._logger.info(
+            "Initialization complete, start generating columns...")
         self.init_RMP()
         while True:  # may need to add a termination condition
             try:
@@ -474,7 +487,8 @@ class NetworkColumnGeneration:
                 added = False
                 for col_ind, customer in enumerate(self.customer_list):
                     added = (
-                        self.subproblem(customer, col_ind, dual_vars, dual_index)
+                        self.subproblem(customer, col_ind,
+                                        dual_vars, dual_index)
                         or added
                     )
                     if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
