@@ -9,15 +9,33 @@ from param import Param
 
 if __name__ == "__main__":
     datapath = "data/data_0401_V3.xlsx"
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=2,
+    #     plant_num=2,
+    #     warehouse_num=13,
+    #     customer_num=5,
+    #     one_period=True,
+    # )
+
+    # smallest instance causing bug
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=1,
+    #     plant_num=1,
+    #     warehouse_num=25,
+    #     customer_num=3,
+    #     one_period=True,
+    # )
+
     cfg = dict(
         data_dir=datapath,
-        sku_num=2,
-        plant_num=2,
-        warehouse_num=13,
-        customer_num=5,
+        sku_num=10,
+        plant_num=10,
+        warehouse_num=30,
+        customer_num=20,
         one_period=True,
     )
-
     # cfg = dict(data_dir=datapath, one_period=True)
 
     (
@@ -37,7 +55,7 @@ if __name__ == "__main__":
     for e in edge_list:
         e.capacity = cap["qty"].get(e.idx, np.inf)
         # e.variable_lb = cap["lb"].get(e.idx, np.inf)
-        pass
+        # pass
     network = constuct_network(node_list, edge_list, sku_list)
     ###############################################################
 
@@ -49,6 +67,7 @@ if __name__ == "__main__":
     max_iter = 5
     init_primal = None
     init_dual = None  # 'dual'
+    # init_dual = "dual"
 
     np_cg = NetworkColumnGeneration(
         arg,

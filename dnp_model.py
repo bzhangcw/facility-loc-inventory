@@ -81,13 +81,13 @@ class DNP:
         # todo, remove this
         # self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
         self.cus_ratio = 1.0
-        # self.cus_ratio = 1.0
         self.var_idx = None
         self.dual_index_for_RMP = {
             "transportation_capacity": dict(),
             "node_capacity": dict(),
             # "weights_sum": dict(),
         }
+        self.index_for_dual_var = 0  # void bugs of index out of range
 
     def modeling(self):
         """
@@ -469,7 +469,8 @@ class DNP:
                     flow_sum
                     >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
-                index += 1
+
+                self.index_for_dual_var += 1
 
             # capacity constraint
             if edge.capacity < np.inf:
@@ -495,16 +496,16 @@ class DNP:
                         name=f"edge_capacity{t,edge}",
                     )
 
-                self.dual_index_for_RMP["transportation_capacity"][edge] = index
-                index += 1
+                self.dual_index_for_RMP["transportation_capacity"][edge] = self.index_for_dual_var
+                self.index_for_dual_var += 1
 
         return
 
     def add_constr_production_capacity(self, t: int):
-        index = (
-            list(
-                self.dual_index_for_RMP["transportation_capacity"].values())[-1] + 1
-        )
+
+        # index = (
+        #     list(self.dual_index_for_RMP["transportation_capacity"].values())[-1] + 1
+        # )
 
         for node in self.network.nodes:
             if node.type == const.PLANT:
@@ -541,22 +542,11 @@ class DNP:
                             name=f"node_capacity{t, node}",
                         )
 
-                # constr = self.model.addConstr(self.vars['sku_production'].sum(t, node, '*') <= node.production_capacity * self.vars['open'][t, node])
-                # constr = (
-                #     self.model.addConstr(
-                #         self.variables["sku_production"].sum(t, node, "*")
-                #         # <= node.production_capacity
-                #         # multiply by customer ratio to force feasibliity of first column of cg
-                #         <= node.production_capacity * self.cus_ratio
-                #     )
-                #     if node.production_capacity < np.inf
-                #     else None
-                # )
+                    # self.dual_index_for_RMP["node_capacity"][node] = index
+                    # index += 1
 
-                # self.constrs["production_capacity"][(t, node)] = constr
-
-                    self.dual_index_for_RMP["node_capacity"][node] = index
-                    index += 1
+                    self.dual_index_for_RMP["node_capacity"][node] = self.index_for_dual_var
+                    self.index_for_dual_var += 1
 
         return
 
@@ -580,7 +570,7 @@ class DNP:
         return
 
     def add_constr_holding_capacity(self, t: int):
-        index = list(self.dual_index_for_RMP["node_capacity"].values())[-1] + 1
+        # index = list(self.dual_index_for_RMP["node_capacity"].values())[-1] + 1
 
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
@@ -597,6 +587,8 @@ class DNP:
                         * self.variables["open"][(t, node)]
                         * self.cus_ratio
                     )
+                    
+                    self.index_for_dual_var += 1
 
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
@@ -631,8 +623,8 @@ class DNP:
                 # )
                 # self.constrs["holding_capacity"][(t, node)] = constr
 
-                    self.dual_index_for_RMP["node_capacity"][node] = index
-                    index += 1
+                    self.dual_index_for_RMP["node_capacity"][node] = self.index_for_dual_var
+                    self.index_for_dual_var += 1
 
                 if self.arg.backorder is True:
                     if self.bool_covering:
@@ -645,7 +637,7 @@ class DNP:
                             self.variables["sku_inventory"].sum(
                                 t, node, "*") >= -self.arg.M
                         )
-                    index += 1
+                    self.index_for_dual_var += 1
 
         return
 
@@ -706,9 +698,9 @@ class DNP:
         """
         Use dual variables to calculate the reduced cost
         """
-        self.original_obj = self.get_original_objective()
-        obj = self.original_obj + \
-            self.extra_objective(customer, dualvar, dual_index)
+
+        obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
+
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
