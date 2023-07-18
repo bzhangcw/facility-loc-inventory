@@ -84,8 +84,7 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
             pred_reachable_nodes = set()
-            get_pred_reachable_nodes(
-                self.network, customer, pred_reachable_nodes)
+            get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
             # @note: reset visited status
             # @update: 070523
             for k in pred_reachable_nodes:
@@ -113,10 +112,8 @@ class NetworkColumnGeneration:
 
             # can we do better?
             this_subgraph = self.network.subgraph(related_nodes)
-            self.subgraph[customer].add_nodes_from(
-                this_subgraph.nodes(data=True))
-            self.subgraph[customer].add_edges_from(
-                this_subgraph.edges(data=True))
+            self.subgraph[customer].add_nodes_from(this_subgraph.nodes(data=True))
+            self.subgraph[customer].add_edges_from(this_subgraph.edges(data=True))
             self.subgraph[customer].graph["sku_list"] = cus_sku_list
 
             self._logger.debug(f"{cus_sku_list}")
@@ -233,7 +230,6 @@ class NetworkColumnGeneration:
                 continue
             transportation = 0.0
             for customer in self.customer_list:
-
                 # if e in self.subgraph[customer].edges:  # todo: can we do better?
                 #     for number in range(len(self.columns[customer])):
                 #         transportation += (
@@ -274,7 +270,6 @@ class NetworkColumnGeneration:
                     continue
                 production = 0.0
                 for customer in self.customer_list:
-
                     # if node in self.subgraph[customer].nodes:
                     #     for number in range(len(self.columns[customer])):
                     #         production += (
@@ -315,7 +310,6 @@ class NetworkColumnGeneration:
                     continue
                 holding = 0.0
                 for customer in self.customer_list:
-
                     # if node in self.subgraph[customer].nodes:
                     #     for number in range(len(self.columns[customer])):
                     #         holding += (
@@ -446,7 +440,7 @@ class NetworkColumnGeneration:
 
             self.vars["column_weights"].append(
                 self.RMP_model.addVar(
-                    obj=1.0,
+                    obj=self.columns[customer][-1]["beta"],
                     name=f"lambda_{customer.idx}_{len(self.columns[customer])}",
                     lb=0.0,
                     ub=1.0,
@@ -535,8 +529,7 @@ class NetworkColumnGeneration:
         else:
             raise Exception("unknown primal initialization")
 
-        self._logger.info(
-            "Initialization complete, start generating columns...")
+        self._logger.info("Initialization complete, start generating columns...")
         self.init_RMP()
         while True:  # may need to add a termination condition
             try:
