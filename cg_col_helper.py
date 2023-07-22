@@ -12,8 +12,8 @@ import utils
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 
-CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
-CG_EXTRA_DEBUGGING = os.environ.get("CG_EXTRA_DEBUGGING", 1)
+CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
+CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 
 def init_col_helpers(cg_object):

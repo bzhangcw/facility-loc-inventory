@@ -89,7 +89,7 @@ def primal_sweeping_method(self, sort_method=sorted):
         update_plant_capacity(self, col_ind, wc)
         update_warehouse_capacity(self, col_ind, pc)
 
-        # reset capacity constraints
+        # set capacity constraints based on what has been used
         oracle: dnp_model.DNP = self.oracles[_this_customer]
         oracle.del_constr_capacity()
         (
@@ -110,3 +110,8 @@ def primal_sweeping_method(self, sort_method=sorted):
             oracle.used_plant_capacity,
             oracle.used_warehouse_capacity,
         ) = ({}, {}, {})
+
+        for t in range(oracle.T):
+            oracle.add_constr_holding_capacity(t)
+            oracle.add_constr_production_capacity(t)
+            oracle.add_constr_transportation_capacity(t)

@@ -300,7 +300,9 @@ class NetworkColumnGeneration:
                 self.solve_RMP()
 
                 if self.RMP_model.status == COPT.INFEASIBLE:
-                    self._logger.info("Initial column of RMP is infeasible")
+                    self._logger.info("initial column of RMP is infeasible")
+                    self.RMP_model.computeIIS()
+                    self.RMP_model.write(f"rmp@{self.num_cols}.ilp")
                     break
                 ######################################
                 rmp_dual_vars = self.RMP_model.getDuals()
