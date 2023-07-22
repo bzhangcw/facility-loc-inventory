@@ -1,15 +1,17 @@
-import logging
+import logging.handlers
 import logging.handlers
 import os
 import pickle
 import sys
+import time
+from collections import defaultdict
 from typing import List
 
 import networkx as nx
+import pandas as pd
 
 from entity import Node, Edge
 from network import construct_network
-from param import Param
 from read_data import read_data
 
 
@@ -109,3 +111,32 @@ def get_out_edges(network: nx.DiGraph, node: Node) -> List[Edge]:
     """
 
     return [e[2]["object"] for e in list(network.out_edges(node, data=True))]
+
+
+global_timers = []
+
+
+class TimerContext:
+    def __init__(self, k, name):
+        self.k = k
+        self.name = name
+
+    def __enter__(self):
+        self.start = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.end = time.time()
+        self.interval = self.end - self.start
+        global_timers.append(
+            [self.k, self.name, self.interval]
+        )
+
+
+def visualize_timers():
+    df = pd.DataFrame(data=global_timers, columns=['k', 'name', 'time'])
+    df.set_index(["name", "k"]).to_excel(f"{CONF.DEFAULT_SOL_PATH}/timing.xlsx")
+    logger.info(f"""
+=== describing time statistics ===
+{df.groupby("name")['time'].describe().reset_index()}
+    """)

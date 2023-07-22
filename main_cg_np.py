@@ -67,7 +67,7 @@ if __name__ == "__main__":
     arg.T = 1
     # arg.backorder = False
     # max_iter = 15
-    max_iter = 5
+    max_iter = 10
     init_primal = None
     init_dual = None  # 'dual'
     init_sweeping = True

@@ -110,10 +110,10 @@ class Plant(Node):
         pass
 
     def __str__(self) -> str:
-        return f"Plant_{self.idx}"
+        return f"{self.idx}"
 
     def __repr__(self) -> str:
-        return f"Plant_{self.idx}"
+        return f"{self.idx}"
 
 
 class Warehouse(Node):
@@ -199,10 +199,10 @@ class Warehouse(Node):
         pass
 
     def __str__(self) -> str:
-        return f"Warehouse_{self.idx}"
+        return f"{self.idx}"
 
     def __repr__(self) -> str:
-        return f"Warehouse_{self.idx}"
+        return f"{self.idx}"
 
 
 class Customer(Node):
@@ -269,10 +269,10 @@ class Customer(Node):
         pass
 
     def __str__(self) -> str:
-        return f"Customer_{self.idx}"
+        return f"{self.idx}"
 
     def __repr__(self) -> str:
-        return f"Customer_{self.idx}"
+        return f"{self.idx}"
 
 
 class Edge:

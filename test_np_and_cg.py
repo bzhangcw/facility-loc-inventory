@@ -166,7 +166,7 @@ if __name__ == "__main__":
 
                         np_cg.run()
                         t_end = time.time()
-                        result["CG-iter"] = np_cg.num_cols
+                        result["CG-iter"] = np_cg.iter
                         result["CG-time"] = t_end - t_begin
                         result["CG-obj"] = np_cg.RMP_model.objval
                     except:

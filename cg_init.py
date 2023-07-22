@@ -3,6 +3,7 @@ utilities for initialize first columns in CG framework
 """
 from coptpy import COPT
 
+import cg_col_helper
 import dnp_model
 from entity import Customer, Plant
 from utils import get_in_edges, get_out_edges
@@ -46,28 +47,18 @@ def init_cols_from_dual_feas_sol(self, dual_vars):
     return init_dual, init_dual_index
 
 
-def update_edge_capacity(self, cus_idx, used):
-    if cus_idx == 0:
-        return
-    customer_before = self.customer_list[cus_idx - 1]
-    for k, v in self.columns_helpers[customer_before]["sku_flow_sum"].items():
+def update_edge_capacity(self, customer, used):
+    for k, v in self.columns_helpers[customer]["sku_flow_sum"].items():
         used[k] = used.get(k, 0) + v.getValue()
 
 
-def update_warehouse_capacity(self, cus_idx, used):
-    if cus_idx == 0:
-        return
-    customer_before = self.customer_list[cus_idx - 1]
-    for k, v in self.columns_helpers[customer_before]["sku_inventory_sum"].items():
+def update_warehouse_capacity(self, customer, used):
+    for k, v in self.columns_helpers[customer]["sku_inventory_sum"].items():
         used[k] = used.get(k, 0) + v.getValue()
 
 
-def update_plant_capacity(self, cus_idx, used):
-    if cus_idx == 0:
-        return
-
-    customer_before = self.customer_list[cus_idx - 1]
-    for k, v in self.columns_helpers[customer_before]["sku_production_sum"].items():
+def update_plant_capacity(self, customer, used):
+    for k, v in self.columns_helpers[customer]["sku_production_sum"].items():
         used[k] = used.get(k, 0) + v.getValue()
 
 
@@ -84,10 +75,7 @@ def primal_sweeping_method(self, sort_method=sorted):
     sequence = sort_method(range(self.customer_list.__len__()))
 
     for col_ind in sequence:
-        _this_customer = self.customer_list[col_ind]
-        update_edge_capacity(self, col_ind, ec)
-        update_plant_capacity(self, col_ind, wc)
-        update_warehouse_capacity(self, col_ind, pc)
+        _this_customer: Customer = self.customer_list[col_ind]
 
         # set capacity constraints based on what has been used
         oracle: dnp_model.DNP = self.oracles[_this_customer]
@@ -101,7 +89,12 @@ def primal_sweeping_method(self, sort_method=sorted):
             oracle.add_constr_holding_capacity(t)
             oracle.add_constr_production_capacity(t)
             oracle.add_constr_transportation_capacity(t)
+
+        # solve
         self.subproblem(_this_customer, col_ind)
+        update_edge_capacity(self, _this_customer, ec)
+        update_plant_capacity(self, _this_customer, pc)
+        update_warehouse_capacity(self, _this_customer, wc)
 
         # then reset column constraints
         oracle.del_constr_capacity()

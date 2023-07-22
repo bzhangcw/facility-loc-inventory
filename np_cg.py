@@ -26,30 +26,26 @@ import dnp_model
 # import dnp_model
 from param import Param
 
-# macro for debugging
-CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
-CG_EXTRA_DEBUGGING = os.environ.get("CG_EXTRA_DEBUGGING", 1)
-
 
 class NetworkColumnGeneration:
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        bool_covering=False,
-        bool_edge_lb=False,
-        bool_node_lb=False,
-        max_iter=500,
-        init_primal=None,
-        init_sweeping=True,
-        init_dual=None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            bool_covering=False,
+            bool_edge_lb=False,
+            bool_node_lb=False,
+            max_iter=500,
+            init_primal=None,
+            init_sweeping=True,
+            init_dual=None,
     ) -> None:
         self._logger = utils.logger
-        self._logger.setLevel(logging.DEBUG if CG_EXTRA_VERBOSITY else logging.INFO)
+        self._logger.setLevel(logging.DEBUG if cg_col_helper.CG_EXTRA_VERBOSITY else logging.INFO)
         self._logger.info(
-            f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {CG_EXTRA_DEBUGGING}"
+            f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {cg_col_helper.CG_EXTRA_DEBUGGING}"
         )
         self.arg = arg
         self.network = network
@@ -75,7 +71,7 @@ class NetworkColumnGeneration:
         self.bool_node_lb = bool_node_lb
         self.dual_index = dict()
         self.vars = dict()  # variables
-        self.num_cols = 0
+        self.iter = 0
         self.max_iter = max_iter
         self.red_cost = np.zeros((max_iter, len(customer_list)))
         self.full_network = self.network.copy()
@@ -84,6 +80,7 @@ class NetworkColumnGeneration:
         self.init_dual = init_dual
         self.init_sweeping = init_sweeping
         self.RMP_constrs = dict()
+        self.rmp_capacity_cnstr = []
 
     def get_subgraph(self):
         """
@@ -104,7 +101,7 @@ class NetworkColumnGeneration:
             for node in pred_reachable_nodes:
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                        cus_sku_list
+                            cus_sku_list
                     ):
                         # If the sku_list associated with a pred_node
                         # doesn't have any same element with the cus_sku_list,
@@ -130,8 +127,8 @@ class NetworkColumnGeneration:
         return
 
     def construct_oracle(
-        self,
-        customer: Customer,
+            self,
+            customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -184,6 +181,119 @@ class NetworkColumnGeneration:
         self.RMP_model.setParam("Crossover", 0)
 
         self.RMP_model.solve()
+        self.RMP_model.setParam(COPT.Param.Logging, 0)
+
+    def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
+        """
+        Construct and solve the subproblem
+        Only need to change the objective function, subject to the same oracle constraints
+        """
+
+        added = False  # whether a new column is added
+        oracle = self.oracles[customer]
+        oracle.model.reset()
+        oracle.update_objective(customer, dual_vars, dual_index)
+
+        oracle.solve()
+        v = oracle.model.objval
+        self.red_cost[self.iter, col_ind] = v
+        # successfully added if dual price < 0
+        #   or there is no dual variables
+        #   implying initialization
+        added = v < -1e-2 or dual_vars is None
+        # querying column
+        new_col = cg_col_helper.query_columns(self, customer)
+        self.columns[customer].append(new_col)
+        if cg_col_helper.CG_EXTRA_VERBOSITY:
+            _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
+            _cost = pd.Series(
+                {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
+            )
+            column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
+            print(column_debugger)
+
+        return added
+
+    def run(self):
+        """
+        The main loop of column generation algorithm
+        """
+
+        self.get_subgraph()
+
+        # construct oracles
+        self._logger.info("initialization complete, start generating columns...")
+        self._logger.info("generating column oracles")
+        # initialize column helpers
+        with utils.TimerContext(self.iter, f"initialize_columns"):
+            for customer in tqdm(self.customer_list):
+                self.oracles[customer] = self.construct_oracle(customer)
+            cg_col_helper.init_col_helpers(self)
+
+        # use the sweeping method to initialize
+        cg_init.primal_sweeping_method(self)
+        with utils.TimerContext(self.iter, f"initialize_rmp"):
+            self.init_RMP()
+        self.RMP_model.setParam(COPT.Param.Logging, 1)
+        self._logger.info("initialization of restricted master finished")
+        self._logger.info("solving the first rmp")
+        while True:  # may need to add a termination condition
+            try:
+                bool_early_stop = False
+                with utils.TimerContext(self.iter, f"solve_rmp"):
+                    self.solve_RMP()
+
+                if self.RMP_model.status == COPT.INFEASIBLE:
+                    self._logger.info("initial column of RMP is infeasible")
+                    self.RMP_model.write(f"rmp@{self.iter}.lp")
+                    self.RMP_model.computeIIS()
+                    self.RMP_model.write(f"rmp@{self.iter}.ilp")
+                    break
+                with utils.TimerContext(self.iter, f"get_duals"):
+                    ######################################
+                    rmp_dual_vars = self.RMP_model.getDuals()
+                    dual_vars = rmp_dual_vars
+                    dual_index = self.dual_index
+                ######################################
+                added = False
+                with utils.TimerContext(self.iter, f"solve_columns"):
+                    for col_ind, customer in enumerate(self.customer_list):
+                        added = (
+                                self.subproblem(customer, col_ind, dual_vars, dual_index)
+                                or added
+                        )
+                        if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
+                            bool_early_stop = True
+                            self._logger.info("early terminated")
+                            break
+
+                self.iter += 1
+
+                print(
+                    "k: ",
+                    "{:5d}".format(self.iter),
+                    "/",
+                    "{:d}".format(self.max_iter),
+                    " f: {:.6e}".format(self.RMP_model.objval),
+                    " c': %.4e" % np.min(self.red_cost[self.iter - 1, :]),
+                )
+
+                if not added or self.iter >= self.max_iter:
+                    self.red_cost = self.red_cost[: self.iter, :]
+                    break
+
+                if bool_early_stop:
+                    self._logger.info("early terminated")
+                    break
+                with utils.TimerContext(self.iter, f"update_rmp"):
+                    self.update_RMP_by_cols()
+
+            except KeyboardInterrupt as _unused_e:
+                self._logger.info("early terminated")
+                break
+        utils.visualize_timers()
+        self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
+        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
     def update_RMP_by_cols(self):
         """
@@ -225,16 +335,12 @@ class NetworkColumnGeneration:
                             )
                         )
 
-            capacity_cnstr = []
-            capacity_cnstr.append(self.RMP_constrs["transportation_capacity"].values())
-            capacity_cnstr.append(self.RMP_constrs["node_capacity"].values())
-
             new_col = cp.Column(
-                capacity_cnstr + [self.RMP_constrs["weights_sum"][customer]],
-                capacity_cons_coef + [1.0],
+                [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
+                [*capacity_cons_coef, 1.0],
             )
 
-            self.vars["column_weights"].append(
+            self.vars["column_weights"][customer, self.columns[customer].__len__() - 1] = (
                 self.RMP_model.addVar(
                     obj=self.columns[customer][-1]["beta"],
                     name=f"lambda_{customer.idx}_{len(self.columns[customer])}",
@@ -243,111 +349,6 @@ class NetworkColumnGeneration:
                     column=new_col,
                 )
             )
-
-    def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
-        """
-        Construct and solve the subproblem
-        Only need to change the objective function, subject to the same oracle constraints
-        """
-
-        added = False  # whether a new column is added
-        oracle = self.oracles[customer]
-        oracle.model.reset()
-        oracle.update_objective(customer, dual_vars, dual_index)
-
-        oracle.solve()
-        v = oracle.model.objval
-        self.red_cost[self.num_cols, col_ind] = v
-        # successfully added if dual price < 0
-        #   or there is no dual variables
-        #   implying initialization
-        added = v < -1e-2 or dual_vars is None
-        # querying column
-        new_col = cg_col_helper.query_columns(self, customer)
-        self.columns[customer].append(new_col)
-        if CG_EXTRA_VERBOSITY:
-            _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
-            _cost = pd.Series(
-                {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
-            )
-            column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
-            print(column_debugger)
-
-        return added
-
-    def run(self):
-        """
-        The main loop of column generation algorithm
-        """
-
-        self.get_subgraph()
-
-        # construct oracles
-        self._logger.info("initialization complete, start generating columns...")
-        self._logger.info("generating column oracles")
-        for customer in tqdm(self.customer_list):
-            self.oracles[customer] = self.construct_oracle(customer)
-        # initialize column helpers
-        cg_col_helper.init_col_helpers(self)
-
-        # use the sweeping method to initialize
-        cg_init.primal_sweeping_method(self)
-        self.init_RMP()
-        self._logger.info("initialization of restricted master finished")
-        while True:  # may need to add a termination condition
-            try:
-                bool_early_stop = False
-                self.solve_RMP()
-
-                if self.RMP_model.status == COPT.INFEASIBLE:
-                    self._logger.info("initial column of RMP is infeasible")
-                    self.RMP_model.computeIIS()
-                    self.RMP_model.write(f"rmp@{self.num_cols}.ilp")
-                    break
-                ######################################
-                rmp_dual_vars = self.RMP_model.getDuals()
-
-                dual_vars = rmp_dual_vars
-                dual_index = self.dual_index
-                ######################################
-
-                added = False
-                for col_ind, customer in enumerate(self.customer_list):
-                    added = (
-                        self.subproblem(customer, col_ind, dual_vars, dual_index)
-                        or added
-                    )
-                    if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
-                        bool_early_stop = True
-                        self._logger.info("early terminated")
-                        break
-
-                self.num_cols += 1
-
-                print(
-                    "k: ",
-                    "{:5d}".format(self.num_cols),
-                    "/",
-                    "{:d}".format(self.max_iter),
-                    " f: {:.6e}".format(self.RMP_model.objval),
-                    " c': %.4e" % np.min(self.red_cost[self.num_cols - 1, :]),
-                )
-
-                if not added or self.num_cols >= self.max_iter:
-                    self.red_cost = self.red_cost[: self.num_cols, :]
-                    break
-
-                if bool_early_stop:
-                    self._logger.info("early terminated")
-                    break
-                # self.update_RMP()
-                self.update_RMP_by_cols()
-
-            except KeyboardInterrupt as _unused_e:
-                self._logger.info("early terminated")
-                break
-        self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
-        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
     def init_RMP(self):
         """
@@ -378,7 +379,6 @@ class NetworkColumnGeneration:
         # add variables
         self.vars = dict()
         for vt, param in self.var_types.items():
-            # print(f"  - {vt}")
             self.vars[vt] = self.RMP_model.addVars(
                 idx[vt],
                 lb=param["lb"],
@@ -547,18 +547,22 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             for number in range(len(self.columns[customer])):
                 obj += (
-                    self.vars["column_weights"][customer, number]
-                    * self.columns[customer][number]["beta"]
+                        self.vars["column_weights"][customer, number]
+                        * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
+        self.rmp_capacity_cnstr = [
+            *self.RMP_constrs["transportation_capacity"].values(),
+            *self.RMP_constrs["node_capacity"].values()
+        ]
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         cus_col_value = pd.DataFrame(
-            index=range(self.num_cols), columns=[c.idx for c in self.customer_list]
+            index=range(self.iter), columns=[c.idx for c in self.customer_list]
         )
         cus_col_weights = pd.DataFrame(
-            index=range(self.num_cols), columns=[c.idx for c in self.customer_list]
+            index=range(self.iter), columns=[c.idx for c in self.customer_list]
         )
         reduced_cost = pd.DataFrame(
             self.red_cost, columns=[c.idx for c in self.customer_list]
@@ -566,7 +570,7 @@ class NetworkColumnGeneration:
 
         for customer in self.customer_list:
             # for number in range(self.num_cols):
-            for number in range(self.num_cols):
+            for number in range(self.iter):
                 cus_col_value.loc[number, customer.idx] = self.columns[customer][
                     number
                 ]["beta"]
@@ -588,7 +592,7 @@ class NetworkColumnGeneration:
         )
 
         with open(
-            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:
