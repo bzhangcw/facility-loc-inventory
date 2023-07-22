@@ -8,7 +8,7 @@ from typing import List
 import networkx as nx
 
 from entity import Node, Edge
-from network import constuct_network
+from network import construct_network
 from param import Param
 from read_data import read_data
 
@@ -73,7 +73,7 @@ def get_data_from_cfg(cfg):
         )
 
         node_list = plant_list + warehouse_list + customer_list
-        network = constuct_network(node_list, edge_list, sku_list)
+        network = construct_network(node_list, edge_list, sku_list)
         package = (
             sku_list,
             plant_list,

@@ -4,7 +4,7 @@ import pandas as pd
 
 import utils
 from dnp_model import DNP
-from network import constuct_network
+from network import construct_network
 from param import Param
 from coptpy import COPT
 
@@ -12,12 +12,14 @@ import os
 import time
 
 
-def write1dict2csv(path, result: dict, float_format: str = None, mode='a', encoding='utf-8'):
+def write1dict2csv(
+    path, result: dict, float_format: str = None, mode="a", encoding="utf-8"
+):
     """
-    write/append one dict to csv 
+    write/append one dict to csv
     """
 
-    assert path[-4:] == '.csv'
+    assert path[-4:] == ".csv"
 
     if os.path.isfile(path):
         header_flag = False
@@ -25,8 +27,14 @@ def write1dict2csv(path, result: dict, float_format: str = None, mode='a', encod
         header_flag = True
 
     df = pd.DataFrame(result, index=[0])
-    df.to_csv(path, header=header_flag, float_format=float_format,
-              mode=mode, encoding=encoding, index=False)
+    df.to_csv(
+        path,
+        header=header_flag,
+        float_format=float_format,
+        mode=mode,
+        encoding=encoding,
+        index=False,
+    )
 
     return
 
@@ -38,10 +46,9 @@ def now():
 
 
 if __name__ == "__main__":
-
     # output_flag = True
     output_flag = False
-    outputfile = './out_debug/large_np_cg_{}.csv'.format(now())
+    outputfile = "./out_debug/large_np_cg_{}.csv".format(now())
 
     datapath = "data/data_0401_V3.xlsx"
     # sku_num_list = list(range(10, 60, 20))
@@ -54,8 +61,12 @@ if __name__ == "__main__":
     warehouse_num_list = [28]  # max 28
     customer_num_list = [120]  # max 472
 
-    num_prob = len(sku_num_list) * len(plant_num_list) * \
-        len(warehouse_num_list) * len(customer_num_list)
+    num_prob = (
+        len(sku_num_list)
+        * len(plant_num_list)
+        * len(warehouse_num_list)
+        * len(customer_num_list)
+    )
 
     k_prob = 0
 
@@ -63,16 +74,16 @@ if __name__ == "__main__":
         for plant in plant_num_list:
             for wareh in warehouse_num_list:
                 for cus in customer_num_list:
-
                     k_prob += 1
                     print(
-                        f"Problem {k_prob}/{num_prob}: sku_num={sku}, plant_num={plant}, warehouse_num={wareh}, customer_num={cus}")
+                        f"Problem {k_prob}/{num_prob}: sku_num={sku}, plant_num={plant}, warehouse_num={wareh}, customer_num={cus}"
+                    )
 
                     result = dict()
-                    result['param-sku-num'] = sku
-                    result['param-plant-num'] = plant
-                    result['param-warehouse-num'] = wareh
-                    result['param-customer-num'] = cus
+                    result["param-sku-num"] = sku
+                    result["param-plant-num"] = plant
+                    result["param-warehouse-num"] = wareh
+                    result["param-customer-num"] = cus
 
                     cfg = dict(
                         data_dir=datapath,
@@ -94,20 +105,19 @@ if __name__ == "__main__":
                         *_,
                     ) = utils.get_data_from_cfg(cfg)
 
-                    result['real-sku-num'] = len(sku_list)
-                    result['real-plant-num'] = len(plant_list)
-                    result['real-warehouse-num'] = len(warehouse_list)
-                    result['real-customer-num'] = len(customer_list)
-                    result['real-edge-num'] = len(edge_list)
+                    result["real-sku-num"] = len(sku_list)
+                    result["real-plant-num"] = len(plant_list)
+                    result["real-warehouse-num"] = len(warehouse_list)
+                    result["real-customer-num"] = len(customer_list)
+                    result["real-edge-num"] = len(edge_list)
 
                     # # use external capacity, todo, move internals
-                    cap = pd.read_csv(
-                        "./data/random_capacity.csv").set_index("id")
+                    cap = pd.read_csv("./data/random_capacity.csv").set_index("id")
                     for e in edge_list:
                         e.bool_capacity = cap["qty"].get(e.idx, np.inf)
                         # e.variable_lb = cap["lb"].get(e.idx, np.inf)
                         pass
-                    network = constuct_network(node_list, edge_list, sku_list)
+                    network = construct_network(node_list, edge_list, sku_list)
                     ###############################################################
 
                     ############################   args   #########################
@@ -125,14 +135,13 @@ if __name__ == "__main__":
                         # model.model.setParam("LpMethod", 2)  # interior point method
 
                         model.solve()
-                        model.get_solution(
-                            data_dir=utils.CONF.DEFAULT_SOL_PATH)
-                        result['DNP-time'] = model.model.solvingtime
-                        result['DNP-obj'] = model.model.objVal
+                        model.get_solution(data_dir=utils.CONF.DEFAULT_SOL_PATH)
+                        result["DNP-time"] = model.model.solvingtime
+                        result["DNP-obj"] = model.model.objVal
                     except:
                         print("DNP failed")
-                        result['DNP-time'] = np.inf
-                        result['DNP-obj'] = np.inf
+                        result["DNP-time"] = np.inf
+                        result["DNP-obj"] = np.inf
                     ###############################################################
 
                     ############################    CG    #########################
@@ -140,7 +149,7 @@ if __name__ == "__main__":
                     init_primal = None
                     init_dual = None  # 'dual'
 
-                    result['CG-max-iter'] = max_iter
+                    result["CG-max-iter"] = max_iter
 
                     try:
                         t_begin = time.time()
@@ -157,14 +166,14 @@ if __name__ == "__main__":
 
                         np_cg.run()
                         t_end = time.time()
-                        result['CG-iter'] = np_cg.num_cols
-                        result['CG-time'] = t_end - t_begin
-                        result['CG-obj'] = np_cg.RMP_model.objval
+                        result["CG-iter"] = np_cg.num_cols
+                        result["CG-time"] = t_end - t_begin
+                        result["CG-obj"] = np_cg.RMP_model.objval
                     except:
                         print("CG failed")
-                        result['CG-iter'] = np.inf
-                        result['CG-time'] = np.inf
-                        result['CG-obj'] = np.inf
+                        result["CG-iter"] = np.inf
+                        result["CG-time"] = np.inf
+                        result["CG-obj"] = np.inf
 
                     ############################  output  #########################
 

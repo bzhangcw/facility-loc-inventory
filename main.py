@@ -1,5 +1,5 @@
 from read_data import read_data
-from network import constuct_network
+from network import construct_network
 from dnp_model import DNP
 from param import Param
 import os
@@ -52,7 +52,7 @@ if __name__ == "__main__":
             n.production_lb = lb_df["lb"].get(n.idx, np.inf)
         # if n.type == const.WAREHOUSE:
         #     n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
-    network = constuct_network(node_list, edge_list, sku_list)
+    network = construct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)

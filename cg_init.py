@@ -46,155 +46,67 @@ def init_cols_from_dual_feas_sol(self, dual_vars):
     return init_dual, init_dual_index
 
 
-def init_cols_from_primal_feas_sol(self):
-    full_model = dnp_model.DNP(self.arg, self.full_network, cus_num=472)
-    full_model.modeling()
-    # get the LP relaxation
-    # vars = model.model.getVars()
-    # binary_vars_index = []
-    # for v in vars:
-    #     if v.getType() == COPT.BINARY:
-    #         binary_vars_index.append(v.getIdx())
-    #         v.setType(COPT.CONTINUOUS)
-    ######################
-    full_model.model.setParam("Logging", 1)
-    full_model.model.setParam("RelGap", 1.3)
-    full_model.solve()
+def update_edge_capacity(self, cus_idx, used):
+    if cus_idx == 0:
+        return
+    customer_before = self.customer_list[cus_idx - 1]
+    for k, v in self.columns_helpers[customer_before]["sku_flow_sum"].items():
+        used[k] = used.get(k, 0) + v.getValue()
 
-    t = 0  # one time period
-    init_col = {}
-    # for customer in tqdm(self.customer_list, desc="Customer"):
-    for customer in self.customer_list:
-        init_col[customer] = self.oracles[customer].var_idx
-        init_col[customer]["sku_flow_ratio"] = {}
 
-        self.fix_val_constr[customer] = []
+def update_warehouse_capacity(self, cus_idx, used):
+    if cus_idx == 0:
+        return
+    customer_before = self.customer_list[cus_idx - 1]
+    for k, v in self.columns_helpers[customer_before]["sku_inventory_sum"].items():
+        used[k] = used.get(k, 0) + v.getValue()
 
-        # get all paths from customer to each plant node
-        # all_paths = {}
-        # for node in self.subgraph[customer].nodes:
-        #     if self.subgraph[customer].in_degree(node) == 0:  # source node
-        #         all_paths[node] = nx.all_simple_paths(
-        #             self.subgraph[customer],
-        #             node,
-        #             customer,
-        #             cutoff=20,
-        #             # self.subgraph[customer].reverse(), customer, node # find all paths start from customer to source node
-        #         )
 
-        customer_in_edges = get_in_edges(self.subgraph[customer], customer)
-        customer_pre_node_egdes = []
-        for edge in customer_in_edges:
-            customer_pre_node = edge.start
-            customer_pre_node_egdes += get_out_edges(self.network, customer_pre_node)
+def update_plant_capacity(self, cus_idx, used):
+    if cus_idx == 0:
+        return
 
-        # for sku in tqdm(self.subgraph[customer].graph["sku_list"], desc="SKU"):
-        for sku in self.subgraph[customer].graph["sku_list"]:
-            total_sku_flow_sum = full_model.variables["sku_flow"].sum(
-                t, customer_pre_node_egdes, sku
-            )
-            customer_sku_flow = full_model.variables["sku_flow"].sum(
-                t, customer_in_edges, sku
-            )
+    customer_before = self.customer_list[cus_idx - 1]
+    for k, v in self.columns_helpers[customer_before]["sku_production_sum"].items():
+        used[k] = used.get(k, 0) + v.getValue()
 
-            if type(total_sku_flow_sum) != float:
-                total_sku_flow_sum = total_sku_flow_sum.getValue()
-            if type(customer_sku_flow) != float:
-                customer_sku_flow = customer_sku_flow.getValue()
 
-            sku_flow_ratio = (
-                customer_sku_flow / total_sku_flow_sum if total_sku_flow_sum != 0 else 0
-            )
+def primal_sweeping_method(self, sort_method=sorted):
+    """
+    :param self:
+    :param sort_method:
+        a sort method to do sweeping, default to id,
+        one can use, e.g., a Lagrangian heuristic by sorting the dual price.
+    :return:
+    """
+    ec, pc, wc = {}, {}, {}
 
-            init_col[customer]["sku_flow_ratio"][sku] = sku_flow_ratio
+    sequence = sort_method(range(self.customer_list.__len__()))
 
-            # for node in tqdm(self.subgraph[customer].nodes, desc="Nodes"):
-            for node in self.subgraph[customer].nodes:
-                node_sku_list = node.get_node_sku_list(
-                    t, self.subgraph[customer].graph["sku_list"]
-                )
+    for col_ind in sequence:
+        _this_customer = self.customer_list[col_ind]
+        update_edge_capacity(self, col_ind, ec)
+        update_plant_capacity(self, col_ind, wc)
+        update_warehouse_capacity(self, col_ind, pc)
 
-                if isinstance(node, Customer):
-                    if sku in node_sku_list:
-                        init_col[customer]["sku_demand_slack"][
-                            (t, node, sku)
-                        ] = full_model.variables["sku_demand_slack"][t, node, sku].x
+        # reset capacity constraints
+        oracle: dnp_model.DNP = self.oracles[_this_customer]
+        oracle.del_constr_capacity()
+        (
+            oracle.used_edge_capacity,
+            oracle.used_plant_capacity,
+            oracle.used_warehouse_capacity,
+        ) = (ec, pc, wc)
+        for t in range(oracle.T):
+            oracle.add_constr_holding_capacity(t)
+            oracle.add_constr_production_capacity(t)
+            oracle.add_constr_transportation_capacity(t)
+        self.subproblem(_this_customer, col_ind)
 
-                        constr = self.oracles[customer].model.addConstr(
-                            self.oracles[customer].variables["sku_demand_slack"][
-                                t, node, sku
-                            ]
-                            == full_model.variables["sku_demand_slack"][t, node, sku].x
-                        )
-
-                        self.fix_val_constr[customer].append(constr)
-
-                elif isinstance(node, Plant):
-                    if sku in node_sku_list:
-                        init_col[customer]["sku_production"][(t, node, sku)] = (
-                            full_model.variables["sku_production"][t, node, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        constr = self.oracles[customer].model.addConstr(
-                            self.oracles[customer].variables["sku_production"][
-                                t, node, sku
-                            ]
-                            == full_model.variables["sku_production"][t, node, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        self.fix_val_constr[customer].append(constr)
-
-                else:
-                    if sku in node_sku_list:
-                        init_col[customer]["sku_inventory"][(t, node, sku)] = (
-                            full_model.variables["sku_inventory"][t, node, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        constr = self.oracles[customer].model.addConstr(
-                            self.oracles[customer].variables["sku_inventory"][
-                                t, node, sku
-                            ]
-                            == full_model.variables["sku_inventory"][t, node, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        self.fix_val_constr[customer].append(constr)
-
-            # for e in tqdm(self.subgraph[customer].edges, desc="Edges"):
-            for e in self.subgraph[customer].edges:
-                edge = self.subgraph[customer].edges[e]["object"]
-                edge_sku_list = edge.get_edge_sku_list(
-                    t, self.subgraph[customer].graph["sku_list"]
-                )
-
-                if sku in edge_sku_list:
-                    if isinstance(edge.end, Customer):
-                        init_col[customer]["sku_flow"][
-                            (t, edge, sku)
-                        ] = full_model.variables["sku_flow"][t, edge, sku].x
-
-                        constr = self.oracles[customer].model.addConstr(
-                            self.oracles[customer].variables["sku_flow"][t, edge, sku]
-                            == full_model.variables["sku_flow"][t, edge, sku].x
-                        )
-
-                        self.fix_val_constr[customer].append(constr)
-
-                    else:
-                        init_col[customer]["sku_flow"][(t, edge, sku)] = (
-                            full_model.variables["sku_flow"][t, edge, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        constr = self.oracles[customer].model.addConstr(
-                            self.oracles[customer].variables["sku_flow"][t, edge, sku]
-                            == full_model.variables["sku_flow"][t, edge, sku].x
-                            * sku_flow_ratio
-                        )
-
-                        self.fix_val_constr[customer].append(constr)
-
-    return init_col
+        # then reset column constraints
+        oracle.del_constr_capacity()
+        (
+            oracle.used_edge_capacity,
+            oracle.used_plant_capacity,
+            oracle.used_warehouse_capacity,
+        ) = ({}, {}, {})

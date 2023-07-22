@@ -19,9 +19,10 @@ import argparse
 from entity import SKU, Customer
 from tqdm import tqdm
 import os
-from network import constuct_network, get_pred_reachable_nodes
+from network import construct_network, get_pred_reachable_nodes
 from read_data import read_data
 import dnp_model
+
 # import dnp_model
 from param import Param
 
@@ -64,8 +65,11 @@ class NetworkColumnGeneration:
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
-        self.oracles: Dict[Customer, dnp_model.DNP] = {}  #
-        self.new_oracles: Dict[Customer, dnp_model.DNP] = {}  # Added
+        self.oracles: Dict[Customer, dnp_model.DNP] = {}
+        # @note: new,
+        #   the oracle extension saves extra constraints for primal feasibility
+        #   every time it is used, remove this
+        self.oracles_extension: Dict[Customer, dnp_model.DNP] = {}  #
         self.bool_covering = bool_covering
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
@@ -94,25 +98,25 @@ class NetworkColumnGeneration:
             for k in pred_reachable_nodes:
                 k.visited = False
             related_nodes = pred_reachable_nodes.copy()
-            # todo: what does this mean? add comment
-            # note: use "node.visted = Bool" to avoid the excessive recursive times
-            # in the situation that two nodes can reach each other
+            # @note:
+            #   use "node.visited = Bool" to avoid the excessive recursive times
+            #   in the situation that two nodes can reach each other
             for node in pred_reachable_nodes:
-                # todo, previous
-                # if bool(node.get_node_sku_list(0, sku_list)):
                 if bool(node.get_node_sku_list(0, self.full_sku_list)):
                     if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
                         cus_sku_list
                     ):
-                        # If the sku_list associated with a pred_node doesn't have any same element with the cus_sku_list, then remove the pred_node
+                        # If the sku_list associated with a pred_node
+                        # doesn't have any same element with the cus_sku_list,
+                        # then remove the pred_node
                         related_nodes.remove(node)
                 else:
-                    # If a pred_node doesn't store or produce any SKU in period 0, then remove it
+                    # If a pred_node doesn't store or produce any
+                    # SKU in period 0, then remove it
                     related_nodes.remove(node)
             related_nodes.add(customer)
 
             self.subgraph[customer] = nx.DiGraph(sku_list=self.full_sku_list)
-            # self.subgraph[customer] = self.network.subgraph(related_nodes)
 
             # can we do better?
             this_subgraph = self.network.subgraph(related_nodes)
@@ -125,7 +129,10 @@ class NetworkColumnGeneration:
 
         return
 
-    def construct_oracle(self, customer: Customer, cus_num: int,bool_sweeping:bool,used_edge_capacity:dict,used_warehouse_capacity:dict,used_plant_capacity:dict):
+    def construct_oracle(
+        self,
+        customer: Customer,
+    ):
         """
         Construct oracles for each customer
         """
@@ -143,14 +150,8 @@ class NetworkColumnGeneration:
             model_name,
             bool_covering=self.bool_covering,
             bool_capacity=True,
-            bool_feasibility=False,
             bool_edge_lb=self.bool_edge_lb,
             bool_node_lb=self.bool_node_lb,
-            cus_num=cus_num,
-            bool_sweeping=bool_sweeping,
-            used_edge_capacity = used_edge_capacity,
-            used_warehouse_capacity = used_warehouse_capacity,
-            used_plant_capacity=used_plant_capacity,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
         oracle.modeling()
@@ -158,7 +159,7 @@ class NetworkColumnGeneration:
         return oracle
 
     def solve_lp_relaxation(self):
-        full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network, cus_num=472)
+        full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network)
         full_lp_relaxation.modeling()
         # get the LP relaxation
         vars = full_lp_relaxation.model.getVars()
@@ -174,6 +175,177 @@ class NetworkColumnGeneration:
         dual_index = full_lp_relaxation.dual_index_for_RMP
 
         return lp_dual, dual_index
+
+    def solve_RMP(self):
+        """
+        Solve the RMP and get the dual variables to construct the subproblem
+        """
+        self.RMP_model.setParam("LpMethod", 2)
+        self.RMP_model.setParam("Crossover", 0)
+
+        self.RMP_model.solve()
+
+    def update_RMP_by_cols(self):
+        """
+        Incrementally update the RMP with new columns
+        """
+
+        self.RMP_model.reset()
+
+        for customer in self.customer_list:
+            capacity_cons_coef = []
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                if edge.capacity < np.inf:
+                    capacity_cons_coef.append(
+                        (
+                            self.columns[customer][-1]["sku_flow_sum"][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0
+                        )
+                    )
+
+            for node in self.network.nodes:
+                if node.type == const.PLANT:
+                    if node.production_capacity < np.inf:
+                        capacity_cons_coef.append(
+                            (
+                                self.columns[customer][-1]["sku_production_sum"][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
+                        )
+                elif node.type == const.WAREHOUSE:
+                    if node.inventory_capacity < np.inf:
+                        capacity_cons_coef.append(
+                            (
+                                self.columns[customer][-1]["sku_inventory_sum"][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
+                        )
+
+            capacity_cnstr = []
+            capacity_cnstr.append(self.RMP_constrs["transportation_capacity"].values())
+            capacity_cnstr.append(self.RMP_constrs["node_capacity"].values())
+
+            new_col = cp.Column(
+                capacity_cnstr + [self.RMP_constrs["weights_sum"][customer]],
+                capacity_cons_coef + [1.0],
+            )
+
+            self.vars["column_weights"].append(
+                self.RMP_model.addVar(
+                    obj=self.columns[customer][-1]["beta"],
+                    name=f"lambda_{customer.idx}_{len(self.columns[customer])}",
+                    lb=0.0,
+                    ub=1.0,
+                    column=new_col,
+                )
+            )
+
+    def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
+        """
+        Construct and solve the subproblem
+        Only need to change the objective function, subject to the same oracle constraints
+        """
+
+        added = False  # whether a new column is added
+        oracle = self.oracles[customer]
+        oracle.model.reset()
+        oracle.update_objective(customer, dual_vars, dual_index)
+
+        oracle.solve()
+        v = oracle.model.objval
+        self.red_cost[self.num_cols, col_ind] = v
+        # successfully added if dual price < 0
+        #   or there is no dual variables
+        #   implying initialization
+        added = v < -1e-2 or dual_vars is None
+        # querying column
+        new_col = cg_col_helper.query_columns(self, customer)
+        self.columns[customer].append(new_col)
+        if CG_EXTRA_VERBOSITY:
+            _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
+            _cost = pd.Series(
+                {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
+            )
+            column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
+            print(column_debugger)
+
+        return added
+
+    def run(self):
+        """
+        The main loop of column generation algorithm
+        """
+
+        self.get_subgraph()
+
+        # construct oracles
+        self._logger.info("initialization complete, start generating columns...")
+        self._logger.info("generating column oracles")
+        for customer in tqdm(self.customer_list):
+            self.oracles[customer] = self.construct_oracle(customer)
+        # initialize column helpers
+        cg_col_helper.init_col_helpers(self)
+
+        # use the sweeping method to initialize
+        cg_init.primal_sweeping_method(self)
+        self.init_RMP()
+        self._logger.info("initialization of restricted master finished")
+        while True:  # may need to add a termination condition
+            try:
+                bool_early_stop = False
+                self.solve_RMP()
+
+                if self.RMP_model.status == COPT.INFEASIBLE:
+                    self._logger.info("Initial column of RMP is infeasible")
+                    break
+                ######################################
+                rmp_dual_vars = self.RMP_model.getDuals()
+
+                dual_vars = rmp_dual_vars
+                dual_index = self.dual_index
+                ######################################
+
+                added = False
+                for col_ind, customer in enumerate(self.customer_list):
+                    added = (
+                        self.subproblem(customer, col_ind, dual_vars, dual_index)
+                        or added
+                    )
+                    if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
+                        bool_early_stop = True
+                        self._logger.info("early terminated")
+                        break
+
+                self.num_cols += 1
+
+                print(
+                    "k: ",
+                    "{:5d}".format(self.num_cols),
+                    "/",
+                    "{:d}".format(self.max_iter),
+                    " f: {:.6e}".format(self.RMP_model.objval),
+                    " c': %.4e" % np.min(self.red_cost[self.num_cols - 1, :]),
+                )
+
+                if not added or self.num_cols >= self.max_iter:
+                    self.red_cost = self.red_cost[: self.num_cols, :]
+                    break
+
+                if bool_early_stop:
+                    self._logger.info("early terminated")
+                    break
+                # self.update_RMP()
+                self.update_RMP_by_cols()
+
+            except KeyboardInterrupt as _unused_e:
+                self._logger.info("early terminated")
+                break
+        self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
+        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
     def init_RMP(self):
         """
@@ -245,7 +417,6 @@ class NetworkColumnGeneration:
                 #             * self.columns[customer][number]["sku_flow_sum"][edge]
                 #         )
 
-                # todo: can we do better?
                 for number in range(len(self.columns[customer])):
                     transportation += self.vars["column_weights"][customer, number] * (
                         self.columns[customer][number]["sku_flow_sum"][edge]
@@ -379,276 +550,6 @@ class NetworkColumnGeneration:
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
-
-    def solve_RMP(self):
-        """
-        Solve the RMP and get the dual variables to construct the subproblem
-        """
-        self.RMP_model.setParam("LpMethod", 2)
-        self.RMP_model.setParam("Crossover", 0)
-
-        self.RMP_model.solve()
-
-    def update_RMP(self):
-        """
-        Update the RMP with new columns
-        """
-
-        self.RMP_model.clear()
-        self.init_RMP()
-
-    def update_RMP_by_cols(self):
-        """
-        Incrementally update the RMP with new columns
-        """
-
-        self.RMP_model.clear()
-
-        for customer in self.customer_list:
-            capacity_cons_coef = []
-            for e in self.network.edges:
-                edge = self.network.edges[e]["object"]
-                if edge.capacity < np.inf:
-                    capacity_cons_coef.append(
-                        (
-                            self.columns[customer][-1]["sku_flow_sum"][edge]
-                            if e in self.subgraph[customer].edges
-                            else 0.0
-                        )
-                    )
-
-            for node in self.network.nodes:
-                if node.type == const.PLANT:
-                    if node.production_capacity < np.inf:
-                        capacity_cons_coef.append(
-                            (
-                                self.columns[customer][-1]["sku_production_sum"][node]
-                                if node in self.subgraph[customer].nodes
-                                else 0.0
-                            )
-                        )
-                elif node.type == const.WAREHOUSE:
-                    if node.inventory_capacity < np.inf:
-                        capacity_cons_coef.append(
-                            (
-                                self.columns[customer][-1]["sku_inventory_sum"][node]
-                                if node in self.subgraph[customer].nodes
-                                else 0.0
-                            )
-                        )
-
-            capacity_cnstr = []
-            capacity_cnstr.append(self.RMP_constrs["transportation_capacity"].values())
-            capacity_cnstr.append(self.RMP_constrs["node_capacity"].values())
-
-            new_col = cp.Column(
-                capacity_cnstr + [self.RMP_constrs["weights_sum"][customer]],
-                capacity_cons_coef + [1.0],
-            )
-
-            self.vars["column_weights"].append(
-                self.RMP_model.addVar(
-                    obj=self.columns[customer][-1]["beta"],
-                    name=f"lambda_{customer.idx}_{len(self.columns[customer])}",
-                    lb=0.0,
-                    ub=1.0,
-                    column=new_col,
-                )
-            )
-
-    def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
-        """
-        Construct and solve the subproblem
-        Only need to change the objective function, subject to the same oracle constraints
-        """
-
-        added = False  # whether a new column is added
-        oracle = self.oracles[customer]
-        oracle.model.reset()
-        oracle.update_objective(customer, dual_vars, dual_index)
-
-        oracle.solve()
-        # for e in self.subgraph[customer].edges:
-        #     v = oracle.variables['sku_flow'].sum(0, self.subgraph[customer].edges[e]["object"], "*").value
-        # for node in self.subgraph[customer].nodes:
-        #     if node.type == const.WAREHOUSE:
-        #         v = oracle.variables['sku_inventory'].sum(0, node, "*").value
-        #     elif node.type == const.PLANT:
-        #         v = oracle.variables['sku_production'].sum(0, node, "*").value
-        v = oracle.model.objval
-        self.red_cost[self.num_cols, col_ind] = v
-        added = v < -1e-2 or dual_vars is None
-        # querying column
-        new_col = cg_col_helper.query_columns(self, customer)
-        self.columns[customer].append(new_col)
-        if CG_EXTRA_VERBOSITY:
-            _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
-            _cost = pd.Series(
-                {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
-            )
-            column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
-            print(column_debugger)
-
-        return added
-
-    def construct_new_oracle(self, customer, cus_num):
-        """
-        Construct oracles for each customer
-        """
-        subgraph = self.subgraph[customer]
-        full_sku_list = subgraph.graph["sku_list"]
-        arg = self.arg
-        arg.T = 1
-        env_name = customer.idx + "_new_oracle_env"
-        model_name = customer.idx + "_new_oracle"
-        oracle = dnp_model.DNP(
-            arg,
-            subgraph,
-            full_sku_list,
-            env_name,
-            model_name,
-            bool_covering=self.bool_covering,
-            bool_capacity=True,
-            bool_feasibility=False,
-            bool_edge_lb=self.bool_edge_lb,
-            bool_node_lb=self.bool_node_lb,
-            cus_num=cus_num,
-            env=self.RMP_env,
-        )  # for initial column, set obj = 0
-        oracle.modeling()
-        return oracle
-
-    def run(self):
-        """
-        The main loop of column generation algorithm
-        """
-
-        self.get_subgraph()
-
-        if self.init_sweeping:
-            for col_ind, customer in enumerate(self.customer_list):
-                if col_ind == 0:
-                    self.oracles[customer] = self.construct_oracle(customer, 1,False,{},{},{})
-                    cg_col_helper.init_col_helpers_customer(self, customer)
-                    self.subproblem(customer, col_ind)
-                else:
-                    used_edge_capacity = self.update_edge_capacity(col_ind)
-                    used_warehouse_capacity = self.update_warehouse_capacity(col_ind)
-                    used_plant_capacity = self.update_plant_capacity(col_ind)
-                    self.oracles[customer] = self.construct_oracle(customer, 1,True, used_edge_capacity,used_warehouse_capacity,used_plant_capacity)
-                    cg_col_helper.init_col_helpers_customer(self, customer)
-                    self.subproblem(customer, col_ind)
-        else:
-            for customer in self.customer_list:
-                # change the cus_ratio to 1.0 for all oracles
-                self.oracles[customer] = self.construct_oracle(customer, len(self.customer_list),False,{},{},{})
-            cg_col_helper.init_col_helpers(self)
-            for col_ind, customer in enumerate(self.customer_list):
-                self.subproblem(customer, col_ind)
-            if self.init_primal is None:
-                pass
-            elif self.init_primal == "primal":
-                raise ValueError("unfinished yet")
-                # initialize cols form the primal feasible solution
-                cg_init.init_cols_from_primal_feas_sol(self)
-            else:
-                raise Exception("unknown primal initialization")
-
-        self._logger.info("Initialization complete, start generating columns...")
-        self.init_RMP()
-        while True:  # may need to add a termination condition
-            try:
-                bool_early_stop = False
-                self.solve_RMP()
-
-                if self.RMP_model.status == COPT.INFEASIBLE:
-                    self._logger.info("Initial column of RMP is infeasible")
-                    break
-                ######################################
-                rmp_dual_vars = self.RMP_model.getDuals()
-                if self.num_cols == 0 and self.init_dual == "dual":
-                    dual_vars, dual_index = cg_init.init_cols_from_dual_feas_sol(
-                        self, rmp_dual_vars
-                    )
-                else:
-                    dual_vars = rmp_dual_vars
-                    dual_index = self.dual_index
-                ######################################
-
-                added = False
-                for col_ind, customer in enumerate(self.customer_list):
-                    added = (
-                        self.subproblem(customer, col_ind, dual_vars, dual_index)
-                        or added
-                    )
-                    if self.oracles[customer].model.status == coptpy.COPT.INTERRUPTED:
-                        bool_early_stop = True
-                        self._logger.info("early terminated")
-                        break
-
-                self.num_cols += 1
-
-                print(
-                    "k: ",
-                    "{:5d}".format(self.num_cols),
-                    "/",
-                    "{:d}".format(self.max_iter),
-                    " f: {:.6e}".format(self.RMP_model.objval),
-
-                    " c': %.4e" % np.min(self.red_cost[self.num_cols - 1, :]),
-                )
-
-                if not added or self.num_cols >= self.max_iter:
-                    self.red_cost = self.red_cost[: self.num_cols, :]
-                    break
-
-                if bool_early_stop:
-                    self._logger.info("early terminated")
-                    break
-                # self.update_RMP()
-                self.update_RMP_by_cols()
-
-            except KeyboardInterrupt as _unused_e:
-                self._logger.info("early terminated")
-                break
-        self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
-        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
-
-    def update_edge_capacity(self, cus_idx):
-        used_edge_capacity = {}
-        for e in self.network.edges:
-            edge = self.network.edges[e]["object"]
-            used_edge_capacity[edge] = 0
-        for i in range(cus_idx):
-            customer_before = self.customer_list[i]
-            for k, v in self.columns_helpers[customer_before]["sku_flow_sum"].items():
-                if k in used_edge_capacity.keys():
-                    used_edge_capacity[k] += v.getValue()
-        return used_edge_capacity
-
-    def update_warehouse_capacity(self, cus_idx):
-        used_warehouse_capacity = {}
-        for node in self.network.nodes:
-            if node.type == const.WAREHOUSE:
-                used_warehouse_capacity[node] = 0
-        for i in range(cus_idx):
-            customer_before = self.customer_list[i]
-            for k, v in self.columns_helpers[customer_before]["sku_inventory_sum"].items():
-                if k in used_warehouse_capacity.keys():
-                    used_warehouse_capacity[k] += v.getValue()
-        return used_warehouse_capacity
-
-    def update_plant_capacity(self, cus_idx):
-        used_plant_capacity = {}
-        for node in self.network.nodes:
-            if node.type == const.PLANT:
-                used_plant_capacity[node] = 0
-        for i in range(cus_idx):
-            customer_before = self.customer_list[i]
-            for k, v in self.columns_helpers[customer_before]["sku_production_sum"].items():
-                if k in used_plant_capacity.keys():
-                    used_plant_capacity[k] += v.getValue()
-        return used_plant_capacity
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         cus_col_value = pd.DataFrame(

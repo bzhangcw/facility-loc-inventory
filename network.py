@@ -7,7 +7,7 @@ import math
 import const
 
 
-def constuct_network(
+def construct_network(
     nodes: List[Node], edges: List[Edge], SKUs: List[SKU]
 ) -> nx.DiGraph:
     """

@@ -16,7 +16,7 @@ from entity import SKU, Customer
 from tqdm import tqdm
 from np_cg import *
 import os
-from network import constuct_network, get_pred_reachable_nodes
+from network import construct_network, get_pred_reachable_nodes
 from read_data import read_data
 
 from param import Param

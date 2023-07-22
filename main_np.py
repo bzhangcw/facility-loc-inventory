@@ -3,7 +3,7 @@ import pandas as pd
 
 import utils
 from dnp_model import DNP
-from network import constuct_network
+from network import construct_network
 from param import Param
 from coptpy import COPT
 
@@ -12,51 +12,37 @@ if __name__ == "__main__":
     arg = param.arg
 
     datapath = "data/data_0401_V3.xlsx"
-    # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-    #     data_dir=f"{utils.CONF.DEFAULT_DATA_PATH}/{fpath}",
-    #     sku_num=5,
-    #     plant_num=5,
-    #     warehouse_num=5,
-    #     customer_num=5,
-    # )
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=2,
-    #     plant_num=2,
-    #     warehouse_num=13,
-    #     customer_num=2,
-    #     one_period=True,
-    # )
-
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=2,
-    #     plant_num=2,
-    #     warehouse_num=13,
-    #     customer_num=5,
-    #     one_period=True,
-    # )
-
-    # smallest instance causing bug
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=1,
-    #     plant_num=1,
-    #     warehouse_num=25,
-    #     customer_num=3,
-    #     one_period=True,
-    # )
-
-    cfg = dict(
-        data_dir=datapath,
-        sku_num=140,
-        plant_num=23,
-        warehouse_num=28,
-        customer_num=100,
-        one_period=True,
-    )
-
-    # cfg = dict(data_dir=datapath, one_period=True)
+    pick_instance = 3
+    if pick_instance == 1:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=2,
+            plant_num=2,
+            warehouse_num=13,
+            customer_num=5,
+            one_period=True,
+        )
+    elif pick_instance == 2:
+        # smallest instance causing bug
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=1,
+            plant_num=1,
+            warehouse_num=25,
+            customer_num=3,
+            one_period=True,
+        )
+    elif pick_instance == 3:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=140,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=100,
+            one_period=True,
+        )
+    else:
+        cfg = dict(data_dir=datapath, one_period=True)
     (
         sku_list,
         plant_list,
@@ -74,10 +60,10 @@ if __name__ == "__main__":
         e.capacity = cap["qty"].get(e.idx, np.inf)
         # e.variable_lb = cap["lb"].get(e.idx, np.inf)
         # pass
-    network = constuct_network(node_list, edge_list, sku_list)
+    network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
 
-    model = DNP(arg, network, cus_num=1)
+    model = DNP(arg, network)
     model.modeling()
     # get the LP relaxation
     # variables = model.model.getVars()
