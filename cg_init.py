@@ -3,13 +3,13 @@ utilities for initialize first columns in CG framework
 """
 from coptpy import COPT
 
-from dnp_model import DNP
+import dnp_model
 from entity import Customer, Plant
 from utils import get_in_edges, get_out_edges
 
 
 def init_cols_from_dual_feas_sol(self, dual_vars):
-    full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
+    full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network, cus_num=472)
     full_lp_relaxation.modeling()
     # get the LP relaxation
     vars = full_lp_relaxation.model.getVars()
@@ -47,7 +47,7 @@ def init_cols_from_dual_feas_sol(self, dual_vars):
 
 
 def init_cols_from_primal_feas_sol(self):
-    full_model = DNP(self.arg, self.full_network, cus_num=472)
+    full_model = dnp_model.DNP(self.arg, self.full_network, cus_num=472)
     full_model.modeling()
     # get the LP relaxation
     # vars = model.model.getVars()

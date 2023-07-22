@@ -8,6 +8,8 @@ import pandas as pd
 import networkx as nx
 from coptpy import COPT
 
+import update_constr
+from update_constr import *
 import const
 from entity import SKU
 from read_data import read_data
@@ -32,6 +34,10 @@ class DNP:
         bool_edge_lb: bool = True,
         bool_node_lb: bool = True,
         cus_num: int = 1,
+        bool_sweeping: bool = False,
+        used_edge_capacity: dict = None,
+        used_warehouse_capacity: dict = None,
+        used_plant_capacity: dict = None,
         logging: int = 0,
         env=None,
     ) -> None:
@@ -57,6 +63,9 @@ class DNP:
         self.bool_covering = bool_covering
         self.bool_capacity = bool_capacity
         self.bool_feasibility = bool_feasibility
+        self.used_edge_capacity = used_edge_capacity
+        self.used_warehouse_capacity = used_warehouse_capacity
+        self.used_plant_capacity = used_plant_capacity
         # whether to add edge lower bound constraints
         if bool_covering:
             self.bool_edge_lb = bool_edge_lb
@@ -77,6 +86,7 @@ class DNP:
             self.bool_node_lb = False
         self.original_obj = 0.0
         self.cus_num = cus_num
+        self.bool_sweeping = bool_sweeping
         self.total_cus_num = arg.total_cus_num
         # todo, remove this
         # self.cus_ratio = min(self.cus_num / self.total_cus_num, 1.0)
@@ -475,17 +485,28 @@ class DNP:
             # capacity constraint
             if edge.capacity < np.inf:
                 if self.bool_covering:
-                    self.constrs["transportation_capacity"][
-                        (t, edge)
-                    ] = self.model.addConstr(
-                        # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
-                        # multiply by customer ratio to force feasibliity of first column of cg
-                        flow_sum
-                        <= edge.capacity
-                        * self.variables["select_edge"][t, edge]
-                        * self.cus_ratio,
-                        name=f"edge_capacity{t,edge}",
-                    )
+                    if self.bool_sweeping:
+                        self.constrs["transportation_capacity"][(t, edge)] = self.model.addConstr(
+                            # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                            # multiply by customer ratio to force feasibliity of first column of cg
+                            flow_sum
+                            <= (edge.capacity - self.used_edge_capacity[edge])
+                            * self.variables["select_edge"][t, edge]
+                            * self.cus_ratio,
+                            name=f"edge_capacity{t, edge}",
+                        )
+                    else:
+                        self.constrs["transportation_capacity"][
+                            (t, edge)
+                        ] = self.model.addConstr(
+                            # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                            # multiply by customer ratio to force feasibliity of first column of cg
+                            flow_sum
+                            <= edge.capacity
+                            * self.variables["select_edge"][t, edge]
+                            * self.cus_ratio,
+                            name=f"edge_capacity{t,edge}",
+                        )
                 else:
                     self.constrs["transportation_capacity"][
                         (t, edge)
@@ -525,15 +546,26 @@ class DNP:
                 # capacity constraint
                 if node.production_capacity < np.inf:
                     if self.bool_covering:
-                        self.constrs["production_capacity"][
-                            (t, node)
-                        ] = self.model.addConstr(
-                            # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
-                            # multiply by customer ratio to force feasibliity of first column of cg
-                            node_sum
-                            <= node.production_capacity * self.variables["open"][t, node] * self.cus_ratio,
-                            name=f"node_capacity{t, node}",
-                        )
+                        if self.bool_sweeping:
+                            self.constrs["production_capacity"][
+                                (t, node)
+                            ] = self.model.addConstr(
+                                # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                                # multiply by customer ratio to force feasibliity of first column of cg
+                                node_sum
+                                <= (node.production_capacity-self.used_plant_capacity[node]) * self.variables["open"][t, node] * self.cus_ratio,
+                                name=f"node_capacity{t, node}",
+                            )
+                        else:
+                            self.constrs["production_capacity"][
+                                (t, node)
+                            ] = self.model.addConstr(
+                                # flow_sum <= edge.capacity * self.vars["select_edge"][t, edge]
+                                # multiply by customer ratio to force feasibliity of first column of cg
+                                node_sum
+                                <= node.production_capacity * self.variables["open"][t, node] * self.cus_ratio,
+                                name=f"node_capacity{t, node}",
+                            )
                     else:
                         self.constrs["production_capacity"][
                             (t, node)
@@ -593,15 +625,26 @@ class DNP:
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
                     if self.bool_node_lb:
-                        constr = self.model.addConstr(
-                            self.variables["sku_inventory"].sum(t, node, "*")
-                            # <= node.inventory_capacity * self.vars["open"][t, node]
-                            # multiply by customer ratio to force feasibliity of first column of cg
-                            <= node.inventory_capacity
-                            # * self.variables.get("open", {}).get((t, node), 0)
-                            * self.variables["open"][(t, node)]
-                            * self.cus_ratio
-                        )
+                        if self.bool_sweeping:
+                            constr = self.model.addConstr(
+                                self.variables["sku_inventory"].sum(t, node, "*")
+                                # <= node.inventory_capacity * self.vars["open"][t, node]
+                                # multiply by customer ratio to force feasibliity of first column of cg
+                                <= (node.inventory_capacity-self.used_warehouse_capacity[node])
+                                # * self.variables.get("open", {}).get((t, node), 0)
+                                * self.variables["open"][(t, node)]
+                                * self.cus_ratio
+                            )
+                        else:
+                            constr = self.model.addConstr(
+                                self.variables["sku_inventory"].sum(t, node, "*")
+                                # <= node.inventory_capacity * self.vars["open"][t, node]
+                                # multiply by customer ratio to force feasibliity of first column of cg
+                                <= node.inventory_capacity
+                                # * self.variables.get("open", {}).get((t, node), 0)
+                                * self.variables["open"][(t, node)]
+                                * self.cus_ratio
+                            )
                     else:
                         constr = self.model.addConstr(
                             self.variables["sku_inventory"].sum(t, node, "*")

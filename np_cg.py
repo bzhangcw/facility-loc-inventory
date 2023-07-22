@@ -21,7 +21,8 @@ from tqdm import tqdm
 import os
 from network import constuct_network, get_pred_reachable_nodes
 from read_data import read_data
-from dnp_model import DNP
+import dnp_model
+# import dnp_model
 from param import Param
 
 # macro for debugging
@@ -41,6 +42,7 @@ class NetworkColumnGeneration:
         bool_node_lb=False,
         max_iter=500,
         init_primal=None,
+        init_sweeping=True,
         init_dual=None,
     ) -> None:
         self._logger = utils.logger
@@ -62,7 +64,8 @@ class NetworkColumnGeneration:
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
-        self.oracles: Dict[Customer, DNP] = {}  #
+        self.oracles: Dict[Customer, dnp_model.DNP] = {}  #
+        self.new_oracles: Dict[Customer, dnp_model.DNP] = {}  # Added
         self.bool_covering = bool_covering
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
@@ -75,6 +78,7 @@ class NetworkColumnGeneration:
         self.fix_val_constr = {}
         self.init_primal = init_primal
         self.init_dual = init_dual
+        self.init_sweeping = init_sweeping
         self.RMP_constrs = dict()
 
     def get_subgraph(self):
@@ -121,7 +125,7 @@ class NetworkColumnGeneration:
 
         return
 
-    def construct_oracle(self, customer: Customer, cus_num: int):
+    def construct_oracle(self, customer: Customer, cus_num: int,bool_sweeping:bool,used_edge_capacity:dict,used_warehouse_capacity:dict,used_plant_capacity:dict):
         """
         Construct oracles for each customer
         """
@@ -131,7 +135,7 @@ class NetworkColumnGeneration:
         arg.T = 1
         env_name = customer.idx + "_oracle_env"
         model_name = customer.idx + "_oracle"
-        oracle = DNP(
+        oracle = dnp_model.DNP(
             arg,
             subgraph,
             full_sku_list,
@@ -143,6 +147,10 @@ class NetworkColumnGeneration:
             bool_edge_lb=self.bool_edge_lb,
             bool_node_lb=self.bool_node_lb,
             cus_num=cus_num,
+            bool_sweeping=bool_sweeping,
+            used_edge_capacity = used_edge_capacity,
+            used_warehouse_capacity = used_warehouse_capacity,
+            used_plant_capacity=used_plant_capacity,
             env=self.RMP_env,
         )  # for initial column, set obj = 0
         oracle.modeling()
@@ -150,7 +158,7 @@ class NetworkColumnGeneration:
         return oracle
 
     def solve_lp_relaxation(self):
-        full_lp_relaxation = DNP(self.arg, self.full_network, cus_num=472)
+        full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network, cus_num=472)
         full_lp_relaxation.modeling()
         # get the LP relaxation
         vars = full_lp_relaxation.model.getVars()
@@ -460,6 +468,13 @@ class NetworkColumnGeneration:
         oracle.update_objective(customer, dual_vars, dual_index)
 
         oracle.solve()
+        # for e in self.subgraph[customer].edges:
+        #     v = oracle.variables['sku_flow'].sum(0, self.subgraph[customer].edges[e]["object"], "*").value
+        # for node in self.subgraph[customer].nodes:
+        #     if node.type == const.WAREHOUSE:
+        #         v = oracle.variables['sku_inventory'].sum(0, node, "*").value
+        #     elif node.type == const.PLANT:
+        #         v = oracle.variables['sku_production'].sum(0, node, "*").value
         v = oracle.model.objval
         self.red_cost[self.num_cols, col_ind] = v
         added = v < -1e-2 or dual_vars is None
@@ -476,6 +491,33 @@ class NetworkColumnGeneration:
 
         return added
 
+    def construct_new_oracle(self, customer, cus_num):
+        """
+        Construct oracles for each customer
+        """
+        subgraph = self.subgraph[customer]
+        full_sku_list = subgraph.graph["sku_list"]
+        arg = self.arg
+        arg.T = 1
+        env_name = customer.idx + "_new_oracle_env"
+        model_name = customer.idx + "_new_oracle"
+        oracle = dnp_model.DNP(
+            arg,
+            subgraph,
+            full_sku_list,
+            env_name,
+            model_name,
+            bool_covering=self.bool_covering,
+            bool_capacity=True,
+            bool_feasibility=False,
+            bool_edge_lb=self.bool_edge_lb,
+            bool_node_lb=self.bool_node_lb,
+            cus_num=cus_num,
+            env=self.RMP_env,
+        )  # for initial column, set obj = 0
+        oracle.modeling()
+        return oracle
+
     def run(self):
         """
         The main loop of column generation algorithm
@@ -483,51 +525,34 @@ class NetworkColumnGeneration:
 
         self.get_subgraph()
 
-        for customer in self.customer_list:
-            # change the cus_ratio to 1.0 for all oracles
-            self.oracles[customer] = self.construct_oracle(
-                customer, len(self.customer_list)
-            )
-
-        cg_col_helper.init_col_helpers(self)
-        for col_ind, customer in enumerate(self.customer_list):
-            self.subproblem(customer, col_ind)
-
-        if self.init_primal is None:
-            # initialize cols form the oracle
-            # for customer in tqdm(self.customer_list):
-            #     self.oracles[customer] = self.construct_oracle(customer, 1)
-            #     # self.oracles[customer] = self.construct_oracle(
-            #     #     customer, len(self.customer_list)
-            #     # )  # set the cus_ratio to 1 for oracle
-            #
-            # for customer in tqdm(self.customer_list):
-            #
-            #
-            #     # for test
-            #     if self.oracles[customer].model.status == COPT.INFEASIBLE:
-            #         continue
-            #     else:
-            #         continue
-            #
-            # self.init_RMP()
-            #
-            # for customer in self.customer_list:
-            #     # change the cus_ratio to 1.0 for all oracles
-            #     self.oracles[customer] = self.construct_oracle(
-            #         customer, len(self.customer_list)
-            #     )
-            #     #############################################
-            #     # self.oracles[customer].del_constr_for_RMP()
-            #     cg_col_helper.init_col_helpers(self)
-            pass
-
-        elif self.init_primal == "primal":
-            raise ValueError("unfinished yet")
-            # initialize cols form the primal feasible solution
-            cg_init.init_cols_from_primal_feas_sol(self)
+        if self.init_sweeping:
+            for col_ind, customer in enumerate(self.customer_list):
+                if col_ind == 0:
+                    self.oracles[customer] = self.construct_oracle(customer, 1,False,{},{},{})
+                    cg_col_helper.init_col_helpers_customer(self, customer)
+                    self.subproblem(customer, col_ind)
+                else:
+                    used_edge_capacity = self.update_edge_capacity(col_ind)
+                    used_warehouse_capacity = self.update_warehouse_capacity(col_ind)
+                    used_plant_capacity = self.update_plant_capacity(col_ind)
+                    self.oracles[customer] = self.construct_oracle(customer, 1,True, used_edge_capacity,used_warehouse_capacity,used_plant_capacity)
+                    cg_col_helper.init_col_helpers_customer(self, customer)
+                    self.subproblem(customer, col_ind)
         else:
-            raise Exception("unknown primal initialization")
+            for customer in self.customer_list:
+                # change the cus_ratio to 1.0 for all oracles
+                self.oracles[customer] = self.construct_oracle(customer, len(self.customer_list),False,{},{},{})
+            cg_col_helper.init_col_helpers(self)
+            for col_ind, customer in enumerate(self.customer_list):
+                self.subproblem(customer, col_ind)
+            if self.init_primal is None:
+                pass
+            elif self.init_primal == "primal":
+                raise ValueError("unfinished yet")
+                # initialize cols form the primal feasible solution
+                cg_init.init_cols_from_primal_feas_sol(self)
+            else:
+                raise Exception("unknown primal initialization")
 
         self._logger.info("Initialization complete, start generating columns...")
         self.init_RMP()
@@ -569,6 +594,7 @@ class NetworkColumnGeneration:
                     "/",
                     "{:d}".format(self.max_iter),
                     " f: {:.6e}".format(self.RMP_model.objval),
+
                     " c': %.4e" % np.min(self.red_cost[self.num_cols - 1, :]),
                 )
 
@@ -587,6 +613,42 @@ class NetworkColumnGeneration:
                 break
         self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
         self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
+
+    def update_edge_capacity(self, cus_idx):
+        used_edge_capacity = {}
+        for e in self.network.edges:
+            edge = self.network.edges[e]["object"]
+            used_edge_capacity[edge] = 0
+        for i in range(cus_idx):
+            customer_before = self.customer_list[i]
+            for k, v in self.columns_helpers[customer_before]["sku_flow_sum"].items():
+                if k in used_edge_capacity.keys():
+                    used_edge_capacity[k] += v.getValue()
+        return used_edge_capacity
+
+    def update_warehouse_capacity(self, cus_idx):
+        used_warehouse_capacity = {}
+        for node in self.network.nodes:
+            if node.type == const.WAREHOUSE:
+                used_warehouse_capacity[node] = 0
+        for i in range(cus_idx):
+            customer_before = self.customer_list[i]
+            for k, v in self.columns_helpers[customer_before]["sku_inventory_sum"].items():
+                if k in used_warehouse_capacity.keys():
+                    used_warehouse_capacity[k] += v.getValue()
+        return used_warehouse_capacity
+
+    def update_plant_capacity(self, cus_idx):
+        used_plant_capacity = {}
+        for node in self.network.nodes:
+            if node.type == const.PLANT:
+                used_plant_capacity[node] = 0
+        for i in range(cus_idx):
+            customer_before = self.customer_list[i]
+            for k, v in self.columns_helpers[customer_before]["sku_production_sum"].items():
+                if k in used_plant_capacity.keys():
+                    used_plant_capacity[k] += v.getValue()
+        return used_plant_capacity
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         cus_col_value = pd.DataFrame(

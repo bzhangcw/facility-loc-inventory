@@ -1,33 +1,57 @@
 # external friend functions for np_cg
 
 
-import json
-import pickle
+import os
 
-import coptpy
-import coptpy as cp
-from coptpy import COPT
-import const
-import utils
-import cg_init
-import networkx as nx
 import numpy as np
 import pandas as pd
-from typing import List
-import argparse
-from entity import SKU, Customer
 from tqdm import tqdm
-import os
-from network import constuct_network, get_pred_reachable_nodes
-from read_data import read_data
-from dnp_model import DNP
-from param import Param
+
+import const
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 
 CG_EXTRA_VERBOSITY = os.environ.get("CG_EXTRA_VERBOSITY", 0)
 CG_EXTRA_DEBUGGING = os.environ.get("CG_EXTRA_DEBUGGING", 1)
 
+def init_col_helpers_customer(cg_object,customer):
+    """
+    Initialize the column helpers
+        for the subproblem according to the oracles
+    """
+    col_helper = {attr: {} for attr in ATTR_IN_RMP}
+    # saving column LinExpr
+    for e in cg_object.subgraph[customer].edges:
+        edge = cg_object.network.edges[e]["object"]
+        if edge.capacity == np.inf:
+            continue
+        # can we do better?
+        col_helper["sku_flow_sum"][edge] = (
+            cg_object.oracles[customer].variables["sku_flow"].sum(0, edge, "*")
+        )
+
+    for node in cg_object.subgraph[customer].nodes:
+        if node.type == const.PLANT:
+            if node.production_capacity == np.inf:
+                continue
+            col_helper["sku_production_sum"][node] = (
+                cg_object.oracles[customer]
+                .variables["sku_production"]
+                .sum(0, node, "*")
+            )
+        elif node.type == const.WAREHOUSE:
+            # node holding capacity
+            if node.inventory_capacity == np.inf:
+                continue
+            col_helper["sku_inventory_sum"][node] = (
+                cg_object.oracles[customer]
+                .variables["sku_inventory"]
+                .sum(0, node, "*")
+            )
+    col_helper["beta"] = cg_object.oracles[customer].original_obj.getExpr()
+
+    cg_object.columns_helpers[customer] = col_helper
+    cg_object.columns[customer] = []
 
 def init_col_helpers(cg_object):
     """

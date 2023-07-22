@@ -30,10 +30,10 @@ if __name__ == "__main__":
 
     cfg = dict(
         data_dir=datapath,
-        sku_num=10,
-        plant_num=10,
-        warehouse_num=30,
-        customer_num=20,
+        sku_num=140,
+        plant_num=23,
+        warehouse_num=28,
+        customer_num=100,
         one_period=True,
     )
     # cfg = dict(data_dir=datapath, one_period=True)
@@ -67,6 +67,10 @@ if __name__ == "__main__":
     max_iter = 5
     init_primal = None
     init_dual = None  # 'dual'
+    init_sweeping = True
+
+
+
     # init_dual = "dual"
 
     np_cg = NetworkColumnGeneration(
@@ -78,6 +82,10 @@ if __name__ == "__main__":
         bool_covering=True,
         init_primal=init_primal,
         init_dual=init_dual,
+        init_sweeping=init_sweeping,
     )
 
     np_cg.run()
+
+
+# for e in self.subgraph[customer].edges: print(oracle.variables['sku_flow'].sum(0,self.network.edges[e]["object"],"*"))

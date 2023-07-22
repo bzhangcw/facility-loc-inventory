@@ -49,10 +49,10 @@ if __name__ == "__main__":
 
     cfg = dict(
         data_dir=datapath,
-        sku_num=10,
-        plant_num=10,
-        warehouse_num=30,
-        customer_num=20,
+        sku_num=140,
+        plant_num=23,
+        warehouse_num=28,
+        customer_num=100,
         one_period=True,
     )
 
