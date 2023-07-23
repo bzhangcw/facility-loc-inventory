@@ -503,7 +503,7 @@ class DNP:
                 index += 1
 
             # capacity constraint
-            if node.production_capacity >= np.inf:
+            if node.production_capacity < np.inf:
                 left_capacity = node.production_capacity - self.used_plant_capacity.get(
                     node, 0
                 )
