@@ -16,12 +16,26 @@ if __name__ == "__main__":
 
     datapath = "data/data_0401_V3.xlsx"
     arg.T = 7
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=140,
+    #     plant_num=23,
+    #     warehouse_num=28,
+    #     customer_num=519,
+    #     one_period=False,
+    #     # sku_num=10,
+    #     # plant_num=3,
+    #     # warehouse_num=8,
+    #     # customer_num=9,
+    #     # one_period=True,
+    # )
+
     cfg = dict(
         data_dir=datapath,
-        sku_num=140,
-        plant_num=23,
-        warehouse_num=28,
-        customer_num=519,
+        sku_num=20,
+        plant_num=5,
+        warehouse_num=5,
+        customer_num=100,
         one_period=False,
         # sku_num=10,
         # plant_num=3,
@@ -61,4 +75,4 @@ if __name__ == "__main__":
     model.get_solution(data_dir=utils.CONF.DEFAULT_SOL_PATH)
     endtime = datetime.datetime.now()
     print(endtime - starttime)
-    model.write("test_7_f.mps")
+    model.write("mps/test_7_f.mps")

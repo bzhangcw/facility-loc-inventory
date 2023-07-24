@@ -346,23 +346,24 @@ class DNP:
                         )
 
                     last_period_inventory = 0.0
-                    # if t == 0:
-                    #     if node.initial_inventory is not None:
-                    #         if self.open_relationship:
-                    #             self.model.addConstr(
-                    #                 self.vars["open"][self.T - 1, node] == 1
-                    #             )
-                    #         last_period_inventory = (
-                    #             node.initial_inventory[k]
-                    #             if k in node.initial_inventory
-                    #             else 0.0
-                    #         )
-                    #     else:
-                    #         last_period_inventory = 0.0
-                    # else:
-                    #     last_period_inventory = self.vars["sku_inventory"][
-                    #         t - 1, node, k
-                    #     ]
+
+                    if t == 0:
+                        if node.initial_inventory is not None:
+                            # if self.open_relationship:
+                            self.model.addConstr(
+                                self.variables["open"][self.T - 1, node] == 1
+                            )
+                            last_period_inventory = (
+                                node.initial_inventory[k]
+                                if k in node.initial_inventory
+                                else 0.0
+                            )
+                        else:
+                            last_period_inventory = 0.0
+                    else:
+                        last_period_inventory = self.variables["sku_inventory"][
+                            t - 1, node, k
+                        ]
                     # last_period_inventory *= self.cus_ratio
 
                     constr = self.model.addConstr(
@@ -500,7 +501,7 @@ class DNP:
                     node_sum >= node.production_lb * self.variables["open"][t, node],
                     name=f"node_lb{t, node}",
                 )
-                index += 1
+                # index += 1
 
             # capacity constraint
             if node.production_capacity < np.inf:
