@@ -1,7 +1,7 @@
 import json
 import logging
 import pickle
-
+import gurobipy as gp
 import coptpy
 import coptpy as cp
 from coptpy import COPT
@@ -179,7 +179,11 @@ class NetworkColumnGeneration:
         """
         self.RMP_model.setParam("LpMethod", 2)
         self.RMP_model.setParam("Crossover", 0)
-
+        # self.RMP_model.write("out/rmpmodel.lp")
+        # m = gp.read("out/rmpmodel.lp")
+        # m.setParam('TimeLimit', 3600)
+        # m.setParam('MIPGap', 0.01)
+        # m.optimize()
         self.RMP_model.solve()
         self.RMP_model.setParam(COPT.Param.Logging, 0)
 
