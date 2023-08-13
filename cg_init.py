@@ -1,6 +1,8 @@
 """
 utilities for initialize first columns in CG framework
 """
+from typing import Dict, Tuple, Any
+
 from coptpy import COPT
 
 import cg_col_helper
@@ -48,18 +50,23 @@ def init_cols_from_dual_feas_sol(self, dual_vars):
 
 
 def update_edge_capacity(self, customer, used):
-    for k, v in self.columns_helpers[customer]["sku_flow_sum"].items():
-        used[k] = used.get(k, 0) + v.getValue()
+    for t in range(self.oracles[customer].T):
+        for k, v in self.columns_helpers[customer]["sku_flow_sum"][t].items():
+            used[t][k] = used.get(t).get(k, 0) + (v.getValue() if type(v) is not float else v)
+
 
 
 def update_warehouse_capacity(self, customer, used):
-    for k, v in self.columns_helpers[customer]["sku_inventory_sum"].items():
-        used[k] = used.get(k, 0) + v.getValue()
+    for t in range(self.oracles[customer].T):
+        for k, v in self.columns_helpers[customer]["sku_inventory_sum"][t].items():
+            used[t][k] = used.get(t).get(k, 0) + (v.getValue() if type(v) is not float else v)
+
 
 
 def update_plant_capacity(self, customer, used):
-    for k, v in self.columns_helpers[customer]["sku_production_sum"].items():
-        used[k] = used.get(k, 0) + v.getValue()
+    for t in range(self.oracles[customer].T):
+        for k, v in self.columns_helpers[customer]["sku_production_sum"][t].items():
+            used[t][k] = used.get(t).get(k, 0) + (v.getValue() if type(v) is not float else v)
 
 
 def primal_sweeping_method(self, sort_method=sorted):
@@ -70,8 +77,8 @@ def primal_sweeping_method(self, sort_method=sorted):
         one can use, e.g., a Lagrangian heuristic by sorting the dual price.
     :return:
     """
-    ec, pc, wc = {}, {}, {}
-
+    ec, pc, wc = {t: {} for t in range(self.arg.T)}, {t: {} for t in range(self.arg.T)}, {t: {} for t in range(self.arg.T)}
+    reset = {t: {} for t in range(self.arg.T)}
     sequence = sort_method(range(self.customer_list.__len__()))
 
     for col_ind in sequence:
@@ -85,12 +92,12 @@ def primal_sweeping_method(self, sort_method=sorted):
             oracle.used_plant_capacity,
             oracle.used_warehouse_capacity,
         ) = (ec, pc, wc)
+        # print(_this_customer)
         for t in range(oracle.T):
             oracle.add_constr_holding_capacity(t)
             oracle.add_constr_production_capacity(t)
             oracle.add_constr_transportation_capacity(t)
-
-        # solve
+        
         self.subproblem(_this_customer, col_ind)
         update_edge_capacity(self, _this_customer, ec)
         update_plant_capacity(self, _this_customer, pc)
@@ -102,7 +109,7 @@ def primal_sweeping_method(self, sort_method=sorted):
             oracle.used_edge_capacity,
             oracle.used_plant_capacity,
             oracle.used_warehouse_capacity,
-        ) = ({}, {}, {})
+        ) = (reset, reset, reset)
 
         for t in range(oracle.T):
             oracle.add_constr_holding_capacity(t)

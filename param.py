@@ -111,6 +111,24 @@ class Param:
             """,
         )
 
+        parser.add_argument(
+            "--cus_num",
+            type=int,
+            default=4,
+            help="""
+            tested customer number
+            """,
+        )
+
+        parser.add_argument(
+            "--difficulty",
+            type=int,
+            default=1,
+            help="""
+            whether add lb and capacity constraint or not
+            """,
+        )
+
         return parser
 
 

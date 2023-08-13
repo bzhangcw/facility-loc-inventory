@@ -87,7 +87,11 @@ class NetworkColumnGeneration:
         Get a subgraph for each customer from the original graph
         """
         for customer in self.customer_list:
-            cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
+            cus_sku_list = []
+            for t in range(self.arg.T):
+                cus_sku_list = list(
+                    set().union(cus_sku_list, customer.get_node_sku_list(t, self.full_sku_list)))
+            # cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
             pred_reachable_nodes = set()
             get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
             # @note: reset visited status
@@ -99,8 +103,14 @@ class NetworkColumnGeneration:
             #   use "node.visited = Bool" to avoid the excessive recursive times
             #   in the situation that two nodes can reach each other
             for node in pred_reachable_nodes:
-                if bool(node.get_node_sku_list(0, self.full_sku_list)):
-                    if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
+                final_sku_node_list = []
+                for t in range(self.arg.T):
+                    final_sku_node_list = list(set().union(final_sku_node_list, node.get_node_sku_list(t, self.full_sku_list)))
+                if bool(final_sku_node_list):
+                    # if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
+                    #         cus_sku_list
+                    # ):
+                    if not set(final_sku_node_list) & set(
                             cus_sku_list
                     ):
                         # If the sku_list associated with a pred_node
@@ -136,7 +146,7 @@ class NetworkColumnGeneration:
         subgraph = self.subgraph[customer]
         full_sku_list = subgraph.graph["sku_list"]
         arg = self.arg
-        arg.T = 1
+        # arg.T = 7
         env_name = customer.idx + "_oracle_env"
         model_name = customer.idx + "_oracle"
         oracle = dnp_model.DNP(
@@ -197,8 +207,12 @@ class NetworkColumnGeneration:
         oracle = self.oracles[customer]
         oracle.model.reset()
         oracle.update_objective(customer, dual_vars, dual_index)
-
         oracle.solve()
+        # Test CG oracle cost
+        # if dual_vars is None:
+        #     print("-----------------------CG-----------------------")
+        #     print(customer)
+        #     oracle.Test_cost()
         v = oracle.model.objval
         self.red_cost[self.iter, col_ind] = v
         # successfully added if dual price < 0
@@ -307,38 +321,50 @@ class NetworkColumnGeneration:
         self.RMP_model.reset()
 
         for customer in self.customer_list:
-            capacity_cons_coef = []
-            for e in self.network.edges:
-                edge = self.network.edges[e]["object"]
-                if edge.capacity < np.inf:
-                    capacity_cons_coef.append(
-                        (
-                            self.columns[customer][-1]["sku_flow_sum"][edge]
-                            if e in self.subgraph[customer].edges
-                            else 0.0
-                        )
-                    )
-
-            for node in self.network.nodes:
-                if node.type == const.PLANT:
-                    if node.production_capacity < np.inf:
-                        capacity_cons_coef.append(
+            edge_capacity_cons_coef = []
+            node_capacity_cons_coef = []
+            # edge_capacity_cons_name = []
+            # node_capacity_cons_name = []
+            # capacity_cons_name = []
+            for t in range(self.arg.T):
+                for e in self.network.edges:
+                    edge = self.network.edges[e]["object"]
+                    if edge.capacity < np.inf:
+                        edge_capacity_cons_coef.append(
                             (
-                                self.columns[customer][-1]["sku_production_sum"][node]
-                                if node in self.subgraph[customer].nodes
+                                self.columns[customer][-1]["sku_flow_sum"][t][edge]
+                                # if e in self.subgraph[customer].edges
+                                if e in self.subgraph[customer].edges
                                 else 0.0
                             )
                         )
-                elif node.type == const.WAREHOUSE:
-                    if node.inventory_capacity < np.inf:
-                        capacity_cons_coef.append(
-                            (
-                                self.columns[customer][-1]["sku_inventory_sum"][node]
-                                if node in self.subgraph[customer].nodes
-                                else 0.0
-                            )
-                        )
+                        # edge_capacity_cons_name.append((t, edge))
 
+                for node in self.network.nodes:
+                    if node.type == const.PLANT:
+                        if node.production_capacity < np.inf:
+                            node_capacity_cons_coef.append(
+                                (
+                                    self.columns[customer][-1]["sku_production_sum"][t][node]
+                                    # if node in self.subgraph[customer].nodes
+                                    if node in self.subgraph[customer].nodes
+                                    else 0.0
+                                )
+                            )
+                            # node_capacity_cons_name.append((t, node))
+                    elif node.type == const.WAREHOUSE:
+                        if node.inventory_capacity < np.inf:
+                            node_capacity_cons_coef.append(
+                                (
+                                    self.columns[customer][-1]["sku_inventory_sum"][t][node]
+                                    # if node in self.subgraph[customer].nodes
+                                    if node in self.subgraph[customer].nodes
+                                    else 0.0
+                                )
+                            )
+                            # node_capacity_cons_name.append((t, node))
+            capacity_cons_coef = [*edge_capacity_cons_coef, *node_capacity_cons_coef]
+            # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
             new_col = cp.Column(
                 [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
                 [*capacity_cons_coef, 1.0],
@@ -393,10 +419,8 @@ class NetworkColumnGeneration:
 
         ################# add constraints #################
         constr_types = {
-            "transportation_capacity": {"index": "(edge)"},
-            # "production_capacity": {"index": "(node)"},
-            # "holding_capacity": {"index": "(node)"},
-            "node_capacity": {"index": "(node)"},
+            "transportation_capacity": {"index": "(t, edge)"},
+            "node_capacity": {"index": "(t,node)"},
             "weights_sum": {"index": "(customer)"},
         }
 
@@ -409,131 +433,114 @@ class NetworkColumnGeneration:
             "weights_sum": dict(),
         }
         index = 0
+        for t in range(self.arg.T):
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                if edge.capacity == np.inf:
+                    continue
+                transportation = 0.0
+                for customer in self.customer_list:
+                    # if e in self.subgraph[customer].edges:  # todo: can we do better?
+                    #     for number in range(len(self.columns[customer])):
+                    #         transportation += (
+                    #             self.vars["column_weights"][customer, number]
+                    #             * self.columns[customer][number]["sku_flow_sum"][edge]
+                    #         )
 
-        for e in self.network.edges:
-            edge = self.network.edges[e]["object"]
-            if edge.capacity == np.inf:
-                continue
-            transportation = 0.0
-            for customer in self.customer_list:
-                # if e in self.subgraph[customer].edges:  # todo: can we do better?
-                #     for number in range(len(self.columns[customer])):
-                #         transportation += (
-                #             self.vars["column_weights"][customer, number]
-                #             * self.columns[customer][number]["sku_flow_sum"][edge]
-                #         )
+                    for number in range(len(self.columns[customer])):
+                        transportation += self.vars["column_weights"][customer, number] * (
+                            self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0
+                        )
 
-                for number in range(len(self.columns[customer])):
-                    transportation += self.vars["column_weights"][customer, number] * (
-                        self.columns[customer][number]["sku_flow_sum"][edge]
-                        if e in self.subgraph[customer].edges
-                        else 0.0
+                if type(transportation) == float:
+                    # continue
+                    transportation = 0 * self.vars["column_weights"].sum(customer, "*")
+                sumcoef = 0
+                for i in range(transportation.getSize()):
+                    sumcoef += transportation.getCoeff(i)
+                if sumcoef == 0:
+                    # continue
+                    transportation = 0 * self.vars["column_weights"].sum(customer, "*")
+
+                constr = self.RMP_model.addConstr(
+                    transportation <= edge.capacity,
+                    name=f"transportation_capacity_{t, edge.idx}",
+                )
+                self.RMP_constrs["transportation_capacity"][(t, edge)] = constr
+                self.dual_index["transportation_capacity"][(t, edge)] = index
+                index += 1
+
+            for node in self.network.nodes:
+                # node production capacity
+                if node.type == const.PLANT:
+                    if node.production_capacity == np.inf:
+                        continue
+                    production = 0.0
+                    for customer in self.customer_list:
+                        for number in range(len(self.columns[customer])):
+                            production += self.vars["column_weights"][customer, number] * (
+                                self.columns[customer][number]["sku_production_sum"][t][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
+
+                    if type(production) == float:
+                        # continue
+                        production = 0 * self.vars["column_weights"].sum(customer, "*")
+
+                    sumcoef = 0
+                    for i in range(production.getSize()):
+                        sumcoef += production.getCoeff(i)
+                    if sumcoef == 0:
+                        # continue
+                        production = 0 * self.vars["column_weights"].sum(customer, "*")
+
+                    constr = self.RMP_model.addConstr(
+                        production <= node.production_capacity,
+                        name=f"production_capacity_{node.idx}",
                     )
+                    # self.RMP_constrs["production_capacity"][node] = constr
+                    self.RMP_constrs["node_capacity"][(t, node)] = constr
 
-            if type(transportation) == float:
-                # continue
-                transportation = 0 * self.vars["column_weights"].sum(customer, "*")
-            sumcoef = 0
-            for i in range(transportation.getSize()):
-                sumcoef += transportation.getCoeff(i)
-            if sumcoef == 0:
-                # continue
-                transportation = 0 * self.vars["column_weights"].sum(customer, "*")
+                elif node.type == const.WAREHOUSE:
+                    # node holding capacity
+                    if node.inventory_capacity == np.inf:
+                        continue
+                    holding = 0.0
+                    for customer in self.customer_list:
 
-            constr = self.RMP_model.addConstr(
-                transportation <= edge.capacity,
-                name=f"transportation_capacity_{edge.idx}",
-            )
-            self.RMP_constrs["transportation_capacity"][edge] = constr
-            self.dual_index["transportation_capacity"][edge] = index
-            index += 1
+                        for number in range(len(self.columns[customer])):
+                            holding += self.vars["column_weights"][customer, number] * (
+                                self.columns[customer][number]["sku_inventory_sum"][t][node]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
 
-        for node in self.network.nodes:
-            # node production capacity
-            if node.type == const.PLANT:
-                if node.production_capacity == np.inf:
+                    if type(holding) == float:
+                        # continue
+                        holding = 0 * self.vars["column_weights"].sum(customer, "*")
+
+                    sumcoef = 0
+                    for i in range(holding.getSize()):
+                        sumcoef += holding.getCoeff(i)
+                    if sumcoef == 0:
+                        # continue
+                        holding = 0 * self.vars["column_weights"].sum(customer, "*")
+
+                    constr = self.RMP_model.addConstr(
+                        holding <= node.inventory_capacity,
+                        name=f"inventory_capacity_{t, node.idx}",
+                    )
+                    # self.RMP_constrs["holding_capacity"][node] = constr
+                    self.RMP_constrs["node_capacity"][(t, node)] = constr
+
+                else:
                     continue
-                production = 0.0
-                for customer in self.customer_list:
-                    # if node in self.subgraph[customer].nodes:
-                    #     for number in range(len(self.columns[customer])):
-                    #         production += (
-                    #             self.vars["column_weights"][customer, number]
-                    #             * self.columns[customer][number]["sku_production_sum"][
-                    #                 node
-                    #             ]
-                    #         )
 
-                    for number in range(len(self.columns[customer])):
-                        production += self.vars["column_weights"][customer, number] * (
-                            self.columns[customer][number]["sku_production_sum"][node]
-                            if node in self.subgraph[customer].nodes
-                            else 0.0
-                        )
-
-                if type(production) == float:
-                    # continue
-                    production = 0 * self.vars["column_weights"].sum(customer, "*")
-
-                sumcoef = 0
-                for i in range(production.getSize()):
-                    sumcoef += production.getCoeff(i)
-                if sumcoef == 0:
-                    # continue
-                    production = 0 * self.vars["column_weights"].sum(customer, "*")
-
-                constr = self.RMP_model.addConstr(
-                    production <= node.production_capacity,
-                    name=f"production_capacity_{node.idx}",
-                )
-                # self.RMP_constrs["production_capacity"][node] = constr
-                self.RMP_constrs["node_capacity"][node] = constr
-
-            elif node.type == const.WAREHOUSE:
-                # node holding capacity
-                if node.inventory_capacity == np.inf:
-                    continue
-                holding = 0.0
-                for customer in self.customer_list:
-                    # if node in self.subgraph[customer].nodes:
-                    #     for number in range(len(self.columns[customer])):
-                    #         holding += (
-                    #             self.vars["column_weights"][customer, number]
-                    #             * self.columns[customer][number]["sku_inventory_sum"][
-                    #                 node
-                    #             ]
-                    #         )
-
-                    for number in range(len(self.columns[customer])):
-                        holding += self.vars["column_weights"][customer, number] * (
-                            self.columns[customer][number]["sku_inventory_sum"][node]
-                            if node in self.subgraph[customer].nodes
-                            else 0.0
-                        )
-
-                if type(holding) == float:
-                    # continue
-                    holding = 0 * self.vars["column_weights"].sum(customer, "*")
-
-                sumcoef = 0
-                for i in range(holding.getSize()):
-                    sumcoef += holding.getCoeff(i)
-                if sumcoef == 0:
-                    # continue
-                    holding = 0 * self.vars["column_weights"].sum(customer, "*")
-
-                constr = self.RMP_model.addConstr(
-                    holding <= node.inventory_capacity,
-                    name=f"inventory_capacity_{node.idx}",
-                )
-                # self.RMP_constrs["holding_capacity"][node] = constr
-                self.RMP_constrs["node_capacity"][node] = constr
-
-            else:
-                continue
-
-            self.dual_index["node_capacity"][node] = index
-            index += 1
+                self.dual_index["node_capacity"][(t, node)] = index
+                index += 1
 
         for customer in self.customer_list:
             # weights sum to 1
@@ -575,12 +582,16 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             # for number in range(self.num_cols):
             for number in range(self.iter):
-                cus_col_value.loc[number, customer.idx] = self.columns[customer][
-                    number
-                ]["beta"]
-                cus_col_weights.loc[number, customer.idx] = self.vars["column_weights"][
-                    customer, number
-                ].value
+                if self.columns[customer][number] != {}:
+                    cus_col_value.loc[number, customer.idx] = self.columns[customer][
+                        number
+                    ]["beta"]
+                    cus_col_weights.loc[number, customer.idx] = self.vars["column_weights"][
+                        customer, number
+                    ].value
+                else:
+                    cus_col_value.loc[number, customer.idx] = 0
+                    cus_col_weights.loc[number, customer.idx] = 0
 
         num_cus = len(self.customer_list)
         cus_col_value.to_csv(
