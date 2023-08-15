@@ -121,11 +121,19 @@ class Param:
         )
 
         parser.add_argument(
-            "--difficulty",
+            "--capacity",
             type=int,
             default=1,
             help="""
-            whether add lb and capacity constraint or not
+            whether add capacity constraint or not
+            """,
+        )
+        parser.add_argument(
+            "--lowerbound",
+            type=int,
+            default=1,
+            help="""
+            whether add lower bound constraint or not
             """,
         )
 

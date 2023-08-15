@@ -36,6 +36,7 @@ class DNP:
             used_warehouse_capacity: dict = None,
             used_plant_capacity: dict = None,
             logging: int = 0,
+            cus_num: int = 1,
             env=None,
     ) -> None:
         self.arg = arg
@@ -93,7 +94,7 @@ class DNP:
         self.ud = 0.0
         self.nf = 0.0
         self.ef = 0.0
-        self.total_cus_num = arg.total_cus_num
+        self.total_cus_num = cus_num
         self.var_idx = None
         self.dual_index_for_RMP = {
             "transportation_capacity": dict(),

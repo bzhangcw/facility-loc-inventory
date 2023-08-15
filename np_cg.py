@@ -218,7 +218,7 @@ class NetworkColumnGeneration:
         # successfully added if dual price < 0
         #   or there is no dual variables
         #   implying initialization
-        added = v < -1e-2 or dual_vars is None
+        added = v < -1e-9 or dual_vars is None
         # querying column
         new_col = cg_col_helper.query_columns(self, customer)
         self.columns[customer].append(new_col)
