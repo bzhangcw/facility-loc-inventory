@@ -8,14 +8,6 @@ import pandas as pd
 import numpy as np
 import datetime
 from np_cg import *
-from np_cg import *
-import numpy as np
-import pandas as pd
-
-import utils
-from dnp_model import DNP
-from network import construct_network
-from param import Param
 
 
 if __name__ == "__main__":
@@ -23,18 +15,16 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     arg.T = 4
-    arg.cus_num = 100
     arg.backorder = False
     # arg.bool_capacity = False # True
     datapath = "data/data_0401_0inv.xlsx"
+
+    arg.cus_num = 50
     cfg = dict(
         data_dir=datapath,
-        sku_num=140,
-        plant_num=23,
-        warehouse_num=28,
-        # sku_num=50,
-        # plant_num=10,
-        # warehouse_num=10,
+        sku_num=50,
+        plant_num=30,
+        warehouse_num=30,
         customer_num=arg.cus_num,
         one_period=False if arg.T > 1 else True,
     )
@@ -50,7 +40,7 @@ if __name__ == "__main__":
     ) = utils.get_data_from_cfg(cfg)
     #
     if arg.capacity == 1:
-        cap = pd.read_csv("./data/random_capacity_updated_2.csv").set_index("id")
+        cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
             e.capacity = cap["qty"].get(e.idx, np.inf)
     if arg.lowerbound == 1:
@@ -63,16 +53,21 @@ if __name__ == "__main__":
         #     if n.type == const.PLANT:
         #         n.production_lb = lb_df["lb"].get(n.idx, np.inf)
     network = construct_network(node_list, edge_list, sku_list)
-    model = DNP(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.solve()
-    # model.Test_cost()
-    model.get_solution("New_sol/")
+    # model = DNP(arg, network)
+    # model.modeling()
+    # model.model.setParam("Logging", 1)
+    # model.solve()
+    # model.get_solution("New_sol/")
+
+    # model = DNP.remote(arg, network)
+    # model.modeling.remote()
+    # model.model.setParam.remote("Logging", 1)
+    # model.solve.remote()
+    # model.get_solution.remote("New_sol/")
 
     # #-----------------CG Model-----------------#
     print("----------DCG Model------------")
-    max_iter = 100
+    max_iter = 2
     init_primal = None
     init_dual = None
 
@@ -85,7 +80,7 @@ if __name__ == "__main__":
         bool_covering=True,
         init_primal=init_primal,
         init_dual=init_dual,
-        bool_edge_lb = True,
+        bool_edge_lb=True,
     )
     np_cg.run()
     np_cg.get_solution("New_sol/")

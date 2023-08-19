@@ -6,9 +6,9 @@ import os
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
 import const
 import utils
+import ray
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging
@@ -26,16 +26,31 @@ def init_col_helpers(cg_object):
 
     # for t in range(cg_object.oracles[0].T):
     for customer in tqdm(cg_object.customer_list):
-        col_helper = {attr: {t: {} for t in range(cg_object.oracles[customer].T)} for attr in ATTR_IN_RMP}
+        # col_helper = {attr: {t: {} for t in range(cg_object.oracles[customer].T)} for attr in ATTR_IN_RMP}
+        col_helper = {
+            attr: {
+                # t: {} for t in range(ray.get(cg_object.oracles[customer].getT.remote()))
+                t: {}
+                for t in range(cg_object.arg.T)
+            }
+            for attr in ATTR_IN_RMP
+        }
+
         # saving column LinExpr
-        for t in range(cg_object.oracles[customer].T):
+        # for t in range(cg_object.oracles[customer].T):
+        # for t in range(ray.get(cg_object.oracles[customer].getT.remote())):
+        for t in range(cg_object.arg.T):
             for e in cg_object.subgraph[customer].edges:
                 edge = cg_object.network.edges[e]["object"]
                 if edge.capacity == np.inf:
                     continue
                 # can we do better?
                 col_helper["sku_flow_sum"][t][edge] = (
-                    cg_object.oracles[customer].variables["sku_flow"].sum(t, edge, "*")
+                    # cg_object.oracles[customer].variables["sku_flow"].sum(t, edge, "*")
+                    # ray.get(cg_object.oracles[customer].getvariables.remote())[
+                    ray.get(cg_object.oracles[customer].getvariables.remote())[
+                        "sku_flow"
+                    ].sum(t, edge, "*")
                 )
 
             for node in cg_object.subgraph[customer].nodes:
@@ -63,8 +78,17 @@ def init_col_helpers(cg_object):
         cg_object.columns[customer] = []
 
 
-def eval_helper(col_helper,T):
-    _vals = {attr: {t: {k: v.getValue() if type(v) is not float else 0 for k, v in col_helper[attr][t].items()} for t in range(T)} for attr in ATTR_IN_RMP}
+def eval_helper(col_helper, T):
+    _vals = {
+        attr: {
+            t: {
+                k: v.getValue() if type(v) is not float else 0
+                for k, v in col_helper[attr][t].items()
+            }
+            for t in range(T)
+        }
+        for attr in ATTR_IN_RMP
+    }
     # for t in range(T):
     #     for attr in ATTR_IN_RMP:
     #         if col_helper[attr][t] != {}:
@@ -72,7 +96,7 @@ def eval_helper(col_helper,T):
     #                 if type(v) is not float:
     #                     if v.getValue() > 0:
     #                         _vals[attr][t][k] = v.getValue()
-                        # _vals[attr][t][k] = v.getValue()
+    # _vals[attr][t][k] = v.getValue()
     # _vals = {
     #     t: {attr: {k: v.getValue() for k, v in col_helper[attr][t].items()}
     #     for attr in ATTR_IN_RMP} for t in range(7)}
@@ -81,7 +105,7 @@ def eval_helper(col_helper,T):
 
 
 def query_columns(cg_object, customer):
-    new_col = eval_helper(cg_object.columns_helpers[customer],cg_object.arg.T)
+    new_col = eval_helper(cg_object.columns_helpers[customer], cg_object.arg.T)
 
     # visualize this column
     oracle = cg_object.oracles[customer]

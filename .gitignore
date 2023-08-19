@@ -1,10 +1,12 @@
+*.lp
+New_sol/
 mps/
 output/
 out/
 *.csv
 *.xlsx
 tem_out/
-data/
+# data/
 lp/
 tmp/
 oracle_lp/

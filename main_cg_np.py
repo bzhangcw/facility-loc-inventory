@@ -9,7 +9,7 @@ from param import Param
 
 if __name__ == "__main__":
     datapath = "data/data_0401_V3.xlsx"
-    pick_instance = 3
+    pick_instance = 4
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
@@ -35,6 +35,15 @@ if __name__ == "__main__":
             sku_num=140,
             plant_num=23,
             warehouse_num=28,
+            customer_num=100,
+            one_period=True,
+        )
+    elif pick_instance == 4:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=60,
+            plant_num=30,
+            warehouse_num=30,
             customer_num=100,
             one_period=True,
         )
