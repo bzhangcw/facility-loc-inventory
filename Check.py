@@ -19,15 +19,28 @@ if __name__ == "__main__":
     # arg.bool_capacity = False # True
     datapath = "data/data_0401_0inv.xlsx"
 
-    arg.cus_num = 50
+    # for comparing speed
+    # arg.cus_num = 50
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=50,
+    #     plant_num=30,
+    #     warehouse_num=30,
+    #     customer_num=arg.cus_num,
+    #     one_period=False if arg.T > 1 else True,
+    # )
+
+    # for debug
+    arg.cus_num = 5
     cfg = dict(
         data_dir=datapath,
-        sku_num=50,
-        plant_num=30,
-        warehouse_num=30,
+        sku_num=10,
+        plant_num=5,
+        warehouse_num=5,
         customer_num=arg.cus_num,
         one_period=False if arg.T > 1 else True,
     )
+
     (
         sku_list,
         plant_list,
@@ -70,6 +83,8 @@ if __name__ == "__main__":
     max_iter = 2
     init_primal = None
     init_dual = None
+    # init_ray = False
+    init_ray = True
 
     np_cg = NetworkColumnGeneration(
         arg,
@@ -81,6 +96,7 @@ if __name__ == "__main__":
         init_primal=init_primal,
         init_dual=init_dual,
         bool_edge_lb=True,
+        init_ray=init_ray,
     )
     np_cg.run()
     np_cg.get_solution("New_sol/")

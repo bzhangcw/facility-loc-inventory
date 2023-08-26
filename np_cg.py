@@ -164,21 +164,34 @@ class NetworkColumnGeneration:
         # arg.T = 7
         env_name = customer.idx + "_oracle_env"
         model_name = customer.idx + "_oracle"
-        # oracle = dnp_model.DNP(
-        oracle = dnp_model.DNP.remote(
-            arg,
-            subgraph,
-            full_sku_list,
-            env_name,
-            model_name,
-            bool_covering=self.bool_covering,
-            bool_capacity=True,
-            bool_edge_lb=self.bool_edge_lb,
-            bool_node_lb=self.bool_node_lb,
-            # env=self.RMP_env,
-        )  # for initial column, set obj = 0
-        # oracle.modeling()
-        oracle.modeling.remote()
+
+        if self.init_ray:
+            oracle = dnp_model.DNP.remote(
+                arg,
+                subgraph,
+                full_sku_list,
+                env_name,
+                model_name,
+                bool_covering=self.bool_covering,
+                bool_capacity=True,
+                bool_edge_lb=self.bool_edge_lb,
+                bool_node_lb=self.bool_node_lb,
+            )  # for initial column, set obj = 0
+            oracle.modeling.remote()
+        else:
+            oracle = dnp_model.DNP(
+                arg,
+                subgraph,
+                full_sku_list,
+                env_name,
+                model_name,
+                bool_covering=self.bool_covering,
+                bool_capacity=True,
+                bool_edge_lb=self.bool_edge_lb,
+                bool_node_lb=self.bool_node_lb,
+                env=self.RMP_env,
+            )  # for initial column, set obj = 0
+            oracle.modeling()
 
         return oracle
 
@@ -222,33 +235,45 @@ class NetworkColumnGeneration:
 
         added = False  # whether a new column is added
         oracle = self.oracles[customer]
-        # oracle.model.reset()
-        # oracle.update_objective(customer, dual_vars, dual_index)
-        # oracle.solve()
-        # v = oracle.model.objval
 
-        # oracle.model.reset.remote()
-        oracle.model_reset.remote()
-        oracle.update_objective.remote(customer, dual_vars, dual_index)
-        oracle.solve.remote()
-        v = ray.get(oracle.get_model_objval.remote())
+        if self.init_ray:
+            oracle.model_reset.remote()
+            oracle.update_objective.remote(customer, dual_vars, dual_index)
+            oracle.solve.remote()
+            v = ray.get(oracle.get_model_objval.remote())
+        else:
+            oracle.model.reset()
+            oracle.update_objective(customer, dual_vars, dual_index)
+            oracle.solve()
+            v = oracle.model.objval
 
         self.red_cost[self.iter, col_ind] = v
         added = v < -1e-9 or dual_vars is None
-        # new_col = cg_col_helper.query_columns(self, customer)
-        new_col = ray.get(oracle.query_columns.remote())
+
+        if self.init_ray:
+            new_col = ray.get(oracle.query_columns.remote())
+        else:
+            new_col = oracle.query_columns()
 
         self.columns[customer].append(new_col)
         if cg_col_helper.CG_EXTRA_VERBOSITY:
-            # _xval = pd.Series({v.name: v.x for v in oracle.model.getVars() if v.x > 0})
-            _xval = pd.Series(
-                {v.name: v.x for v in oracle.model.getVars.remote() if v.x > 0}
-            )
+            if self.init_ray:
+                _xval = pd.Series(
+                    {v.name: v.x for v in oracle.model.getVars.remote() if v.x > 0}
+                )
+            else:
+                _xval = pd.Series(
+                    {v.name: v.x for v in oracle.model.getVars() if v.x > 0}
+                )
 
-            _cost = pd.Series(
-                # {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
-                {v.name: v.obj for v in oracle.model.getVars.remote() if v.x > 0}
-            )
+            if self.init_ray:
+                _cost = pd.Series(
+                    {v.name: v.obj for v in oracle.model.getVars.remote() if v.x > 0}
+                )
+            else:
+                _cost = pd.Series(
+                    {v.name: v.obj for v in oracle.model.getVars() if v.x > 0}
+                )
             column_debugger = pd.DataFrame({"value": _xval, "objective": _cost})
             print(column_debugger)
 
@@ -269,6 +294,23 @@ class NetworkColumnGeneration:
             for customer in tqdm(self.customer_list):
                 self.oracles[customer] = self.construct_oracle(customer)
                 self.columns[customer] = []
+                # if customer.idx == "C00120502":
+                if True:
+                    if self.init_ray:
+                        self.oracles[customer].writeLP.remote(customer.idx)
+                    else:
+                        self.oracles[customer].model.write(
+                            f"oracle_lp/{customer.idx}.lp"
+                        )
+
+                    nodes_file_path = f"oracle_lp/{customer.idx}_nodes.txt"
+                    edges_file_path = f"oracle_lp/{customer.idx}_edges.txt"
+                    with open(nodes_file_path, "a") as f:
+                        for node in self.subgraph[customer].nodes:
+                            f.write(f"{node.idx}\n")
+                    with open(edges_file_path, "a") as f:
+                        for edge in self.subgraph[customer].edges:
+                            f.write(f"{edge}\n")
 
             # cg_col_helper.init_col_helpers(self)
 
@@ -304,8 +346,15 @@ class NetworkColumnGeneration:
                             self.subproblem(customer, col_ind, dual_vars, dual_index)
                             or added
                         )
+                        model_status = (
+                            ray.get(self.oracles[customer].get_model_status.remote())
+                            if self.init_ray
+                            else self.oracles[customer].model.status
+                        )
                         if (
-                            self.oracles[customer].model.status
+                            # self.oracles[customer].model.status
+                            # ray.get(self.oracles[customer].get_model_status.remote())
+                            model_status
                             == coptpy.COPT.INTERRUPTED
                         ):
                             bool_early_stop = True

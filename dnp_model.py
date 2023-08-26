@@ -117,6 +117,12 @@ class DNP:
         self.columns_helpers = None
 
     # for ray.remote
+    def writeLP(self, idx):
+        self.model.write(f"oracle_lp/{idx}.lp")
+
+    def get_model_status(self):
+        return self.model.status
+
     def getT(self):
         return self.T
 
