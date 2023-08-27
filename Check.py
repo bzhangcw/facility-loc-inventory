@@ -83,8 +83,8 @@ if __name__ == "__main__":
     max_iter = 2
     init_primal = None
     init_dual = None
-    # init_ray = False
-    init_ray = True
+    init_ray = False
+    # init_ray = True
 
     np_cg = NetworkColumnGeneration(
         arg,
