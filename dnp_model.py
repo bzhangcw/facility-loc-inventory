@@ -14,7 +14,7 @@ import const
 from entity import SKU
 from read_data import read_data
 from utils import get_in_edges, get_out_edges, logger
-
+import time
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging
@@ -45,7 +45,9 @@ class DNP:
         logging: int = 0,
         cus_num: int = 1,
         env=None,
+        cus_list=None,
     ) -> None:
+        self.cus_list = cus_list
         self.arg = arg
         self.T = arg.T
         self.network = network
@@ -117,6 +119,11 @@ class DNP:
         self.columns_helpers = None
 
     # for ray.remote
+    def update_constr_capacity(self, ec, pc, wc):
+        self.used_edge_capacity = ec
+        self.used_plant_capacity = pc
+        self.used_warehouse_capacity = wc
+
     def writeLP(self, idx):
         self.model.write(f"oracle_lp/{idx}.lp")
 
@@ -135,7 +142,7 @@ class DNP:
             needed quantities for the subproblems
 
         """
-        utils.logger.info("generating column helpers")
+        # utils.logger.info("generating column helpers for %s" % self.cus_list[0].idx)
 
         # col_helper = {attr: {t: {} for t in range(self.oracles[customer].T)} for attr in ATTR_IN_RMP}
         col_helper = {
@@ -155,16 +162,18 @@ class DNP:
                     continue
                 # can we do better?
                 # col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
-                col_helper["sku_flow_sum"][t][edge.idx] = self.variables[
-                    "sku_flow"
-                ].sum(t, edge, "*")
+                # col_helper["sku_flow_sum"][t][edge.idx] = self.variables[
+                col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
+                    t, edge, "*"
+                )
 
             for node in self.network.nodes:
                 if node.type == const.PLANT:
                     if node.production_capacity == np.inf:
                         continue
                     # col_helper["sku_production_sum"][t][node] = self.variables[
-                    col_helper["sku_production_sum"][t][node.idx] = self.variables[
+                    # col_helper["sku_production_sum"][t][node.idx] = self.variables[
+                    col_helper["sku_production_sum"][t][node] = self.variables[
                         "sku_production"
                     ].sum(t, node, "*")
                 elif node.type == const.WAREHOUSE:
@@ -172,7 +181,8 @@ class DNP:
                     if node.inventory_capacity == np.inf:
                         continue
                     # col_helper["sku_inventory_sum"][t][node] = self.variables[
-                    col_helper["sku_inventory_sum"][t][node.idx] = self.variables[
+                    # col_helper["sku_inventory_sum"][t][node.idx] = self.variables[
+                    col_helper["sku_inventory_sum"][t][node] = self.variables[
                         "sku_inventory"
                     ].sum(t, node, "*")
 
@@ -347,6 +357,11 @@ class DNP:
 
                 sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
+                # # for debugging
+                # if t == 0 and edge.idx == "T0001_C00120540":
+                #     print("sku_list", sku_list)
+                # # for debugging
+
                 for k in sku_list:
                     # sku k select edge (i,j) at t
                     if self.bool_covering:
@@ -401,6 +416,11 @@ class DNP:
                 nameprefix=f"{param['nameprefix']}_",
             )
 
+        # # for debug
+        # if self.cus_list[0].idx == "C00120540":
+        #     print("sku_flow:", idx["sku_flow"])
+        # # for debug
+
     def add_constraints(self):
         self.constr_types = {
             "flow_conservation": {"index": "(t, node, k)"},
@@ -447,6 +467,10 @@ class DNP:
                 self.add_constr_holding_capacity(t)
 
     def del_constr_capacity(self):
+        # for debug
+        # print("sweeping for ", self.cus_list[0].idx, "at ", time.time())
+        # for debug
+
         to_remove = [
             "transportation_capacity",
             "production_capacity",
@@ -487,7 +511,47 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 out_edges = get_out_edges(self.network, node)
 
-                constr_name = f"flow_conservation_{node.idx}_{k.idx}"
+                # # for debugging
+                # if (
+                #     node.idx == "T0001"
+                #     and k.idx == "Y000009"
+                #     and self.cus_list[0].idx == "C00120540"
+                # ):
+                #     print("t", t)
+                #     print("in_edges", in_edges)
+                #     print("out_edges", out_edges)
+                #     # print(self.variables["sku_flow"].sum(t, out_edges, k))
+                #     # print(
+                #     #     self.variables["sku_flow"].keys(),
+                #     #     len(self.variables["sku_flow"].keys()),
+                #     #     # id(self.variables["sku_flow"]),
+                #     # )
+
+                #     for edge in out_edges:
+                #         isin = (
+                #             " in"
+                #             if (t, edge, k) in self.variables["sku_flow"].keys()
+                #             else " not in"
+                #         )
+                #         print((t, edge, k), isin)
+
+                #     temp_lst1 = [(id(edge), edge) for edge in out_edges]
+                #     temp_lst2 = [
+                #         (id(edge), edge)
+                #         for (t, edge, k) in self.variables["sku_flow"].keys()
+                #     ]
+
+                #     # print("-" * 40, "out edges", "-" * 40)
+                #     # for e in temp_lst1:
+                #     #     print(e)
+
+                #     # print("-" * 40, "keys", "-" * 40)
+                #     # for e in temp_lst2:
+                #     #     print(e)
+
+                # # for debugging
+
+                constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
 
                 if node.type == const.PLANT:
                     constr = self.model.addConstr(
@@ -606,7 +670,14 @@ class DNP:
 
         return
 
-    def add_constr_transportation_capacity(self, t: int):
+    def add_constr_transportation_capacity(self, t: int, verbose=False):
+        # for debug
+        if verbose:
+            print(self.cus_list[0].idx, " ec before:", t, " at ", time.time())
+            for k, v in self.used_edge_capacity[t].items():
+                print(k, ":", v)
+        # for debug
+
         i = 0
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
@@ -816,6 +887,8 @@ class DNP:
         # for node in dual_index["weights_sum"].keys():
         #     obj -= dualvar[dual_index["weights_sum"][node]]
         obj -= dualvar[dual_index["weights_sum"][customer]]
+        # print(dual_index["weights_sum"])
+        # obj -= dualvar[dual_index["weights_sum"]]
 
         return obj
 

@@ -19,27 +19,54 @@ if __name__ == "__main__":
     # arg.bool_capacity = False # True
     datapath = "data/data_0401_0inv.xlsx"
 
-    # for comparing speed
-    # arg.cus_num = 50
+    # full model
     # cfg = dict(
     #     data_dir=datapath,
-    #     sku_num=50,
-    #     plant_num=30,
-    #     warehouse_num=30,
+    #     one_period=False if arg.T > 1 else True,
+    # )
+
+    # for comparing speed
+    arg.cus_num = 50
+    cfg = dict(
+        data_dir=datapath,
+        sku_num=50,
+        plant_num=30,
+        warehouse_num=30,
+        customer_num=arg.cus_num,
+        one_period=False if arg.T > 1 else True,
+    )
+
+    # for debug
+    # arg.cus_num = 5
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=10,
+    #     plant_num=5,
+    #     warehouse_num=5,
     #     customer_num=arg.cus_num,
     #     one_period=False if arg.T > 1 else True,
     # )
 
-    # for debug
-    arg.cus_num = 5
-    cfg = dict(
-        data_dir=datapath,
-        sku_num=10,
-        plant_num=5,
-        warehouse_num=5,
-        customer_num=arg.cus_num,
-        one_period=False if arg.T > 1 else True,
-    )
+    # still infeasible
+    # arg.cus_num = 5
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=15,
+    #     plant_num=6,
+    #     warehouse_num=6,
+    #     customer_num=arg.cus_num,
+    #     one_period=False if arg.T > 1 else True,
+    # )
+
+    # arg.cus_num = 2
+    # cfg = dict(
+    #     data_dir=datapath,
+    #     sku_num=5,
+    #     plant_num=3,
+    #     warehouse_num=3,
+    #     customer_num=arg.cus_num,
+    #     one_period=False if arg.T > 1 else True,
+    # )
 
     (
         sku_list,
@@ -80,7 +107,9 @@ if __name__ == "__main__":
 
     # #-----------------CG Model-----------------#
     print("----------DCG Model------------")
-    max_iter = 2
+    # max_iter = 1000
+    max_iter = 10
+
     init_primal = None
     init_dual = None
     init_ray = False

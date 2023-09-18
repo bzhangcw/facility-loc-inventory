@@ -176,8 +176,11 @@ class NetworkColumnGeneration:
                 bool_capacity=True,
                 bool_edge_lb=self.bool_edge_lb,
                 bool_node_lb=self.bool_node_lb,
+                cus_list=[customer],
             )  # for initial column, set obj = 0
-            oracle.modeling.remote()
+            # oracle.modeling.remote()
+            # ray.get(oracle.modeling.remote())
+
         else:
             oracle = dnp_model.DNP(
                 arg,
@@ -190,6 +193,7 @@ class NetworkColumnGeneration:
                 bool_edge_lb=self.bool_edge_lb,
                 bool_node_lb=self.bool_node_lb,
                 env=self.RMP_env,
+                cus_list=[customer],
             )  # for initial column, set obj = 0
             oracle.modeling()
 
@@ -237,9 +241,13 @@ class NetworkColumnGeneration:
         oracle = self.oracles[customer]
 
         if self.init_ray:
-            oracle.model_reset.remote()
-            oracle.update_objective.remote(customer, dual_vars, dual_index)
-            oracle.solve.remote()
+            # oracle.model_reset.remote()
+            # oracle.update_objective.remote(customer, dual_vars, dual_index)
+            # oracle.solve.remote()
+
+            ray.get(oracle.model_reset.remote())
+            ray.get(oracle.update_objective.remote(customer, dual_vars, dual_index))
+            ray.get(oracle.solve.remote())
             v = ray.get(oracle.get_model_objval.remote())
         else:
             oracle.model.reset()
@@ -294,31 +302,37 @@ class NetworkColumnGeneration:
             for customer in tqdm(self.customer_list):
                 self.oracles[customer] = self.construct_oracle(customer)
                 self.columns[customer] = []
-                # if customer.idx == "C00120502":
-                if True:
-                    if self.init_ray:
-                        self.oracles[customer].writeLP.remote(customer.idx)
-                    else:
-                        self.oracles[customer].model.write(
-                            f"oracle_lp/{customer.idx}.lp"
-                        )
+            if self.init_ray:
+                ray.get([oracle.modeling.remote() for oracle in self.oracles.values()])
 
-                    nodes_file_path = f"oracle_lp/{customer.idx}_nodes.txt"
-                    edges_file_path = f"oracle_lp/{customer.idx}_edges.txt"
-                    with open(nodes_file_path, "a") as f:
-                        for node in self.subgraph[customer].nodes:
-                            f.write(f"{node.idx}\n")
-                    with open(edges_file_path, "a") as f:
-                        for edge in self.subgraph[customer].edges:
-                            f.write(f"{edge}\n")
+            # for debug
+            # if True:
+            #     if self.init_ray:
+            #         ray.get(self.oracles[customer].writeLP.remote(customer.idx))
+            #     else:
+            #         self.oracles[customer].model.write(
+            #             f"oracle_lp/{customer.idx}.lp"
+            #         )
 
-            # cg_col_helper.init_col_helpers(self)
+            #     nodes_file_path = f"oracle_lp/{customer.idx}_nodes.txt"
+            #     edges_file_path = f"oracle_lp/{customer.idx}_edges.txt"
+            #     with open(nodes_file_path, "a") as f:
+            #         for node in self.subgraph[customer].nodes:
+            #             f.write(f"{node.idx}\n")
+            #     with open(edges_file_path, "a") as f:
+            #         for edge in self.subgraph[customer].edges:
+            #             f.write(f"{edge}\n")
+            # for debug
 
         # use the sweeping method to initialize
         cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_RMP()
         self.RMP_model.setParam(COPT.Param.Logging, 1)
+        # for debug
+        # self.RMP_model.write("oracle_lp/init_rmp.lp")
+        # for debug
+
         self._logger.info("initialization of restricted master finished")
         self._logger.info("solving the first rmp")
         while True:  # may need to add a termination condition
@@ -341,16 +355,77 @@ class NetworkColumnGeneration:
                 ######################################
                 added = False
                 with utils.TimerContext(self.iter, f"solve_columns"):
+                    # for col_ind, customer in enumerate(self.customer_list):
+                    #     added = (
+                    #         self.subproblem(customer, col_ind, dual_vars, dual_index)
+                    #         or added
+                    #     )
+                    #     model_status = (
+                    #         ray.get(self.oracles[customer].get_model_status.remote())
+                    #         if self.init_ray
+                    #         else self.oracles[customer].model.status
+                    #     )
+                    #     if (
+                    #         # self.oracles[customer].model.status
+                    #         # ray.get(self.oracles[customer].get_model_status.remote())
+                    #         model_status
+                    #         == coptpy.COPT.INTERRUPTED
+                    #     ):
+                    #         bool_early_stop = True
+                    #         self._logger.info("early terminated")
+                    #         break
+
+                    # modify for parallel
                     for col_ind, customer in enumerate(self.customer_list):
-                        added = (
-                            self.subproblem(customer, col_ind, dual_vars, dual_index)
-                            or added
+                        oracle = self.oracles[customer]
+
+                        if self.init_ray:
+                            oracle.model_reset.remote()
+                            oracle.update_objective.remote(
+                                customer, dual_vars, dual_index
+                            )
+                            oracle.solve.remote()
+                        else:
+                            oracle.model.reset()
+                            oracle.update_objective(customer, dual_vars, dual_index)
+                            oracle.solve()
+
+                    if self.init_ray:
+                        new_cols = ray.get(
+                            [
+                                oracle.query_columns.remote()
+                                for oracle in self.oracles.values()
+                            ]
                         )
-                        model_status = (
-                            ray.get(self.oracles[customer].get_model_status.remote())
-                            if self.init_ray
-                            else self.oracles[customer].model.status
+                        v = ray.get(
+                            [
+                                oracle.get_model_objval.remote()
+                                for oracle in self.oracles.values()
+                            ]
                         )
+                        model_status_list = ray.get(
+                            [
+                                oracle.get_model_status.remote()
+                                for oracle in self.oracles.values()
+                            ]
+                        )
+
+                    else:
+                        new_cols = [
+                            oracle.query_columns() for oracle in self.oracles.values()
+                        ]
+                        v = [oracle.model.objval for oracle in self.oracles.values()]
+                        model_status_list = [
+                            oracle.model.status for oracle in self.oracles.values()
+                        ]
+
+                    for col_ind, customer in enumerate(self.customer_list):
+                        self.red_cost[self.iter, col_ind] = v[col_ind]
+                        added = (v[col_ind] < -1e-9 or dual_vars is None) or added
+                        new_col = new_cols[col_ind]
+                        self.columns[customer].append(new_col)
+
+                        model_status = model_status_list[col_ind]
                         if (
                             # self.oracles[customer].model.status
                             # ray.get(self.oracles[customer].get_model_status.remote())
@@ -360,6 +435,7 @@ class NetworkColumnGeneration:
                             bool_early_stop = True
                             self._logger.info("early terminated")
                             break
+                    # modify for parallel
 
                 self.iter += 1
 
@@ -406,8 +482,14 @@ class NetworkColumnGeneration:
                 for e in self.network.edges:
                     edge = self.network.edges[e]["object"]
                     if edge.capacity < np.inf:
+                        # for debug
+                        # if edge.idx == "T0003_C00120540" and t == 0:
+                        #     print(self.columns[customer][-1]["sku_flow_sum"][t].keys())
+                        # for debug
+
                         edge_capacity_cons_coef.append(
                             (
+                                # self.columns[customer][-1]["sku_flow_sum"][t][edge.idx]
                                 self.columns[customer][-1]["sku_flow_sum"][t][edge]
                                 # if e in self.subgraph[customer].edges
                                 if e in self.subgraph[customer].edges
@@ -422,6 +504,7 @@ class NetworkColumnGeneration:
                             node_capacity_cons_coef.append(
                                 (
                                     self.columns[customer][-1]["sku_production_sum"][t][
+                                        # node.idx
                                         node
                                     ]
                                     # if node in self.subgraph[customer].nodes
@@ -435,6 +518,7 @@ class NetworkColumnGeneration:
                             node_capacity_cons_coef.append(
                                 (
                                     self.columns[customer][-1]["sku_inventory_sum"][t][
+                                        # node.idx
                                         node
                                     ]
                                     # if node in self.subgraph[customer].nodes
@@ -533,7 +617,8 @@ class NetworkColumnGeneration:
                         ] * (
                             # self.columns[customer][number]["sku_flow_sum"][t][edge]
                             # mismatch bug of edge as keys, use idx instead
-                            self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
+                            # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
+                            self.columns[customer][number]["sku_flow_sum"][t][edge]
                             if e in self.subgraph[customer].edges
                             else 0.0
                         )
@@ -570,7 +655,8 @@ class NetworkColumnGeneration:
                                 self.columns[customer][number]["sku_production_sum"][t][
                                     # node
                                     # mismatch bug of node as keys, use idx instead
-                                    node.idx
+                                    # node.idx
+                                    node
                                 ]
                                 if node in self.subgraph[customer].nodes
                                 else 0.0
@@ -605,7 +691,8 @@ class NetworkColumnGeneration:
                                 self.columns[customer][number]["sku_inventory_sum"][t][
                                     # node
                                     # mismatch bug of node as keys, use idx instead
-                                    node.idx
+                                    # node.idx
+                                    node
                                 ]
                                 if node in self.subgraph[customer].nodes
                                 else 0.0

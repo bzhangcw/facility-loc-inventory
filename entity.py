@@ -20,8 +20,11 @@ class SKU:
     def __repr__(self) -> str:
         return f"SKU_{self.idx}"
 
-    # def __hash__(self) -> int:
-    # return hash(self.__repr__())
+    def __hash__(self) -> int:
+        return hash(self.__repr__())
+
+    def __eq__(self, o: object) -> bool:
+        return self.__repr__() == o.__repr__()
 
 
 class Node:
@@ -52,7 +55,16 @@ class Node:
         return
 
     def __str__(self) -> str:
-        return f"Node_{self.idx}"
+        return f"{self.idx}"
+
+    def __repr__(self) -> str:
+        return f"{self.idx}"
+
+    def __hash__(self) -> int:
+        return hash(self.__repr__())
+
+    def __eq__(self, o: object) -> bool:
+        return self.__repr__() == o.__repr__()
 
 
 class Plant(Node):
@@ -109,11 +121,11 @@ class Plant(Node):
         """
         pass
 
-    def __str__(self) -> str:
-        return f"{self.idx}"
+    # def __str__(self) -> str:
+    #     return f"{self.idx}"
 
-    def __repr__(self) -> str:
-        return f"{self.idx}"
+    # def __repr__(self) -> str:
+    #     return f"{self.idx}"
 
 
 class Warehouse(Node):
@@ -198,11 +210,11 @@ class Warehouse(Node):
         """
         pass
 
-    def __str__(self) -> str:
-        return f"{self.idx}"
+    # def __str__(self) -> str:
+    #     return f"{self.idx}"
 
-    def __repr__(self) -> str:
-        return f"{self.idx}"
+    # def __repr__(self) -> str:
+    #     return f"{self.idx}"
 
 
 class Customer(Node):
@@ -268,11 +280,11 @@ class Customer(Node):
         """
         pass
 
-    def __str__(self) -> str:
-        return f"{self.idx}"
+    # def __str__(self) -> str:
+    #     return f"{self.idx}"
 
-    def __repr__(self) -> str:
-        return f"{self.idx}"
+    # def __repr__(self) -> str:
+    #     return f"{self.idx}"
 
 
 class Edge:
@@ -397,6 +409,12 @@ class Edge:
 
     def __repr__(self) -> str:
         return f"Edge_{self.idx}_({self.start}, {self.end})"
+
+    def __hash__(self) -> int:
+        return hash(self.__repr__())
+
+    def __eq__(self, o: object) -> bool:
+        return self.__repr__() == o.__repr__()
 
 
 if __name__ == "__main__":

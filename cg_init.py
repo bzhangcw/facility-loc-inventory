@@ -10,6 +10,7 @@ import dnp_model
 from entity import Customer, Plant
 from utils import get_in_edges, get_out_edges
 import ray
+import time
 
 
 def init_cols_from_dual_feas_sol(self, dual_vars):
@@ -61,6 +62,14 @@ def update_edge_capacity(self, customer, used, columns):
         for k, v in columns["sku_flow_sum"][t].items():
             used[t][k] = used.get(t).get(k, 0) + v
 
+    # for debug
+    # print(customer.idx, " ec after:")
+    # for t in range(self.arg.T):
+    #     print("t: ", t, " at ", time.time())
+    #     for k, v in used[t].items():
+    #         print(k, ":", v)
+    # for debug
+
 
 def update_warehouse_capacity(self, customer, used, columns):
     # for t in range(self.oracles[customer].T):
@@ -103,7 +112,24 @@ def primal_sweeping_method(self, sort_method=sorted):
     sequence = sort_method(range(self.customer_list.__len__()))
 
     for col_ind in sequence:
-        print("sweeping column: ", col_ind)
+        # # for debug
+        # print("sweeping column: ", col_ind, ",", self.customer_list[col_ind].idx)
+        # print("ec:")
+        # for t in range(self.arg.T):
+        #     print(t)
+        #     for k, v in ec[t].items():
+        #         print(k, ":", v)
+        # print("pc:")
+        # for t in range(self.arg.T):
+        #     print(t)
+        #     for k, v in pc[t].items():
+        #         print(k, ":", v)
+        # print("wc:")
+        # for t in range(self.arg.T):
+        #     print(t)
+        #     for k, v in wc[t].items():
+        #         print(k, ":", v)
+        # # for debug
 
         _this_customer: Customer = self.customer_list[col_ind]
 
@@ -111,25 +137,29 @@ def primal_sweeping_method(self, sort_method=sorted):
         oracle: dnp_model.DNP = self.oracles[_this_customer]
 
         if self.init_ray:
-            oracle.del_constr_capacity.remote()
+            ray.get(oracle.del_constr_capacity.remote())
+            ray.get(oracle.update_constr_capacity.remote(ec, pc, wc))
         else:
             oracle.del_constr_capacity()
 
-        (
-            oracle.used_edge_capacity,
-            oracle.used_plant_capacity,
-            oracle.used_warehouse_capacity,
-        ) = (
-            ec,
-            pc,
-            wc,
-        )  # why this works, because of the typedef in line 96?
+            (
+                oracle.used_edge_capacity,
+                oracle.used_plant_capacity,
+                oracle.used_warehouse_capacity,
+            ) = (
+                ec,
+                pc,
+                wc,
+            )
+            # why this works, because of the typedef in line 96?
         # for t in range(oracle.T):
         for t in range(self.arg.T):
             if self.init_ray:
-                oracle.add_constr_holding_capacity.remote(t)
-                oracle.add_constr_production_capacity.remote(t)
-                oracle.add_constr_transportation_capacity.remote(t)
+                ray.get(oracle.add_constr_holding_capacity.remote(t))
+                ray.get(oracle.add_constr_production_capacity.remote(t))
+                ray.get(oracle.add_constr_transportation_capacity.remote(t))
+                # ray.get(oracle.add_constr_transportation_capacity.remote(t, True))
+
             else:
                 oracle.add_constr_holding_capacity(t)
                 oracle.add_constr_production_capacity(t)
@@ -138,9 +168,12 @@ def primal_sweeping_method(self, sort_method=sorted):
         self.subproblem(_this_customer, col_ind)
 
         if self.init_ray:
-            columns = ray.get(self.oracles[_this_customer].query_columns.remote())
+            # columns = ray.get(self.oracles[_this_customer].query_columns.remote())
+            columns = ray.get(oracle.query_columns.remote())
+
         else:
-            columns = self.oracles[_this_customer].query_columns()
+            # columns = self.oracles[_this_customer].query_columns()
+            columns = oracle.query_columns()
 
         update_edge_capacity(self, _this_customer, ec, columns)
         update_plant_capacity(self, _this_customer, pc, columns)
@@ -149,23 +182,24 @@ def primal_sweeping_method(self, sort_method=sorted):
         # then reset column constraints
 
         if self.init_ray:
-            oracle.del_constr_capacity.remote()
+            ray.get(oracle.del_constr_capacity.remote())
+            ray.get(oracle.update_constr_capacity.remote(reset, reset, reset))
         else:
             oracle.del_constr_capacity()
 
-        (
-            oracle.used_edge_capacity,
-            oracle.used_plant_capacity,
-            oracle.used_warehouse_capacity,
-        ) = (reset, reset, reset)
+            (
+                oracle.used_edge_capacity,
+                oracle.used_plant_capacity,
+                oracle.used_warehouse_capacity,
+            ) = (reset, reset, reset)
 
         # for t in range(oracle.T):
 
         for t in range(self.arg.T):
             if self.init_ray:
-                oracle.add_constr_holding_capacity.remote(t)
-                oracle.add_constr_production_capacity.remote(t)
-                oracle.add_constr_transportation_capacity.remote(t)
+                ray.get(oracle.add_constr_holding_capacity.remote(t))
+                ray.get(oracle.add_constr_production_capacity.remote(t))
+                ray.get(oracle.add_constr_transportation_capacity.remote(t))
             else:
                 oracle.add_constr_holding_capacity(t)
                 oracle.add_constr_production_capacity(t)
