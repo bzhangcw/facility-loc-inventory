@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # )
 
     # for comparing speed
-    arg.cus_num = 50
+    arg.cus_num = 100
     cfg = dict(
         data_dir=datapath,
         sku_num=50,
@@ -108,12 +108,12 @@ if __name__ == "__main__":
     # #-----------------CG Model-----------------#
     print("----------DCG Model------------")
     # max_iter = 1000
-    max_iter = 10
+    max_iter = 1
 
     init_primal = None
     init_dual = None
-    init_ray = False
-    # init_ray = True
+    # init_ray = False
+    init_ray = True
 
     np_cg = NetworkColumnGeneration(
         arg,

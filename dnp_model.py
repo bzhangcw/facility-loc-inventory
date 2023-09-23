@@ -22,7 +22,7 @@ CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 
-# @ray.remote
+@ray.remote
 class DNP:
     """
     this is a class for dynamic network flow (DNP)

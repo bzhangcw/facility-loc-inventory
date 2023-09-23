@@ -376,7 +376,7 @@ class NetworkColumnGeneration:
                     #         break
 
                     # modify for parallel
-                    for col_ind, customer in enumerate(self.customer_list):
+                    for col_ind, customer in tqdm(enumerate(self.customer_list), ncols=80, leave=False):
                         oracle = self.oracles[customer]
 
                         if self.init_ray:
@@ -439,13 +439,8 @@ class NetworkColumnGeneration:
 
                 self.iter += 1
 
-                print(
-                    "k: ",
-                    "{:5d}".format(self.iter),
-                    "/",
-                    "{:d}".format(self.max_iter),
-                    " f: {:.6e}".format(self.RMP_model.objval),
-                    " c': %.4e" % np.min(self.red_cost[self.iter - 1, :]),
+                self._logger.info(
+                    f"k: {self.iter:5d} / {self.max_iter:d} f: {self.RMP_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
                 )
 
                 if not added or self.iter >= self.max_iter:
