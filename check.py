@@ -14,7 +14,7 @@ if __name__ == "__main__":
     # -----------------DNP Model-----------------#
     param = Param()
     arg = param.arg
-    arg.T = 4
+    arg.T = 1
     arg.backorder = False
     # arg.bool_capacity = False # True
     datapath = "data/data_0401_0inv.xlsx"
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         sku_num=50,
         plant_num=30,
         warehouse_num=30,
-        customer_num=arg.cus_num,
+        customer_num=5,
         one_period=False if arg.T > 1 else True,
     )
 
@@ -92,18 +92,19 @@ if __name__ == "__main__":
         # for n in node_list:
         #     if n.type == const.PLANT:
         #         n.production_lb = lb_df["lb"].get(n.idx, np.inf)
+
     network = construct_network(node_list, edge_list, sku_list)
-    # model = DNP(arg, network)
-    # model.modeling()
-    # model.model.setParam("Logging", 1)
-    # model.solve()
-    # model.get_solution("New_sol/")
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.solve()
+    model.get_solution("new_sol/")
 
     # model = DNP.remote(arg, network)
     # model.modeling.remote()
     # model.model.setParam.remote("Logging", 1)
     # model.solve.remote()
-    # model.get_solution.remote("New_sol/")
+    # model.get_solution.remote("new_sol/")
 
     # #-----------------CG Model-----------------#
     print("----------DCG Model------------")
@@ -112,8 +113,8 @@ if __name__ == "__main__":
 
     init_primal = None
     init_dual = None
-    # init_ray = False
-    init_ray = True
+    init_ray = False
+    # init_ray = True
 
     np_cg = NetworkColumnGeneration(
         arg,
@@ -128,4 +129,4 @@ if __name__ == "__main__":
         init_ray=init_ray,
     )
     np_cg.run()
-    np_cg.get_solution("New_sol/")
+    np_cg.get_solution("new_sol/")

@@ -22,7 +22,7 @@ CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 
-@ray.remote
+# @ray.remote
 class DNP:
     """
     this is a class for dynamic network flow (DNP)
@@ -714,8 +714,7 @@ class DNP:
                 self.constrs["transportation_capacity"][
                     (t, edge)
                 ] = self.model.addConstr(
-                    flow_sum <= left_capacity * bound,
-                    name=f"edge_capacity{t, edge}",
+                    flow_sum <= left_capacity * bound, name=f"edge_capacity{t, edge}",
                 )
                 self.dual_index_for_RMP["transportation_capacity"][
                     edge
@@ -755,8 +754,7 @@ class DNP:
                     print("t", t, "node", node, "left_capacity", left_capacity)
 
                 self.constrs["production_capacity"][(t, node)] = self.model.addConstr(
-                    node_sum <= bound * left_capacity,
-                    name=f"node_capacity{t, node}",
+                    node_sum <= bound * left_capacity, name=f"node_capacity{t, node}",
                 )
 
                 # self.dual_index_for_RMP["node_capacity"][node] = index
@@ -785,9 +783,10 @@ class DNP:
 
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
-                    left_capacity = (
-                        node.inventory_capacity
-                        - self.used_warehouse_capacity.get(t).get(node, 0)
+                    left_capacity = node.inventory_capacity - self.used_warehouse_capacity.get(
+                        t
+                    ).get(
+                        node, 0
                     )
                     # if self.used_warehouse_capacity.get(t) != {}:
                     #     left_capacity = node.inventory_capacity - self.used_warehouse_capacity.get(t).get(node,0)

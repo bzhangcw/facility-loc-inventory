@@ -57,7 +57,11 @@ def dump_cfg_tofname(cfg):
     logger.info("generating the signature of this problem")
     logger.info(infostr)
     keys = sorted(cfg.keys())
-    return "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+    return (
+        cfg["data_dir"].split("/")[-1].split(".")[0]
+        + "-"
+        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+    )
 
 
 def get_data_from_cfg(cfg):
@@ -128,15 +132,15 @@ class TimerContext:
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
-        global_timers.append(
-            [self.k, self.name, self.interval]
-        )
+        global_timers.append([self.k, self.name, self.interval])
 
 
 def visualize_timers():
-    df = pd.DataFrame(data=global_timers, columns=['k', 'name', 'time'])
+    df = pd.DataFrame(data=global_timers, columns=["k", "name", "time"])
     df.set_index(["name", "k"]).to_excel(f"{CONF.DEFAULT_SOL_PATH}/timing.xlsx")
-    logger.info(f"""
+    logger.info(
+        f"""
 === describing time statistics ===
 {df.groupby("name")['time'].describe().reset_index()}
-    """)
+    """
+    )

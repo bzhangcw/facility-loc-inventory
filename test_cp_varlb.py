@@ -59,10 +59,15 @@ if __name__ == "__main__":
         for e in edge_list:
             e.capacity = cap["qty"].get(e.idx, np.inf)
     if arg.lowerbound == 1:
-        cap = pd.read_csv("./data/lb_cons.csv").set_index("id")
+        cap = pd.read_csv("./data/lb_end.csv").set_index("id")
         for e in edge_list:
             e.variable_lb = cap["lb"].get(e.idx, np.inf)
-        pass
+    if arg.lowerbound == 1:
+        cap = pd.read_csv("./data/lb_inter.csv").set_index("id")
+        for e in edge_list:
+            if e.idx in cap["lb"]:
+                e.variable_lb = cap["lb"][e.idx]
+                print(f"setting {e.idx} to {e.variable_lb}")
 
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
@@ -86,7 +91,7 @@ if __name__ == "__main__":
     )
 
     np_cg.run()
-    np_cg.get_solution("new_sol/")
+    np_cg.get_solution(f"new_sol_{pick_instance}/")
 
     ###############################################################
     model = DNP(arg, network)
@@ -108,6 +113,7 @@ if __name__ == "__main__":
     model.solve()
 
     lpval = model.get_model_objval()
+    model.get_solution(f"new_sol_{pick_instance}/")
     #############################################################
     # starting from the LP relaxation to find a feasible MIP solution
     for idx in binary_vars_index:
@@ -116,9 +122,12 @@ if __name__ == "__main__":
     mipval = model.get_model_objval()
     print(
         f"""
-    --- summary ---------------------------
-    lp relaxation: {lpval},
-    mip          : {mipval},
-    cg           : {np_cg.RMP_model.objval}
-    """
+--- summary ---------------------------
+lp relaxation: {lpval},
+mip          : {mipval},
+cg           : {np_cg.RMP_model.objval}
+"""
     )
+
+    # try the cuts
+    model
