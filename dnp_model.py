@@ -511,46 +511,6 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 out_edges = get_out_edges(self.network, node)
 
-                # # for debugging
-                # if (
-                #     node.idx == "T0001"
-                #     and k.idx == "Y000009"
-                #     and self.cus_list[0].idx == "C00120540"
-                # ):
-                #     print("t", t)
-                #     print("in_edges", in_edges)
-                #     print("out_edges", out_edges)
-                #     # print(self.variables["sku_flow"].sum(t, out_edges, k))
-                #     # print(
-                #     #     self.variables["sku_flow"].keys(),
-                #     #     len(self.variables["sku_flow"].keys()),
-                #     #     # id(self.variables["sku_flow"]),
-                #     # )
-
-                #     for edge in out_edges:
-                #         isin = (
-                #             " in"
-                #             if (t, edge, k) in self.variables["sku_flow"].keys()
-                #             else " not in"
-                #         )
-                #         print((t, edge, k), isin)
-
-                #     temp_lst1 = [(id(edge), edge) for edge in out_edges]
-                #     temp_lst2 = [
-                #         (id(edge), edge)
-                #         for (t, edge, k) in self.variables["sku_flow"].keys()
-                #     ]
-
-                #     # print("-" * 40, "out edges", "-" * 40)
-                #     # for e in temp_lst1:
-                #     #     print(e)
-
-                #     # print("-" * 40, "keys", "-" * 40)
-                #     # for e in temp_lst2:
-                #     #     print(e)
-
-                # # for debugging
-
                 constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
 
                 if node.type == const.PLANT:
@@ -611,7 +571,6 @@ class DNP:
                     )
 
                 self.constrs["flow_conservation"][(t, node, k)] = constr
-
         return
 
     def add_constr_open_relationship(self, t: int):
@@ -1191,7 +1150,20 @@ class DNP:
         # edge output
         edge_sku_t_flow = pd.DataFrame(
             index=range(len(self.variables["sku_flow"])),
-            columns=["id", "start", "end", "sku", "t", "qty"],
+            columns=[
+                "id",
+                "start",
+                "end",
+                "sku",
+                "t",
+                "y",
+                "qty",
+                "vlb",
+                "cap",
+                "obj_start",
+                "obj_end",
+                "obj_edge",
+            ],
         )
 
         node_open_index = 0
@@ -1280,6 +1252,12 @@ class DNP:
                             "sku": k.idx,
                             "t": t,
                             "qty": self.variables["sku_flow"][(t, edge, k)].x,
+                            "y": self.variables["select_edge"][(t, edge)].x,
+                            "vlb": edge.variable_lb,
+                            "cap": edge.capacity,
+                            "obj_start": edge.start,
+                            "obj_end": edge.end,
+                            "obj_edge": edge,
                         }
                         edge_index += 1
 
@@ -1293,6 +1271,9 @@ class DNP:
         warehouse_sku_t_storage.dropna(inplace=True)
         node_sku_t_demand_slack.dropna(inplace=True)
         edge_sku_t_flow.dropna(inplace=True)
+        edge_sku_t_flow = edge_sku_t_flow.assign(
+            bool_lb_vio=lambda df: df['qty'] < df['vlb']
+        )
 
         if (
             len(
@@ -1392,7 +1373,6 @@ class DNP:
             "overall_fullfill_rate": total_fullfill_rate,
             "warehouse_overall_avg_inventory": warehouse_total_avg_inventory,
         }
-        print(overall_kpi)
         overall_kpi = pd.DataFrame(overall_kpi, index=[0])
         with pd.ExcelWriter(os.path.join(data_dir, "kpi.xlsx")) as writer:
             customer_fullfill_sku_rate.to_excel(
@@ -1425,6 +1405,7 @@ class DNP:
             os.path.join(data_dir, "edge_sku_t_flow.csv"), index=False
         )
         logger.info("saving finished")
+        return edge_sku_t_flow
 
 
 if __name__ == "__main__":

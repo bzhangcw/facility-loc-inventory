@@ -12,25 +12,15 @@ if __name__ == "__main__":
     arg = param.arg
 
     datapath = "data/data_0401_V3.xlsx"
-    pick_instance = 1
+    pick_instance = 3
     if pick_instance == 1:
         cfg = dict(
-            data_dir=datapath,
-            sku_num=2,
-            plant_num=2,
-            warehouse_num=13,
-            customer_num=5,
-            one_period=True,
+            data_dir=datapath, sku_num=2, plant_num=2, warehouse_num=13, customer_num=5,
         )
     elif pick_instance == 2:
         # smallest instance causing bug
         cfg = dict(
-            data_dir=datapath,
-            sku_num=1,
-            plant_num=1,
-            warehouse_num=25,
-            customer_num=3,
-            one_period=True,
+            data_dir=datapath, sku_num=1, plant_num=1, warehouse_num=25, customer_num=3,
         )
     elif pick_instance == 3:
         cfg = dict(
@@ -39,7 +29,6 @@ if __name__ == "__main__":
             plant_num=23,
             warehouse_num=28,
             customer_num=100,
-            one_period=True,
         )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
@@ -59,10 +48,15 @@ if __name__ == "__main__":
         for e in edge_list:
             e.capacity = cap["qty"].get(e.idx, np.inf)
     if arg.lowerbound == 1:
-        cap = pd.read_csv("./data/lb_cons.csv").set_index("id")
+        cap = pd.read_csv("./data/lb_end.csv").set_index("id")
         for e in edge_list:
             e.variable_lb = cap["lb"].get(e.idx, np.inf)
-
+    if arg.lowerbound == 1:
+        cap = pd.read_csv("./data/lb_inter.csv").set_index("id")
+        for e in edge_list:
+            if e.idx in cap["lb"]:
+                e.variable_lb = cap["lb"][e.idx]
+                print(f"setting {e.idx} to {e.variable_lb}")
     network = construct_network(node_list, edge_list, sku_list)
 
     model = DNP(arg, network)
@@ -84,10 +78,12 @@ if __name__ == "__main__":
     model.solve()
 
     lpval = model.get_model_objval()
+    lpsol = model.get_solution
     #############################################################
     # starting from the LP relaxation to find a feasible MIP solution
     for idx in binary_vars_index:
         variables[idx].setType(COPT.BINARY)
+    model.model.write("mm.lp")
     model.model.solve()
     mipval = model.get_model_objval()
     #############################################################
