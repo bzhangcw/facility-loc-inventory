@@ -16,7 +16,10 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
     beta = md.addVars(idx1, vtype=grb.GRB.BINARY)
     gamm = md.addVars(idx2, vtype=grb.GRB.BINARY)
     delt = md.addVars(idx2, vtype=grb.GRB.BINARY)
-    lbd = md.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY)
+    # 是否要求lambda大于0
+    # lbd = md.addVar(vtype=grb.GRB.CONTINUOUS, lb=-grb.GRB.INFINITY)
+    # 修改点2
+    lbd = md.addVar(vtype=grb.GRB.CONTINUOUS, lb=-1e-3)
     md.addConstrs((alph[j] + beta[j] <=1) for j in idx1)
     md.addConstrs((gamm[j] + delt[j] <=1) for j in idx2)
     md.addConstr(
@@ -80,10 +83,11 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
     md.optimize()
     if dump:
         md.write("md.mps")
-    C1dR = {e for idx, e in enumerate(N1) if alph[idx].x == 1}
-    C1iR = {e for idx, e in enumerate(N1) if beta[idx].x == 1}
-    C2dR = {e for idx, e in enumerate(N2) if gamm[idx].x == 1}
-    C2iR = {e for idx, e in enumerate(N2) if delt[idx].x == 1}
+    # 修改点3: 修复了一些数值问题
+    C1dR = {e for idx, e in enumerate(N1) if round(alph[idx].x) == 1}
+    C1iR = {e for idx, e in enumerate(N1) if round(beta[idx].x) == 1}
+    C2dR = {e for idx, e in enumerate(N2) if round(gamm[idx].x) == 1}
+    C2iR = {e for idx, e in enumerate(N2) if round(delt[idx].x) == 1}
     L2C = {idx for idx, e in enumerate(N2) if (gamm[idx].x + delt[idx].x) == 0}
     # L1 = emptyset
     # L1dR = {e for idx, e in enumerate(N1) if alpha[idx].x == 1}
@@ -91,12 +95,36 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
     l2values = np.array(
         [[v1[idx].x, v2[idx].x, v3[idx].x] for idx, e in enumerate(N2)]
     )
-    vals = l2values.argmin(axis=1) 
-    # L2dR = {e for idx, e in enumerate(N1) if alpha[idx].x == 1}
-    L2dR = {e for idx, e in enumerate(N2) if vals[idx] == 0 and idx in L2C}
-    L2iR = {e for idx, e in enumerate(N2) if vals[idx] == 1 and idx in L2C}
-    ow = {e for idx, e in enumerate(N2) if vals[idx] == 2 and idx in L2C}
+    vals = l2values.argmin(axis=1)
+    L2iR = set()
+    L2dR = set()
+    ow = set()
+    # L2dR = {e for idx, e in enumerate(N1) if alpha[idx].x == 1}、
+    # 修改点4 对照论文做了一些修改
+    for idx, e in enumerate(N2):
+        if idx in L2C:
+            if l2values[idx][0] ==  l2values[idx][1]:
+                L2iR.add(e)
+            elif vals[idx] == 0:
+                L2dR.add(e)
+            elif vals[idx] == 1:
+                L2iR.add(e)
+            elif vals[idx] == 2:
+                ow.add(e)
+
+    # L2dR = {e for idx, e in enumerate(N2) if vals[idx] == 0 and idx in L2C}
+    # L2iR = {e for idx, e in enumerate(N2) if vals[idx] == 1 and idx in L2C}
+    # ow = {e for idx, e in enumerate(N2) if vals[idx] == 2 and idx in L2C}
     # L2iR = subsets
+    # 测试部分
+    # temp = (
+    #         sum(j.variable_lb for j in C1iR)
+    #         + sum(j.capacity for j in C1dR)
+    #         - sum(j.capacity for j in C2iR)
+    #         - sum(j.variable_lb for j in C2dR)
+    #         - d
+    # )
+    # print("第一次",temp)
     subsets = (
         C1dR, C1iR, C2dR, C2iR,
         L2dR, L2iR, ow
@@ -115,6 +143,7 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
 
 # get corollary 3 type flow
 def eval_cut_c3(x, y, t, d, *subsets, **kwargs):
+    # 用Corollary 3的有效不等式加进去
     C1dR, C1iR, C2dR, C2iR, \
         L2dR, L2iR, ow, *_ = subsets
     lbd = lbdc = (
@@ -128,7 +157,8 @@ def eval_cut_c3(x, y, t, d, *subsets, **kwargs):
         if not (abs(lbdc - kwargs.get("lbdv")) < 1e-1):
             print(lbdc, kwargs.get("lbdv"), lbdc - kwargs.get("lbdv"))
             print("this is unmatched with separation model")
-            lbd = kwargs.get("lbdv")
+            # 修改点5 这里面的才应该是精确解
+            # lbd = kwargs.get("lbdv")
             
     if lbd > 0:
         e1 = (
@@ -137,8 +167,10 @@ def eval_cut_c3(x, y, t, d, *subsets, **kwargs):
                   for j in C1dR)
         )
         e2 = (
-            sum((max(j.variable_lb - lbd, 0) + min(j.variable_lb, lbd) * y[t, j]) 
+            sum((max(j.variable_lb - lbd, 0) + min(j.variable_lb, lbd) * y[t, j])
+
                 for j in C1iR)
+
         )
 
         # e3, e4, e5 = 0 if set R = universe
@@ -166,3 +198,6 @@ def eval_cut_c3(x, y, t, d, *subsets, **kwargs):
         # print(e3)
         return expr, cut_value, lbd, bool_voilate
     return 0, 0, 0, False
+
+
+
