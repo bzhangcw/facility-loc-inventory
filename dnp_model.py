@@ -628,7 +628,10 @@ class DNP:
                 self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
 
         return
-
+    # def fixed_partial(self,t:int):
+    #     for node in self.network.nodes:
+    #         if node.type == const.WAREHOUSE:
+    #
     def add_constr_transportation_capacity(self, t: int, verbose=False):
         # for debug
         if verbose:
@@ -640,7 +643,27 @@ class DNP:
         i = 0
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
+            if self.arg.partial_fixed:
+                if edge.start.type == const.PLANT and edge.end.idx == 'T0015':
+                # if edge.start.type == const.PLANT and edge.end.type == const.WAREHOUSE:
+                    if len(utils.get_in_edges(self.network, edge.end)) + len(utils.get_out_edges(self.network, edge.end)) <=23:
+                        # self.variables["select_edge"][t, edge] = 1
+                        self.model.addConstr(
+                            self.variables["select_edge"][t, edge] == 1
+                        )
+                        print("Fixed select_edge",t,edge)
+                # if edge.start.idx =='T0014'and edge.end.type == const.WAREHOUSE:
+                #     self.model.addConstr(
+                #         self.variables["select_edge"][t, edge] == 1
+                #     )
+                #     print("Fixed select_edge",t,edge)
 
+                # if edge.start.idx =='T0015'and edge.end.type == const.WAREHOUSE:
+                #     if  edge.end.idx != 'T0014':
+                #         self.model.addConstr(
+                #             self.variables["select_edge"][t, edge] == 1
+                #         )
+                #         print("Fixed select_edge",t,edge)
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
 
             # variable lower bound
@@ -1070,13 +1093,24 @@ class DNP:
             return fixed_node_cost
 
         for node in self.network.nodes:
-            if node.type == const.PLANT:
-                this_node_fixed_cost = node.production_fixed_cost
-            elif node.type == const.WAREHOUSE:
-                this_node_fixed_cost = node.holding_fixed_cost
-            elif node.type == const.CUSTOMER:
-                # break
-                this_node_fixed_cost = 0
+            if self.arg.node_cost:
+                if node.type == const.PLANT:
+                    # this_node_fixed_cost = node.production_fixed_cost
+                    this_node_fixed_cost = 100
+                elif node.type == const.WAREHOUSE:
+                    # this_node_fixed_cost = node.holding_fixed_cost
+                    this_node_fixed_cost = 500
+                elif node.type == const.CUSTOMER:
+                    # break
+                    this_node_fixed_cost = 0
+            else:
+                if node.type == const.PLANT:
+                    this_node_fixed_cost = node.production_fixed_cost
+                elif node.type == const.WAREHOUSE:
+                    this_node_fixed_cost = node.holding_fixed_cost
+                elif node.type == const.CUSTOMER:
+                    # break
+                    this_node_fixed_cost = 0
 
             y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
             for t in range(self.T):
@@ -1103,8 +1137,9 @@ class DNP:
             for t in range(self.T):
                 self.model.addConstr(self.variables["select_edge"][(t, edge)] <= p)
 
+            # edge_fixed_edge_cost = edge.transportation_fixed_cost * p
+            edge.transportation_fixed_cost = 10
             edge_fixed_edge_cost = edge.transportation_fixed_cost * p
-
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost
 
             self.obj["fixed_edge_cost"][edge] = edge_fixed_edge_cost
@@ -1252,7 +1287,7 @@ class DNP:
                             "sku": k.idx,
                             "t": t,
                             "qty": self.variables["sku_flow"][(t, edge, k)].x,
-                            "y": self.variables["select_edge"][(t, edge)].x,
+                            "y": self.variables["select_edge"][(t, edge)].x ,
                             "vlb": edge.variable_lb,
                             "cap": edge.capacity,
                             "obj_start": edge.start,

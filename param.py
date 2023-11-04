@@ -50,7 +50,7 @@ class Param:
         parser.add_argument(
             "--unfulfill_sku_unit_cost",
             type=float,
-            default=50,
+            default=50000,
             help="""
             default unfulfill_sku_unit_cost if not given
             """,
@@ -135,6 +135,30 @@ class Param:
             help="""
             whether add lower bound constraint or not
             """,
+        )
+        parser.add_argument(
+            "--partial_fixed",
+            type=int,
+            default=1,
+            help="""
+                   whether fixed some edges or not
+                   """,
+        )
+        parser.add_argument(
+            "--node_cost",
+            type=int,
+            default=1,
+            help="""
+                   whether add fixed cost for nodes or not
+                   """,
+        )
+        parser.add_argument(
+            "--add_inv",
+            type=int,
+            default=0,
+            help="""
+                           whether add initial inventory for T0014 and T0015
+                           """,
         )
 
         return parser

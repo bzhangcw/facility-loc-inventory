@@ -300,7 +300,7 @@ class Edge:
         capacity: float,
         variable_lb: float = np.inf,
         distance: float = None,
-        transportation_fixed_cost: float = 0.0,
+        transportation_fixed_cost: float = None,
         transportation_sku_fixed_cost: "pd.Series[SKU, float]" = None,
         transportation_sku_unit_cost: "pd.Series[SKU, float]" = None,
     ) -> None:

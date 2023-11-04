@@ -10,7 +10,8 @@ from param import Param
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-
+    arg.T = 7
+    arg.partial_fixed = True
     datapath = "/Users/xue/github/facility-loc-inventory/data/data_0401_0inv.xlsx"
     pick_instance = 1
     if pick_instance == 1:
@@ -20,16 +21,16 @@ if __name__ == "__main__":
             plant_num=2,
             warehouse_num=13,
             customer_num=5,
-            one_period=True,
+            one_period=True if arg.T == 1 else False,
         )
     elif pick_instance == 2:
         # smallest instance causing bug
         cfg = dict(
             data_dir=datapath,
-            sku_num=1,
-            plant_num=1,
-            warehouse_num=25,
-            customer_num=3,
+            sku_num=100,
+            plant_num=20,
+            warehouse_num=20,
+            customer_num=100,
             one_period=True,
         )
     elif pick_instance == 3:
@@ -60,8 +61,8 @@ if __name__ == "__main__":
     if arg.capacity == 1:
         cap = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
-            # 修改
             # e.capacity = cap["qty"].get(e.idx, np.inf)
+            # 修改点6 因为论文中uhat是inf
             e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
         lb_end = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/lb_end.csv").set_index("id")
@@ -83,24 +84,26 @@ if __name__ == "__main__":
     init_dual = None  # 'dual'
     init_sweeping = True
 
-    np_cg = NetworkColumnGeneration(
-        arg,
-        network,
-        customer_list,
-        sku_list,
-        max_iter=max_iter,
-        init_primal=init_primal,
-        init_dual=init_dual,
-        init_sweeping=init_sweeping,
-        bool_covering=True,
-        bool_edge_lb=True,
-    )
-    # CG跑的结果是 7.372590e+03
-    np_cg.run()
-    os.makedirs(f"sol_mip_{pick_instance}_DCG_NL/", exist_ok=True)
-    np_cg.get_solution(f"sol_mip_{pick_instance}_DCG_NL/")
+    # np_cg = NetworkColumnGeneration(
+    #     arg,
+    #     network,
+    #     customer_list,
+    #     sku_list,
+    #     max_iter=max_iter,
+    #     init_primal=init_primal,
+    #     init_dual=init_dual,
+    #     init_sweeping=init_sweeping,
+    #     bool_covering=True,
+    #     bool_edge_lb=True,
+    # )
+    # # CG跑的结果是 7.372590e+03
+    # np_cg.run()
+    # os.makedirs(f"sol_mip_{pick_instance}_DCG_NL/", exist_ok=True)
+    # np_cg.get_solution(f"sol_mip_{pick_instance}_DCG_NL/")
 
     ###############################################################
+
+
     model = DNP(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)
