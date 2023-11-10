@@ -57,7 +57,8 @@ class NetworkColumnGeneration:
             if full_sku_list is not None
             else self.network.graph["sku_list"]
         )
-
+        self.open_iter = {}
+        self.flow_iter = {}
         self.RMP_env = cp.Envr("RMP_env")
         self.RMP_model = self.RMP_env.createModel("RMP")
         self.customer_list = customer_list  # List[Customer]
@@ -231,6 +232,8 @@ class NetworkColumnGeneration:
         self.RMP_model.solve()
         self.RMP_model.setParam(COPT.Param.Logging, 0)
 
+
+
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         """
         Construct and solve the subproblem
@@ -238,7 +241,7 @@ class NetworkColumnGeneration:
         """
 
         added = False  # whether a new column is added
-        oracle = self.oracles[customer]
+        oracle: dnp_model.DNP = self.oracles[customer]
 
         if self.init_ray:
             # oracle.model_reset.remote()
@@ -302,6 +305,7 @@ class NetworkColumnGeneration:
             for customer in tqdm(self.customer_list):
                 self.oracles[customer] = self.construct_oracle(customer)
                 self.columns[customer] = []
+
             if self.init_ray:
                 ray.get([oracle.modeling.remote() for oracle in self.oracles.values()])
 
@@ -323,7 +327,7 @@ class NetworkColumnGeneration:
             #         for edge in self.subgraph[customer].edges:
             #             f.write(f"{edge}\n")
             # for debug
-
+            # cg_col_helper.init_col_helpers(self)
         # use the sweeping method to initialize
         cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
@@ -335,12 +339,12 @@ class NetworkColumnGeneration:
 
         self._logger.info("initialization of restricted master finished")
         self._logger.info("solving the first rmp")
+
         while True:  # may need to add a termination condition
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_RMP()
-
                 if self.RMP_model.status == COPT.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     self.RMP_model.write(f"rmp@{self.iter}.lp")
@@ -457,9 +461,60 @@ class NetworkColumnGeneration:
                 self._logger.info("early terminated")
                 break
         utils.visualize_timers()
+        self.open_iter = self.check_y_rmp()
+        self.flow_iter = self.check_w_rmp()
         self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
-        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
+        e_o = self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
+    def write(self, idx):
+        self.RMP_model.write(f"oracle_lp/{idx}.lp")
+    def check_y_rmp(self):
+        open_dict = {
+            t: {
+                # t: {} for t in range(ray.get(self.oracles[customer].getT.remote()))
+            }
+             for t in range(self.arg.T)
+        }
+        for t in range(self.arg.T):
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                if edge.capacity == np.inf:
+                    continue
+                edge_open = []
+                for customer in self.customer_list:
+                    for number in range(len(self.columns[customer])-1):
+                        edge_open.append( self.vars["column_weights"][
+                                              customer, number
+                                          ].x * (
+                                              self.columns[customer][number]["edge_opening_sum"][t][edge]
+                                              if e in self.subgraph[customer].edges
+                                              else 0.0
+                                          ))
+                open_dict[t][edge.idx] = max(edge_open)
+        return open_dict
 
+    def check_w_rmp(self):
+        flow_dict = {
+            t: {
+                # t: {} for t in range(ray.get(self.oracles[customer].getT.remote()))
+            }
+             for t in range(self.arg.T)
+        }
+        for t in range(self.arg.T):
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                if edge.capacity == np.inf:
+                    continue
+                edge_w = 0.0
+                for customer in self.customer_list:
+                    for number in range(len(self.columns[customer])-1):
+                        edge_w += self.vars["column_weights"][
+                            customer, number
+                        ].x * (
+                            self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0)
+                flow_dict[t][edge.idx] = edge_w
+        return flow_dict
     def update_RMP_by_cols(self):
         """
         Incrementally update the RMP with new columns
@@ -753,7 +808,72 @@ class NetworkColumnGeneration:
         reduced_cost = pd.DataFrame(
             self.red_cost, columns=[c.idx for c in self.customer_list]
         )
-
+        col = []
+        # for e in self.network.edges:
+        #     for t in range(self.arg.T):
+        #         name = "edge_" + e.idx + "_" + t + "_" + str(t)
+        #         col.append(name)
+        # 修改点1 先考虑一期点表
+        # edge_sku_t_flow = pd.DataFrame(
+        #     index=range(self.iter),
+        #     columns=col
+        # )
+        len = 0
+        # for n in range(self.iter):
+        for t in self.open_iter.keys():
+            for edge in self.open_iter[t].keys():
+                len += 1
+        edge_sku_t_flow = pd.DataFrame(
+            index=range(len),
+            columns=[
+                "id",
+                "start",
+                "end",
+                "t",
+                "y",
+                "qty",
+                "vlb",
+                "cap",
+            ],
+        )
+        edge_index = 0
+        # for n in range(self.iter):
+        for e in self.network.edges:
+            edge = self.network.edges[e]["object"]
+            if str(edge.end).startswith('T'):
+                for t in range(self.arg.T):
+                    edge_sku_t_flow.iloc[edge_index] = {
+                        "id": edge.idx,
+                        "start": edge.start.idx,
+                        "end": edge.end.idx,
+                        "t": t,
+                        "y": self.open_iter[t][edge.idx],
+                        "qty": self.flow_iter[t][edge.idx],
+                        "vlb": edge.cp_variable_lb,
+                        "cap": edge.capacity,
+                    }
+                    edge_index += 1
+            else:
+                for t in range(self.arg.T):
+                    edge_sku_t_flow.iloc[edge_index] = {
+                        "id": edge.idx,
+                        "start": edge.start.idx,
+                        "end": edge.end.idx,
+                        "t": t,
+                        "y": self.open_iter[t][edge.idx],
+                        "qty": self.flow_iter[t][edge.idx],
+                        "vlb": edge.variable_lb,
+                        "cap": edge.capacity,
+                    }
+                    edge_index += 1  
+        edge_sku_t_flow.dropna(inplace=True)
+        # 修改点 因为y不开的话其实是不会有流量的 也不违反约束
+        edge_sku_t_flow = edge_sku_t_flow.assign(
+            bool_lb_vio=lambda df: df['qty'] < df['vlb']*df['y']
+        )
+        edge_sku_t_flow.to_csv(
+            os.path.join(data_dir, "edge_t_open.csv"), index=False
+        )
         for customer in self.customer_list:
             # for number in range(self.num_cols):
             for number in range(self.iter):
@@ -768,7 +888,10 @@ class NetworkColumnGeneration:
                     cus_col_value.loc[number, customer.idx] = 0
                     cus_col_weights.loc[number, customer.idx] = 0
 
-        num_cus = len(self.customer_list)
+        # num_cus = len(self.customer_list)
+        num_cus = 0
+        for i in self.customer_list:
+            num_cus += 1
         cus_col_value.to_csv(
             os.path.join(data_dir, "cus" + str(num_cus) + "_col_cost.csv"), index=False
         )
@@ -788,7 +911,7 @@ class NetworkColumnGeneration:
                 for col in self.columns[customer]:
                     f.write(json.dumps(col, skipkeys=True))
                     f.write("\n")
-
+        return edge_sku_t_flow
 
 if __name__ == "__main__":
     pass

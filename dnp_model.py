@@ -16,7 +16,7 @@ from read_data import read_data
 from utils import get_in_edges, get_out_edges, logger
 import time
 
-ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
+ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum","edge_opening_sum"]
 # macro for debugging
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
@@ -166,6 +166,7 @@ class DNP:
                 col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
                     t, edge, "*"
                 )
+                col_helper["edge_opening_sum"][t][edge] = self.variables["select_edge"].sum(t, edge)
 
             for node in self.network.nodes:
                 if node.type == const.PLANT:
@@ -185,6 +186,7 @@ class DNP:
                     col_helper["sku_inventory_sum"][t][node] = self.variables[
                         "sku_inventory"
                     ].sum(t, node, "*")
+
 
         col_helper["beta"] = self.original_obj.getExpr()
 
@@ -713,7 +715,7 @@ class DNP:
             node_sum = self.variables["sku_production"].sum(t, node, "*")
 
             # lower bound constraint
-            if self.bool_edge_lb and node.production_lb < np.inf:
+            if self.bool_node_lb and node.production_lb < np.inf:
                 self.constrs["production_variable_lb"][
                     (t, node)
                 ] = self.model.addConstr(
@@ -758,7 +760,7 @@ class DNP:
                         (t, node)
                     ] = self.model.addConstr(
                         node_sum
-                        >= node.warehouse_lb * self.variables["open"][(t, node)]
+                        >= node.inventory_lb * self.variables["open"][(t, node)]
                     )
 
                     self.index_for_dual_var += 1
@@ -770,14 +772,6 @@ class DNP:
                     ).get(
                         node, 0
                     )
-                    # if self.used_warehouse_capacity.get(t) != {}:
-                    #     left_capacity = node.inventory_capacity - self.used_warehouse_capacity.get(t).get(node,0)
-                    # else:
-                    #     left_capacity = node.inventory_capacity
-                    # # left_capacity = (
-                    # #         node.inventory_capacity
-                    # #         - self.used_warehouse_capacity.get(t)[node]
-                    # # )
                     if left_capacity < 0:
                         print("t", t, "node", node, "left_capacity", left_capacity)
                     bound = (
@@ -807,6 +801,18 @@ class DNP:
                             >= -self.arg.M
                         )
                     self.index_for_dual_var += 1
+
+                if self.arg.add_in_upper == 1:
+                    in_inventory_sum = 0
+                    for e in self.network.edges:
+                        edge = self.network.edges[e]["object"]
+                        if edge.end == node:
+                            in_inventory_sum += self.variables["sku_flow"].sum(t, edge, "*")
+                    self.model.addConstr(in_inventory_sum <= node.inventory_capacity*0.4)
+                    self.index_for_dual_var += 1
+
+
+
 
         return
 
@@ -1138,7 +1144,8 @@ class DNP:
                 self.model.addConstr(self.variables["select_edge"][(t, edge)] <= p)
 
             # edge_fixed_edge_cost = edge.transportation_fixed_cost * p
-            edge.transportation_fixed_cost = 10
+            if self.arg.edge_cost:
+                edge.transportation_fixed_cost = 10
             edge_fixed_edge_cost = edge.transportation_fixed_cost * p
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost
 

@@ -10,7 +10,7 @@ import const
 import utils
 import ray
 
-ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
+ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum", "edge_opening_sum"]
 # macro for debugging
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
@@ -46,11 +46,24 @@ def init_col_helpers(cg_object):
                     continue
                 # can we do better?
                 col_helper["sku_flow_sum"][t][edge] = (
-                    # cg_object.oracles[customer].variables["sku_flow"].sum(t, edge, "*")
+                    cg_object.oracles[customer].variables["sku_flow"].sum(t, edge, "*")
                     # ray.get(cg_object.oracles[customer].getvariables.remote())[
-                    ray.get(cg_object.oracles[customer].getvariables.remote())[
-                        "sku_flow"
-                    ].sum(t, edge, "*")
+                    # ray.get(cg_object.oracles[customer].getvariables.remote())[
+                    #     "sku_flow"
+                    # ].sum(t, edge, "*")
+                )
+            # for e in cg_object.subgraph[customer].edges:
+            #     edge = cg_object.network.edges[e]["object"]
+            #     if edge.capacity == np.inf:
+            #         continue
+                # can we do better?
+
+                col_helper["edge_opening_sum"][t][edge] = (
+                    cg_object.oracles[customer].variables["select_edge"][t, edge]
+                    # ray.get(cg_object.oracles[customer].getvariables.remote())[
+                    # ray.get(cg_object.oracles[customer].getvariables.remote())[
+                    #     "sku_flow"
+                    # ].sum(t, edge, "*")
                 )
 
             for node in cg_object.subgraph[customer].nodes:
