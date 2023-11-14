@@ -8,6 +8,7 @@ import pandas as pd
 import networkx as nx
 from coptpy import COPT
 
+import asyncio
 import update_constr
 from update_constr import *
 import const
@@ -16,36 +17,152 @@ from read_data import read_data
 from utils import get_in_edges, get_out_edges, logger
 import time
 
-ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum","edge_opening_sum"]
+ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
+CG_SUBP_LOGGING = int(os.environ.get("CG_SUBP_LOGGING", 0))
+CG_SUBP_THREADS = int(os.environ.get("CG_SUBP_THREADS", 2))
+CG_SUBP_GAP = float(os.environ.get("CG_SUBP_GAP", 0.05))
+CG_SUBP_TIMELIMIT = float(os.environ.get("CG_SUBP_TIMELIMIT", 100))
 
 
-# @ray.remote
+@ray.remote
+class DNP_worker:
+    """
+    Worker class for DNP, each worker is responsible for num_cus customer
+    """
+
+    def __init__(
+            self, cus_list, arg, bool_covering, bool_capacity, bool_edge_lb, bool_node_lb
+    ):
+        self.arg = arg
+        self.cus_list = cus_list
+        self.DNP_dict = {}
+        self.bool_covering = bool_covering
+        self.bool_capacity = bool_capacity
+        self.bool_edge_lb = bool_edge_lb
+        self.bool_node_lb = bool_node_lb
+
+    def construct_DNPs(self, subgraph_dict):
+        for customer in self.cus_list:
+            subgraph = subgraph_dict[customer]
+            full_sku_list = subgraph.graph["sku_list"]
+            env_name = customer.idx + "_oracle_env"
+            model_name = customer.idx + "_oracle"
+            oracle = dnp_model.DNP(
+                self.arg,
+                subgraph,
+                full_sku_list,
+                env_name,
+                model_name,
+                bool_capacity=True,
+                bool_fixed_cost=False,
+                bool_covering=self.bool_covering,
+                bool_edge_lb=self.bool_edge_lb,
+                bool_node_lb=False,
+                logging=CG_SUBP_LOGGING,
+                threads=CG_SUBP_THREADS,
+                gap=CG_SUBP_GAP,
+                limit=CG_SUBP_TIMELIMIT,
+                cus_list=[customer],
+            )
+            oracle.modeling()
+            self.DNP_dict[customer] = oracle
+
+    # for primal sweeping
+    def del_constr_capacity(self, customer):
+        self.DNP_dict[customer].del_constr_capacity()
+
+    def update_constr_capacity(self, customer, ec, pc, wc):
+        self.DNP_dict[customer].update_constr_capacity(ec, pc, wc)
+
+    def add_constr_holding_capacity(self, customer, t):
+        self.DNP_dict[customer].add_constr_holding_capacity(t)
+
+    def add_constr_production_capacity(self, customer, t):
+        self.DNP_dict[customer].add_constr_production_capacity(t)
+
+    def add_constr_transportation_capacity(self, customer, t):
+        self.DNP_dict[customer].add_constr_transportation_capacity(t)
+
+    def query_columns(self, customer):
+        return self.DNP_dict[customer].query_columns()
+
+    def query_all_columns(self):
+        columns = []
+        for customer in self.cus_list:
+            columns.append(self.DNP_dict[customer].query_columns())
+        return columns
+
+    # for subproblem
+    def model_reset(self, customer):
+        self.DNP_dict[customer].model_reset()
+
+    def model_reset_all(self):
+        for customer in self.cus_list:
+            self.DNP_dict[customer].model_reset()
+
+    def update_objective(self, customer, dual_vars, dual_index):
+        self.DNP_dict[customer].update_objective(customer, dual_vars, dual_index)
+
+    def update_objective_all(self, dual_vars, dual_index):
+        for customer in self.cus_list:
+            self.DNP_dict[customer].update_objective(customer, dual_vars, dual_index)
+
+    def solve(self, customer):
+        self.DNP_dict[customer].solve()
+
+    def solve_all(self):
+        for customer in self.cus_list:
+            self.DNP_dict[customer].solve()
+
+    def get_model_objval(self, customer):
+        return self.DNP_dict[customer].get_model_objval()
+
+    def get_model_status(self, customer):
+        return self.DNP_dict[customer].get_model_status()
+
+    def get_all_model_objval(self):
+        objval = []
+        for customer in self.cus_list:
+            objval.append(self.DNP_dict[customer].get_model_objval())
+        return objval
+
+    def get_all_model_status(self):
+        status = []
+        for customer in self.cus_list:
+            status.append(self.DNP_dict[customer].get_model_status())
+        return status
+
+
 class DNP:
     """
     this is a class for dynamic network flow (DNP)
     """
 
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        full_sku_list: List[SKU] = None,
-        env_name: str = "DNP_env",
-        model_name: str = "DNP",
-        bool_covering: bool = True,
-        bool_capacity: bool = True,
-        bool_edge_lb: bool = True,
-        bool_node_lb: bool = True,
-        used_edge_capacity: dict = None,
-        used_warehouse_capacity: dict = None,
-        used_plant_capacity: dict = None,
-        logging: int = 0,
-        cus_num: int = 1,
-        env=None,
-        cus_list=None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            full_sku_list: List[SKU] = None,
+            env_name: str = "DNP_env",
+            model_name: str = "DNP",
+            bool_covering: bool = True,
+            bool_capacity: bool = True,
+            bool_edge_lb: bool = True,
+            bool_node_lb: bool = True,
+            bool_fixed_cost: bool = True,
+            used_edge_capacity: dict = None,
+            used_warehouse_capacity: dict = None,
+            used_plant_capacity: dict = None,
+            logging: int = 0,
+            gap: float = 1e-4,
+            threads: int = None,
+            limit: int = 3600,
+            cus_num: int = 1,
+            env=None,
+            cus_list=None,
     ) -> None:
         self.cus_list = cus_list
         self.arg = arg
@@ -62,11 +179,15 @@ class DNP:
             self.env = env
         self.model = self.env.createModel(model_name)
         self.model.setParam(COPT.Param.Logging, logging)
+        self.model.setParam(COPT.Param.RelGap, gap)
+        self.model.setParam(COPT.Param.TimeLimit, limit)
+        if threads is not None:
+            self.model.setParam(COPT.Param.Threads, threads)
 
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
-
+        self.bool_fixed_cost = bool_fixed_cost
         self.bool_covering = bool_covering
         self.bool_capacity = bool_capacity
         self.used_edge_capacity = {
@@ -166,7 +287,6 @@ class DNP:
                 col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
                     t, edge, "*"
                 )
-                col_helper["edge_opening_sum"][t][edge] = self.variables["select_edge"].sum(t, edge)
 
             for node in self.network.nodes:
                 if node.type == const.PLANT:
@@ -186,7 +306,6 @@ class DNP:
                     col_helper["sku_inventory_sum"][t][node] = self.variables[
                         "sku_inventory"
                     ].sum(t, node, "*")
-
 
         col_helper["beta"] = self.original_obj.getExpr()
 
@@ -513,6 +632,46 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 out_edges = get_out_edges(self.network, node)
 
+                # # for debugging
+                # if (
+                #     node.idx == "T0001"
+                #     and k.idx == "Y000009"
+                #     and self.cus_list[0].idx == "C00120540"
+                # ):
+                #     print("t", t)
+                #     print("in_edges", in_edges)
+                #     print("out_edges", out_edges)
+                #     # print(self.variables["sku_flow"].sum(t, out_edges, k))
+                #     # print(
+                #     #     self.variables["sku_flow"].keys(),
+                #     #     len(self.variables["sku_flow"].keys()),
+                #     #     # id(self.variables["sku_flow"]),
+                #     # )
+
+                #     for edge in out_edges:
+                #         isin = (
+                #             " in"
+                #             if (t, edge, k) in self.variables["sku_flow"].keys()
+                #             else " not in"
+                #         )
+                #         print((t, edge, k), isin)
+
+                #     temp_lst1 = [(id(edge), edge) for edge in out_edges]
+                #     temp_lst2 = [
+                #         (id(edge), edge)
+                #         for (t, edge, k) in self.variables["sku_flow"].keys()
+                #     ]
+
+                #     # print("-" * 40, "out edges", "-" * 40)
+                #     # for e in temp_lst1:
+                #     #     print(e)
+
+                #     # print("-" * 40, "keys", "-" * 40)
+                #     # for e in temp_lst2:
+                #     #     print(e)
+
+                # # for debugging
+
                 constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
 
                 if node.type == const.PLANT:
@@ -526,8 +685,8 @@ class DNP:
                     fulfilled_demand = 0
                     if node.has_demand(t, k):
                         fulfilled_demand = (
-                            node.demand[t, k]
-                            - self.variables["sku_demand_slack"][t, node, k]
+                                node.demand[t, k]
+                                - self.variables["sku_demand_slack"][t, node, k]
                         )
 
                     last_period_inventory = 0.0
@@ -562,8 +721,8 @@ class DNP:
 
                 elif node.type == const.CUSTOMER:
                     fulfilled_demand = (
-                        node.demand[t, k]
-                        - self.variables["sku_demand_slack"][t, node, k]
+                            node.demand[t, k]
+                            - self.variables["sku_demand_slack"][t, node, k]
                     )
                     constr = self.model.addConstr(
                         self.variables["sku_flow"].sum(t, in_edges, k)
@@ -573,6 +732,7 @@ class DNP:
                     )
 
                 self.constrs["flow_conservation"][(t, node, k)] = constr
+
         return
 
     def add_constr_open_relationship(self, t: int):
@@ -610,9 +770,9 @@ class DNP:
             sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
             if (
-                node.type == const.WAREHOUSE
-                and node.has_demand(t)
-                and len(node.demand_sku[t]) > 0
+                    node.type == const.WAREHOUSE
+                    and node.has_demand(t)
+                    and len(node.demand_sku[t]) > 0
             ):
                 constr = self.model.addConstr(self.variables["open"][t, node] == 1)
                 self.constrs["open_relationship"]["open"][(t, node)] = constr
@@ -630,10 +790,7 @@ class DNP:
                 self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
 
         return
-    # def fixed_partial(self,t:int):
-    #     for node in self.network.nodes:
-    #         if node.type == const.WAREHOUSE:
-    #
+
     def add_constr_transportation_capacity(self, t: int, verbose=False):
         # for debug
         if verbose:
@@ -646,14 +803,18 @@ class DNP:
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
             if self.arg.partial_fixed:
-                if edge.start.type == const.PLANT and edge.end.idx == 'T0015':
-                # if edge.start.type == const.PLANT and edge.end.type == const.WAREHOUSE:
-                    if len(utils.get_in_edges(self.network, edge.end)) + len(utils.get_out_edges(self.network, edge.end)) <=23:
+                if edge.start.type == const.PLANT and edge.end.idx == "T0015":
+                    # if edge.start.type == const.PLANT and edge.end.type == const.WAREHOUSE:
+                    if (
+                            len(utils.get_in_edges(self.network, edge.end))
+                            + len(utils.get_out_edges(self.network, edge.end))
+                            <= 23
+                    ):
                         # self.variables["select_edge"][t, edge] = 1
                         self.model.addConstr(
                             self.variables["select_edge"][t, edge] == 1
                         )
-                        print("Fixed select_edge",t,edge)
+                        print("Fixed select_edge", t, edge)
                 # if edge.start.idx =='T0014'and edge.end.type == const.WAREHOUSE:
                 #     self.model.addConstr(
                 #         self.variables["select_edge"][t, edge] == 1
@@ -698,7 +859,8 @@ class DNP:
                 self.constrs["transportation_capacity"][
                     (t, edge)
                 ] = self.model.addConstr(
-                    flow_sum <= left_capacity * bound, name=f"edge_capacity{t, edge}",
+                    flow_sum <= left_capacity * bound,
+                    name=f"edge_capacity{t, edge}",
                 )
                 self.dual_index_for_RMP["transportation_capacity"][
                     edge
@@ -738,7 +900,8 @@ class DNP:
                     print("t", t, "node", node, "left_capacity", left_capacity)
 
                 self.constrs["production_capacity"][(t, node)] = self.model.addConstr(
-                    node_sum <= bound * left_capacity, name=f"node_capacity{t, node}",
+                    node_sum <= bound * left_capacity,
+                    name=f"node_capacity{t, node}",
                 )
 
                 # self.dual_index_for_RMP["node_capacity"][node] = index
@@ -767,10 +930,9 @@ class DNP:
 
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
-                    left_capacity = node.inventory_capacity - self.used_warehouse_capacity.get(
-                        t
-                    ).get(
-                        node, 0
+                    left_capacity = (
+                            node.inventory_capacity
+                            - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
                     if left_capacity < 0:
                         print("t", t, "node", node, "left_capacity", left_capacity)
@@ -807,12 +969,13 @@ class DNP:
                     for e in self.network.edges:
                         edge = self.network.edges[e]["object"]
                         if edge.end == node:
-                            in_inventory_sum += self.variables["sku_flow"].sum(t, edge, "*")
-                    self.model.addConstr(in_inventory_sum <= node.inventory_capacity*0.4)
+                            in_inventory_sum += self.variables["sku_flow"].sum(
+                                t, edge, "*"
+                            )
+                    self.model.addConstr(
+                        in_inventory_sum <= node.inventory_capacity * 0.4
+                    )
                     self.index_for_dual_var += 1
-
-
-
 
         return
 
@@ -843,10 +1006,11 @@ class DNP:
             obj = obj + self.cal_sku_unfulfill_demand_cost(t)
             ud = ud + self.cal_sku_unfulfill_demand_cost(t)
 
-        obj = obj + self.cal_fixed_node_cost()
-        nf = nf + self.cal_fixed_node_cost()
-        obj = obj + self.cal_fixed_edge_cost()
-        ef = ef + self.cal_fixed_edge_cost()
+        if self.bool_fixed_cost:
+            nf = self.cal_fixed_node_cost()
+            ef = self.cal_fixed_edge_cost()
+            obj = obj + nf
+            obj = obj + ef
 
         return obj, hc, pc, tc, ud, nf, ef
 
@@ -856,8 +1020,8 @@ class DNP:
             return obj
         for t, edge in tuple(dual_index["transportation_capacity"].keys()):
             obj -= dualvar[
-                dual_index["transportation_capacity"][(t, edge)]
-            ] * self.variables["sku_flow"].sum(t, edge, "*")
+                       dual_index["transportation_capacity"][(t, edge)]
+                   ] * self.variables["sku_flow"].sum(t, edge, "*")
 
         for t, node in tuple(dual_index["node_capacity"].keys()):
             if node.type == const.PLANT:
@@ -930,19 +1094,19 @@ class DNP:
                     node_sku_producing_cost = 0.0
 
                     if (
-                        node.production_sku_fixed_cost is not None
-                        and self.bool_covering
+                            node.production_sku_fixed_cost is not None
+                            and self.bool_covering
                     ):
                         node_sku_producing_cost = (
-                            node_sku_producing_cost
-                            + node.production_sku_fixed_cost[k]
-                            * self.variables["sku_open"][t, node, k]
+                                node_sku_producing_cost
+                                + node.production_sku_fixed_cost[k]
+                                * self.variables["sku_open"][t, node, k]
                         )
                     if node.production_sku_unit_cost is not None:
                         node_sku_producing_cost = (
-                            node_sku_producing_cost
-                            + node.production_sku_unit_cost[k]
-                            * self.variables["sku_production"][t, node, k]
+                                node_sku_producing_cost
+                                + node.production_sku_unit_cost[k]
+                                * self.variables["sku_production"][t, node, k]
                         )
 
                     producing_cost = producing_cost + node_sku_producing_cost
@@ -974,7 +1138,7 @@ class DNP:
                         I_hat >= self.variables["sku_inventory"][t, node, k]
                     )
                     node_sku_holding_cost = (
-                        node_sku_holding_cost + holding_sku_unit_cost * I_hat
+                            node_sku_holding_cost + holding_sku_unit_cost * I_hat
                     )
 
                     holding_cost = holding_cost + node_sku_holding_cost
@@ -1004,7 +1168,7 @@ class DNP:
                         I_tilde >= -self.variables["sku_inventory"][t, node, k]
                     )
                     node_sku_backorder_cost = (
-                        node_sku_backorder_cost + backorder_sku_unit_cost * I_tilde
+                            node_sku_backorder_cost + backorder_sku_unit_cost * I_tilde
                     )
 
                     backorder_cost = backorder_cost + node_sku_backorder_cost
@@ -1031,28 +1195,28 @@ class DNP:
             if self.bool_covering:
                 for k in sku_list_with_fixed_transportation_cost:
                     if (
-                        edge.transportation_sku_fixed_cost is not None
-                        and k in edge.transportation_sku_fixed_cost
+                            edge.transportation_sku_fixed_cost is not None
+                            and k in edge.transportation_sku_fixed_cost
                     ):
                         edge_transportation_cost = (
-                            edge_transportation_cost
-                            + edge.transportation_sku_fixed_cost[k]
-                            * self.variables["sku_select_edge"][t, edge, k]
+                                edge_transportation_cost
+                                + edge.transportation_sku_fixed_cost[k]
+                                * self.variables["sku_select_edge"][t, edge, k]
                         )
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
+                        edge.transportation_sku_unit_cost is not None
+                        and k in edge.transportation_sku_unit_cost
                 ):
                     transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
                 edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"][t, edge, k]
+                        edge_transportation_cost
+                        + transportation_sku_unit_cost
+                        * self.variables["sku_flow"][t, edge, k]
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -1078,12 +1242,12 @@ class DNP:
                             unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
 
                         unfulfill_node_sku_cost = (
-                            unfulfill_sku_unit_cost
-                            * self.variables["sku_demand_slack"][(t, node, k)]
+                                unfulfill_sku_unit_cost
+                                * self.variables["sku_demand_slack"][(t, node, k)]
                         )
 
                         unfulfill_demand_cost = (
-                            unfulfill_demand_cost + unfulfill_node_sku_cost
+                                unfulfill_demand_cost + unfulfill_node_sku_cost
                         )
 
                         self.obj["unfulfill_demand_cost"][
@@ -1229,8 +1393,8 @@ class DNP:
                     if node.producible_sku is not None:
                         for k in node.producible_sku:
                             if (
-                                preserve_zeros
-                                or self.variables["sku_production"][(t, node, k)].x != 0
+                                    preserve_zeros
+                                    or self.variables["sku_production"][(t, node, k)].x != 0
                             ):
                                 plant_sku_t_production.iloc[plant_index] = {
                                     "node": node.idx,
@@ -1247,8 +1411,8 @@ class DNP:
                     sku_list = node.get_node_sku_list(t, self.full_sku_list)
                     for k in sku_list:
                         if (
-                            preserve_zeros
-                            or self.variables["sku_inventory"][(t, node, k)].x != 0
+                                preserve_zeros
+                                or self.variables["sku_inventory"][(t, node, k)].x != 0
                         ):
                             warehouse_sku_t_storage.iloc[warehouse_index] = {
                                 "node": node.idx,
@@ -1284,8 +1448,8 @@ class DNP:
                 edge_sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
                 for k in edge_sku_list:
                     if (
-                        preserve_zeros
-                        or self.variables["sku_flow"][(t, edge, k)].x != 0
+                            preserve_zeros
+                            or self.variables["sku_flow"][(t, edge, k)].x != 0
                     ):
                         edge_sku_t_flow.iloc[edge_index] = {
                             "id": edge.idx,
@@ -1294,7 +1458,7 @@ class DNP:
                             "sku": k.idx,
                             "t": t,
                             "qty": self.variables["sku_flow"][(t, edge, k)].x,
-                            "y": self.variables["select_edge"][(t, edge)].x ,
+                            "y": self.variables["select_edge"][(t, edge)].x,
                             "vlb": edge.variable_lb,
                             "cap": edge.capacity,
                             "obj_start": edge.start,
@@ -1314,21 +1478,21 @@ class DNP:
         node_sku_t_demand_slack.dropna(inplace=True)
         edge_sku_t_flow.dropna(inplace=True)
         edge_sku_t_flow = edge_sku_t_flow.assign(
-            bool_lb_vio=lambda df: df['qty'] < df['vlb']
+            bool_lb_vio=lambda df: df["qty"] < df["vlb"]
         )
 
         if (
-            len(
-                node_sku_t_demand_slack[
-                    node_sku_t_demand_slack["type"] == const.CUSTOMER
-                ]
-            )
-            != 0
+                len(
+                    node_sku_t_demand_slack[
+                        node_sku_t_demand_slack["type"] == const.CUSTOMER
+                    ]
+                )
+                != 0
         ):
             customer_fullfill_sku_rate = (
                 node_sku_t_demand_slack[
                     node_sku_t_demand_slack["type"] == const.CUSTOMER
-                ]
+                    ]
                 .groupby("sku")
                 .sum()[["demand", "slack"]]
             )
@@ -1338,28 +1502,28 @@ class DNP:
                 lambda x: 1 - x["slack"] / x["demand"], axis=1
             )
             customer_fullfill_total_rate = (
-                1
-                - customer_fullfill_sku_rate["slack"].sum()
-                / customer_fullfill_sku_rate["demand"].sum()
+                    1
+                    - customer_fullfill_sku_rate["slack"].sum()
+                    / customer_fullfill_sku_rate["demand"].sum()
             )
         else:
             customer_fullfill_sku_rate = node_sku_t_demand_slack[
                 node_sku_t_demand_slack["type"] == const.CUSTOMER
-            ][["demand", "slack"]]
+                ][["demand", "slack"]]
             customer_fullfill_total_rate = 1
 
         if (
-            len(
-                node_sku_t_demand_slack[
-                    node_sku_t_demand_slack["type"] == const.WAREHOUSE
-                ]
-            )
-            != 0
+                len(
+                    node_sku_t_demand_slack[
+                        node_sku_t_demand_slack["type"] == const.WAREHOUSE
+                    ]
+                )
+                != 0
         ):
             warehouse_fullfill_sku_rate = (
                 node_sku_t_demand_slack[
                     node_sku_t_demand_slack["type"] == const.WAREHOUSE
-                ]
+                    ]
                 .groupby("sku")
                 .sum()[["demand", "slack"]]
             )
@@ -1369,14 +1533,14 @@ class DNP:
                 lambda x: 1 - x["slack"] / x["demand"], axis=1
             )
             warehouse_fullfill_total_rate = (
-                1
-                - warehouse_fullfill_sku_rate["slack"].sum()
-                / warehouse_fullfill_sku_rate["demand"].sum()
+                    1
+                    - warehouse_fullfill_sku_rate["slack"].sum()
+                    / warehouse_fullfill_sku_rate["demand"].sum()
             )
         else:
             warehouse_fullfill_sku_rate = node_sku_t_demand_slack[
                 node_sku_t_demand_slack["type"] == const.WAREHOUSE
-            ][["demand", "slack"]]
+                ][["demand", "slack"]]
             warehouse_fullfill_total_rate = 1
 
         if len(node_sku_t_demand_slack) != 0:
@@ -1387,9 +1551,9 @@ class DNP:
                 lambda x: 1 - x["slack"] / x["demand"], axis=1
             )
             total_fullfill_rate = (
-                1
-                - total_fullfill_sku_rate["slack"].sum()
-                / total_fullfill_sku_rate["demand"].sum()
+                    1
+                    - total_fullfill_sku_rate["slack"].sum()
+                    / total_fullfill_sku_rate["demand"].sum()
             )
         else:
             total_fullfill_sku_rate = node_sku_t_demand_slack[["demand", "slack"]]
@@ -1397,8 +1561,8 @@ class DNP:
 
         try:
             warehouse_avg_inventory_t = (
-                warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"]
-                / self.T
+                    warehouse_sku_t_storage.groupby("node").sum(numeric_only=True)["qty"]
+                    / self.T
             )
             warehouse_total_avg_inventory = warehouse_avg_inventory_t.sum() / len(
                 warehouse_avg_inventory_t

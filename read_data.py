@@ -128,7 +128,7 @@ def read_data(
         this_plant = Plant(
             idx=plant_id,
             location=loc,
-            production_capacity=capacity/1,
+            production_capacity=capacity / 1,
             producible_sku=producible_sku,
             production_sku_rate=sku_rate,
             production_sku_unit_cost=sku_unit_cost,
@@ -188,7 +188,7 @@ def read_data(
         this_warehouse = Warehouse(
             idx=ws_id,
             location=loc,
-            inventory_capacity=capacity/1,
+            inventory_capacity=capacity / 1,
             holding_fixed_cost=fixed_cost,
             if_current=if_current,
             initial_inventory=begin_inventory,

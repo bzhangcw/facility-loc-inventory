@@ -64,8 +64,8 @@ if __name__ == "__main__":
     # for n in node_list:
     #     if n.type == const.PLANT:
     #         n.production_lb = lb_df["lb"].get(n.idx, np.inf)
-        # if n.type == const.WAREHOUSE:
-        #     n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
+    # if n.type == const.WAREHOUSE:
+    #     n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
     network = construct_network(node_list, edge_list, sku_list)
     model = DNP(arg, network)
     model.modeling()

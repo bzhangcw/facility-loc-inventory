@@ -11,63 +11,46 @@ from np_cg import *
 
 
 if __name__ == "__main__":
-    # -----------------DNP Model-----------------#
     param = Param()
     arg = param.arg
-    arg.T = 1
-    arg.backorder = False
-    # arg.bool_capacity = False # True
+    # # 工厂是100 仓库是500
+    # arg.node_cost = 0
+    # # 边是10
+    # arg.edge_cost = 0
+    arg.capacity = 1
+    # arg.lowerbound = 1
     datapath = "data/data_0401_0inv.xlsx"
-
-    # full model
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     one_period=False if arg.T > 1 else True,
-    # )
-
-    # for comparing speed
-    arg.cus_num = 100
-    cfg = dict(
-        data_dir=datapath,
-        sku_num=50,
-        plant_num=30,
-        warehouse_num=30,
-        customer_num=5,
-        one_period=False if arg.T > 1 else True,
-    )
-
-    # for debug
-    # arg.cus_num = 5
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=10,
-    #     plant_num=5,
-    #     warehouse_num=5,
-    #     customer_num=arg.cus_num,
-    #     one_period=False if arg.T > 1 else True,
-    # )
-
-    # still infeasible
-    # arg.cus_num = 5
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=15,
-    #     plant_num=6,
-    #     warehouse_num=6,
-    #     customer_num=arg.cus_num,
-    #     one_period=False if arg.T > 1 else True,
-    # )
-
-    # arg.cus_num = 2
-    # cfg = dict(
-    #     data_dir=datapath,
-    #     sku_num=5,
-    #     plant_num=3,
-    #     warehouse_num=3,
-    #     customer_num=arg.cus_num,
-    #     one_period=False if arg.T > 1 else True,
-    # )
-
+    pick_instance = 3
+    if pick_instance == 1:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=2,
+            plant_num=2,
+            warehouse_num=13,
+            customer_num=5,
+            one_period=True if arg.T == 1 else False,
+        )
+    elif pick_instance == 2:
+        # smallest instance causing bug
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=100,
+            plant_num=20,
+            warehouse_num=20,
+            customer_num=100,
+            one_period=True,
+        )
+    elif pick_instance == 3:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=140,
+            plant_num=28,
+            warehouse_num=23,
+            customer_num=arg.cus_num,
+            one_period=False,
+        )
+    else:
+        cfg = dict(data_dir=datapath, one_period=True)
     (
         sku_list,
         plant_list,
@@ -78,27 +61,45 @@ if __name__ == "__main__":
         node_list,
         *_,
     ) = utils.get_data_from_cfg(cfg)
-    #
+
+    for e in edge_list:
+        e.variable_lb = 0
+
+    # arg.node_cost = True
+    # arg.partial_fixed = False
     if arg.capacity == 1:
-        cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
+        cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
-            e.capacity = cap["qty"].get(e.idx, np.inf)
+            # e.capacity = cap["qty"].get(e.idx, np.inf)
+            # 修改点6 因为论文中uhat是inf
+            e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
-        cap = pd.read_csv("./data/lb_cons.csv").set_index("id")
+        lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:
-            e.variable_lb = cap["lb"].get(e.idx, np.inf)
+            if e.idx in lb_end["lb"]:
+                e.variable_lb = lb_end["lb"].get(e.idx, 0)
+    if arg.cp_lowerbound == 1:
+        lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
+        for e in edge_list:
+            if e.idx in lb_inter["lb"]:
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+                print(f"setting {e.idx} to {e.variable_lb}")
 
-        # lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
-        # for n in node_list:
-        #     if n.type == const.PLANT:
-        #         n.production_lb = lb_df["lb"].get(n.idx, np.inf)
-
+    if arg.nodelb == 1:
+        lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
+        for n in node_list:
+            if n.type == const.WAREHOUSE:
+                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)
+            if n.type == const.PLANT:
+                n.production_lb = lb_df["lb"].get(n.idx, np.inf)
     network = construct_network(node_list, edge_list, sku_list)
-    model = DNP(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.solve()
-    model.get_solution("new_sol/")
+    ###############################################################
+    # model = DNP(arg, network)
+    # model.modeling()
+    # model.model.setParam("Logging", 1)
+    # model.model.write(f"{arg.cus_num}.mps")
+    # model.model.solve()
+    # model.get_solution("New_sol/")
 
     # model = DNP.remote(arg, network)
     # model.modeling.remote()
@@ -109,12 +110,13 @@ if __name__ == "__main__":
     # #-----------------CG Model-----------------#
     print("----------DCG Model------------")
     # max_iter = 1000
-    max_iter = 1
+    max_iter = 50
 
     init_primal = None
     init_dual = None
-    init_ray = False
-    # init_ray = True
+    init_ray = True
+    num_workers = 10
+    num_cpus = 36
 
     np_cg = NetworkColumnGeneration(
         arg,
@@ -127,6 +129,8 @@ if __name__ == "__main__":
         init_dual=init_dual,
         bool_edge_lb=True,
         init_ray=init_ray,
+        num_workers=num_workers,
+        num_cpus=num_cpus
     )
     np_cg.run()
-    np_cg.get_solution("new_sol/")
+    np_cg.get_solution("new_sol_1/")
