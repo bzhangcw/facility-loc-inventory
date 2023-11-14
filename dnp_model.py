@@ -543,22 +543,41 @@ class DNP:
         # # for debug
 
     def add_constraints(self):
-        self.constr_types = {
-            "flow_conservation": {"index": "(t, node, k)"},
-            "open_relationship": {
-                "select_edge": {"index": "(t, edge, node)"},
-                "sku_select_edge": {"index": "(t, edge, k)"},
-                "open": {"index": "(t, warehouse with demand / customer)"},
-                "sku_open": {"index": "(t, node, k)"},
-            },
-            "transportation_capacity": {"index": "(t, edge)"},
-            # "transportation_variable_lb": {"index": "(t, edge)"},
-            "production_capacity": {"index": "(t, node)"},
-            # "production_variable_lb": {"index": "(t, node)"},
-            "holding_capacity": {"index": "(t, node)"},
-            # "holding_variable_lb": {"index": "(t, node)"},
-            "holding_capacity_back_order": {"index": "(t, node)"},
-        }
+        if self.arg.add_cardinality:
+            self.constr_types = {
+                "flow_conservation": {"index": "(t, node, k)"},
+                "open_relationship": {
+                    "select_edge": {"index": "(t, edge, node)"},
+                    "sku_select_edge": {"index": "(t, edge, k)"},
+                    "open": {"index": "(t, warehouse with demand / customer)"},
+                    "sku_open": {"index": "(t, node, k)"},
+                    "cardinality": {"index": "(t, node)"},
+                },
+                "transportation_capacity": {"index": "(t, edge)"},
+                # "transportation_variable_lb": {"index": "(t, edge)"},
+                "production_capacity": {"index": "(t, node)"},
+                # "production_variable_lb": {"index": "(t, node)"},
+                "holding_capacity": {"index": "(t, node)"},
+                # "holding_variable_lb": {"index": "(t, node)"},
+                "holding_capacity_back_order": {"index": "(t, node)"},
+            }
+        else:
+            self.constr_types = {
+                "flow_conservation": {"index": "(t, node, k)"},
+                "open_relationship": {
+                    "select_edge": {"index": "(t, edge, node)"},
+                    "sku_select_edge": {"index": "(t, edge, k)"},
+                    "open": {"index": "(t, warehouse with demand / customer)"},
+                    "sku_open": {"index": "(t, node, k)"},
+                },
+                "transportation_capacity": {"index": "(t, edge)"},
+                # "transportation_variable_lb": {"index": "(t, edge)"},
+                "production_capacity": {"index": "(t, node)"},
+                # "production_variable_lb": {"index": "(t, node)"},
+                "holding_capacity": {"index": "(t, node)"},
+                # "holding_variable_lb": {"index": "(t, node)"},
+                "holding_capacity_back_order": {"index": "(t, node)"},
+            }
 
         if self.bool_edge_lb:
             self.constr_types["transportation_variable_lb"] = {"index": "(t, edge)"}
@@ -736,6 +755,20 @@ class DNP:
         return
 
     def add_constr_open_relationship(self, t: int):
+        if self.arg.add_cardinality:
+            for node in self.network.nodes:
+                if node.type == const.CUSTOMER:
+                    used_edge = 0
+                    for e in self.network.edges:
+                        edge = self.network.edges[e]["object"]
+                        if edge.end == node:
+                            used_edge += self.variables["select_edge"][t, edge]
+                    constr = self.model.addConstr(
+                        used_edge
+                        <= 2
+                    )
+                    self.constrs["open_relationship"]["cardinality"][(t, node)] = constr
+                    self.index_for_dual_var += 1
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 

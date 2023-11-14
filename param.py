@@ -192,7 +192,14 @@ class Param:
                    whether add upper bound for daily inflow of inventories
                    """,
         )
-
+        parser.add_argument(
+            "--add_cardinality",
+            type=int,
+            default=0,
+            help="""
+                   whether add cardinality constraints for customers or not
+                   """,
+        )
         return parser
 
 
