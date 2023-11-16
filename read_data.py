@@ -1,6 +1,7 @@
-import pandas as pd
-from entity import *
 import numpy as np
+import pandas as pd
+
+from entity import *
 
 loc = np.array([0, 0])
 

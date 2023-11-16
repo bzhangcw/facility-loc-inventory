@@ -1,5 +1,4 @@
 import logging.handlers
-import logging.handlers
 import os
 import pickle
 import sys
@@ -10,7 +9,7 @@ from typing import List
 import networkx as nx
 import pandas as pd
 
-from entity import Node, Edge
+from entity import Edge, Node
 from network import construct_network
 from read_data import read_data
 

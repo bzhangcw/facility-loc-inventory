@@ -5,10 +5,11 @@ import os
 
 import numpy as np
 import pandas as pd
+import ray
 from tqdm import tqdm
+
 import const
 import utils
-import ray
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging

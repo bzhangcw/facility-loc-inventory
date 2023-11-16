@@ -19,7 +19,8 @@ from tqdm import tqdm
 import cg_col_helper
 import cg_init
 import const
-import dnp_model
+from . import slim_dnp_model
+from . import slim_pricing
 import utils
 from entity import SKU, Customer
 from network import construct_network, get_pred_reachable_nodes
@@ -27,23 +28,23 @@ from param import Param
 from read_data import read_data
 
 
-class NetworkColumnGeneration:
+class NetworkColumnGenerationSlim(object):
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            bool_covering=False,
-            bool_edge_lb=False,
-            bool_node_lb=False,
-            max_iter=500,
-            init_primal=None,
-            init_sweeping=True,
-            init_dual=None,
-            init_ray=False,
-            num_workers=8,
-            num_cpus=8
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        bool_covering=False,
+        bool_edge_lb=False,
+        bool_node_lb=False,
+        max_iter=500,
+        init_primal=None,
+        init_sweeping=True,
+        init_dual=None,
+        init_ray=False,
+        num_workers=8,
+        num_cpus=8,
     ) -> None:
         self._logger = utils.logger
         self._logger.setLevel(
@@ -114,51 +115,17 @@ class NetworkColumnGeneration:
                         cus_sku_list, customer.get_node_sku_list(t, self.full_sku_list)
                     )
                 )
-            # cus_sku_list = customer.get_node_sku_list(0, self.full_sku_list)
-            pred_reachable_nodes = set()
-            get_pred_reachable_nodes(self.network, customer, pred_reachable_nodes)
-            # @note: reset visited status
-            # @update: 070523
-            for k in pred_reachable_nodes:
-                k.visited = False
-            related_nodes = pred_reachable_nodes.copy()
-            # @note:
-            #   use "node.visited = Bool" to avoid the excessive recursive times
-            #   in the situation that two nodes can reach each other
-            for node in pred_reachable_nodes:
-                final_sku_node_list = []
-                for t in range(self.arg.T):
-                    final_sku_node_list = list(
-                        set().union(
-                            final_sku_node_list,
-                            node.get_node_sku_list(t, self.full_sku_list),
-                        )
-                    )
-                if bool(final_sku_node_list):
-                    # if not set(node.get_node_sku_list(0, self.full_sku_list)) & set(
-                    #         cus_sku_list
-                    # ):
-                    if not set(final_sku_node_list) & set(cus_sku_list):
-                        # If the sku_list associated with a pred_node
-                        # doesn't have any same element with the cus_sku_list,
-                        # then remove the pred_node
-                        related_nodes.remove(node)
-                else:
-                    # If a pred_node doesn't store or produce any
-                    # SKU in period 0, then remove it
-                    related_nodes.remove(node)
-            related_nodes.add(customer)
 
             self.subgraph[customer] = nx.DiGraph(sku_list=self.full_sku_list)
 
             # can we do better?
-            this_subgraph = self.network.subgraph(related_nodes)
+            this_subgraph = self.network.edge_subgraph(self.network.in_edges(customer))
             self.subgraph[customer].add_nodes_from(this_subgraph.nodes(data=True))
             self.subgraph[customer].add_edges_from(this_subgraph.edges(data=True))
             self.subgraph[customer].graph["sku_list"] = cus_sku_list
 
             self._logger.debug(f"{cus_sku_list}")
-            self._logger.debug(f"{sorted(k.__str__() for k in related_nodes)}")
+            self._logger.debug(f"{sorted(k.__str__() for k in this_subgraph.nodes)}")
 
         return
 
@@ -166,7 +133,7 @@ class NetworkColumnGeneration:
         cus_per_worker = int(np.ceil(self.cus_num / self.num_workers))
         for customer, n in zip(self.customer_list, range(self.cus_num)):
             if n % cus_per_worker == 0:
-                cus_list = self.customer_list[n: min(n + cus_per_worker, self.cus_num)]
+                cus_list = self.customer_list[n : min(n + cus_per_worker, self.cus_num)]
                 worker = dnp_model.DNP_worker.remote(
                     cus_list,
                     self.arg,
@@ -180,8 +147,8 @@ class NetworkColumnGeneration:
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-            self,
-            customer: Customer,
+        self,
+        customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -209,20 +176,17 @@ class NetworkColumnGeneration:
             oracle = self.worker_cus_dict[customer]
 
         else:
-            oracle = dnp_model.DNP(
+            oracle = slim_pricing.Pricing(
                 arg,
                 subgraph,
-                full_sku_list,
-                env_name,
-                model_name,
+                model_name=model_name,
                 bool_covering=self.bool_covering,
-                bool_capacity=True,
                 bool_edge_lb=self.bool_edge_lb,
                 bool_node_lb=self.bool_node_lb,
-                env=self.RMP_env,
-                cus_list=[customer],
+                customer=customer,
             )  # for initial column, set obj = 0
             oracle.modeling()
+            oracle.write(f"{customer}.pricing.lp")
 
         return oracle
 
@@ -326,6 +290,7 @@ class NetworkColumnGeneration:
         # initialize column helpers
         with utils.TimerContext(self.iter, f"initialize_columns"):
             if self.init_ray:
+                raise NotImplementedError("not implemented")
                 self.construct_worker()
                 ray.get(
                     [
@@ -374,7 +339,7 @@ class NetworkColumnGeneration:
                             worker.solve_all.remote()
                     else:
                         for col_ind, customer in tqdm(
-                                enumerate(self.customer_list), ncols=80, leave=False
+                            enumerate(self.customer_list), ncols=80, leave=False
                         ):
                             oracle = self.oracles[customer]
                             oracle.model.reset()
@@ -405,7 +370,7 @@ class NetworkColumnGeneration:
                         v = []
                         model_status_list = []
                         for new_col, _v, _model_status in zip(
-                                all_new_cols, all_v, all_model_status_list
+                            all_new_cols, all_v, all_model_status_list
                         ):
                             new_cols.extend(new_col)
                             v.extend(_v)
@@ -428,10 +393,10 @@ class NetworkColumnGeneration:
 
                         model_status = model_status_list[col_ind]
                         if (
-                                # self.oracles[customer].model.status
-                                # ray.get(self.oracles[customer].get_model_status.remote())
-                                model_status
-                                == coptpy.COPT.INTERRUPTED
+                            # self.oracles[customer].model.status
+                            # ray.get(self.oracles[customer].get_model_status.remote())
+                            model_status
+                            == coptpy.COPT.INTERRUPTED
                         ):
                             bool_early_stop = True
                             self._logger.info("early terminated")
@@ -609,15 +574,15 @@ class NetworkColumnGeneration:
 
                     for number in range(len(self.columns[customer])):
                         transportation += self.vars["column_weights"][
-                                              customer, number
-                                          ] * (
-                                              # self.columns[customer][number]["sku_flow_sum"][t][edge]
-                                              # mismatch bug of edge as keys, use idx instead
-                                              # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
-                                              self.columns[customer][number]["sku_flow_sum"][t][edge]
-                                              if e in self.subgraph[customer].edges
-                                              else 0.0
-                                          )
+                            customer, number
+                        ] * (
+                            # self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            # mismatch bug of edge as keys, use idx instead
+                            # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
+                            self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0
+                        )
 
                 if type(transportation) == float:
                     # continue
@@ -646,17 +611,17 @@ class NetworkColumnGeneration:
                     for customer in self.customer_list:
                         for number in range(len(self.columns[customer])):
                             production += self.vars["column_weights"][
-                                              customer, number
-                                          ] * (
-                                              self.columns[customer][number]["sku_production_sum"][t][
-                                                  # node
-                                                  # mismatch bug of node as keys, use idx instead
-                                                  # node.idx
-                                                  node
-                                              ]
-                                              if node in self.subgraph[customer].nodes
-                                              else 0.0
-                                          )
+                                customer, number
+                            ] * (
+                                self.columns[customer][number]["sku_production_sum"][t][
+                                    # node
+                                    # mismatch bug of node as keys, use idx instead
+                                    # node.idx
+                                    node
+                                ]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
 
                     if type(production) == float:
                         # continue
@@ -734,8 +699,8 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             for number in range(len(self.columns[customer])):
                 obj += (
-                        self.vars["column_weights"][customer, number]
-                        * self.columns[customer][number]["beta"]
+                    self.vars["column_weights"][customer, number]
+                    * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -783,7 +748,7 @@ class NetworkColumnGeneration:
         )
 
         with open(
-                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:

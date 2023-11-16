@@ -1,13 +1,15 @@
-from read_data import read_data
-from network import construct_network
-from dnp_model import DNP
-from param import Param
-import os
-import utils
-import pandas as pd
-import numpy as np
 import datetime
+import os
+
+import numpy as np
+import pandas as pd
+
+import utils
+from dnp_model import DNP
+from network import construct_network
 from np_cg import *
+from param import Param
+from read_data import read_data
 
 if __name__ == "__main__":
     starttime = datetime.datetime.now()

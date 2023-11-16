@@ -1,16 +1,16 @@
 """
 utilities for initialize first columns in CG framework
 """
-from typing import Dict, Tuple, Any
+import time
+from typing import Any, Dict, Tuple
 
+import ray
 from coptpy import COPT
 
 import cg_col_helper
 import dnp_model
 from entity import Customer, Plant
 from utils import get_in_edges, get_out_edges
-import ray
-import time
 
 
 def init_cols_from_dual_feas_sol(self, dual_vars):
@@ -75,7 +75,6 @@ def primal_sweeping_method(self, sort_method=sorted):
         {t: {} for t in range(self.arg.T)},
         {t: {} for t in range(self.arg.T)},
     )
-    reset = {t: {} for t in range(self.arg.T)}
     sequence = sort_method(range(self.customer_list.__len__()))
 
     for col_ind in sequence:
@@ -90,29 +89,6 @@ def primal_sweeping_method(self, sort_method=sorted):
         else:
             oracle: dnp_model.DNP = self.oracles[_this_customer]
 
-            oracle.del_constr_capacity()
-
-            (
-                oracle.used_edge_capacity,
-                oracle.used_plant_capacity,
-                oracle.used_warehouse_capacity,
-            ) = (
-                ec,
-                pc,
-                wc,
-            )
-        for t in range(self.arg.T):
-            if self.init_ray:
-                ray.get(oracle.add_constr_holding_capacity.remote(_this_customer, t))
-                ray.get(oracle.add_constr_production_capacity.remote(_this_customer, t))
-                ray.get(
-                    oracle.add_constr_transportation_capacity.remote(_this_customer, t)
-                )
-            else:
-                oracle.add_constr_holding_capacity(t)
-                oracle.add_constr_production_capacity(t)
-                oracle.add_constr_transportation_capacity(t)
-
         self.subproblem(_this_customer, col_ind)
 
         if self.init_ray:
@@ -120,36 +96,3 @@ def primal_sweeping_method(self, sort_method=sorted):
 
         else:
             columns = oracle.query_columns()
-
-        update_edge_capacity(self, _this_customer, ec, columns)
-        update_plant_capacity(self, _this_customer, pc, columns)
-        update_warehouse_capacity(self, _this_customer, wc, columns)
-
-        # then reset column constraints
-        if self.init_ray:
-            ray.get(oracle.del_constr_capacity.remote(_this_customer))
-            ray.get(
-                oracle.update_constr_capacity.remote(
-                    _this_customer, reset, reset, reset
-                )
-            )
-        else:
-            oracle.del_constr_capacity()
-            (
-                oracle.used_edge_capacity,
-                oracle.used_plant_capacity,
-                oracle.used_warehouse_capacity,
-            ) = (reset, reset, reset)
-
-        for t in range(self.arg.T):
-            if self.init_ray:
-                ray.get(oracle.add_constr_holding_capacity.remote(_this_customer, t))
-                ray.get(oracle.add_constr_production_capacity.remote(_this_customer, t))
-                ray.get(
-                    oracle.add_constr_transportation_capacity.remote(_this_customer, t)
-                )
-
-            else:
-                oracle.add_constr_holding_capacity(t)
-                oracle.add_constr_production_capacity(t)
-                oracle.add_constr_transportation_capacity(t)

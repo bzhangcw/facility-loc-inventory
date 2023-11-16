@@ -1,8 +1,10 @@
-import const
+from abc import abstractmethod
+from typing import List
+
 import numpy as np
 import pandas as pd
-from typing import List
-from abc import abstractmethod
+
+import const
 
 
 class SKU:
@@ -407,10 +409,10 @@ class Edge:
         pass
 
     def __str__(self) -> str:
-        return f"Edge_{self.idx}_({self.start}, {self.end})"
+        return f"E({self.start}, {self.end})"
 
     def __repr__(self) -> str:
-        return f"Edge_{self.idx}_({self.start}, {self.end})"
+        return f"E({self.start}, {self.end})"
 
     def __hash__(self) -> int:
         return hash(self.__repr__())

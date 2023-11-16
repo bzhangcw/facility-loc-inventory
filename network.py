@@ -1,10 +1,12 @@
+import math
+from typing import List
+
 import networkx as nx
-from entity import SKU, Node, Plant, Warehouse, Customer, Edge
 import numpy as np
 import pandas as pd
-from typing import List
-import math
+
 import const
+from entity import SKU, Customer, Edge, Node, Plant, Warehouse
 
 
 def construct_network(
@@ -53,7 +55,7 @@ def prune(graph, ratio):
 def get_pred_reachable_nodes(network, node, pred_reachable_nodes):
     # if node.type == const.CUSTOMER:
     # return
-    # Comment: Use  DFS recursively to find all the forward nodes of the customer without hierarchical restrictions
+    # Comment: Use DFS recursively to find all the forward nodes of the customer without hierarchical restrictions
     if node.type == const.PLANT:
         pred_reachable_nodes.add(node)
         return
