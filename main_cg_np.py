@@ -55,14 +55,30 @@ if __name__ == "__main__":
     ) = utils.get_data_from_cfg(cfg)
     # use external capacity, todo, move internals
     if arg.capacity == 1:
-        cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
+        cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
-            e.capacity = cap["qty"].get(e.idx, np.inf)
+            # e.capacity = cap["qty"].get(e.idx, np.inf)
+            # 修改点6 因为论文中uhat是inf
+            e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
-        cap = pd.read_csv("./data/lb_cons.csv").set_index("id")
+        lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:
-            e.variable_lb = cap["lb"].get(e.idx, np.inf)
-        pass
+            if e.idx in lb_end["lb"]:
+                e.variable_lb = lb_end["lb"].get(e.idx, 0)
+    if arg.cp_lowerbound == 1:
+        lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
+        for e in edge_list:
+            if e.idx in lb_inter["lb"]:
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+                print(f"setting {e.idx} to {e.variable_lb}")
+
+    if arg.nodelb == 1:
+        lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
+        for n in node_list:
+            if n.type == const.WAREHOUSE:
+                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)
+            if n.type == const.PLANT:
+                n.production_lb = lb_df["lb"].get(n.idx, np.inf)
 
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
@@ -83,10 +99,11 @@ if __name__ == "__main__":
         init_sweeping=init_sweeping,
         bool_covering=True,
         bool_edge_lb=True,
+        init_ray=True,
     )
 
     np_cg.run()
-    np_cg.get_solution("new_sol/")
+    np_cg.get_solution("new_sol_1/")
 
     ###############################################################
     model = DNP(arg, network)

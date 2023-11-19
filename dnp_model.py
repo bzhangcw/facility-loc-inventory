@@ -69,6 +69,16 @@ class DNP_worker:
                 cus_list=[customer],
             )
             oracle.modeling()
+            for k, v in oracle.variables["select_edge"].items():
+                if k[1].end.type != "C":
+                    v.setType(COPT.CONTINUOUS)
+            for k, v in oracle.variables["sku_select_edge"].items():
+                if k[1].end.type != "C":
+                    v.setType(COPT.CONTINUOUS)
+            for k, v in oracle.variables["open"].items():
+                v.setType(COPT.CONTINUOUS)
+            for k, v in oracle.variables["sku_open"].items():
+                v.setType(COPT.CONTINUOUS)
             self.DNP_dict[customer] = oracle
 
     # for primal sweeping
@@ -102,6 +112,8 @@ class DNP_worker:
 
     def model_reset_all(self):
         for customer in self.cus_list:
+            if customer in self.skipped:
+                continue
             self.DNP_dict[customer].model_reset()
 
     def update_objective(self, customer, dual_vars, dual_index):
@@ -109,6 +121,8 @@ class DNP_worker:
 
     def update_objective_all(self, dual_vars, dual_index):
         for customer in self.cus_list:
+            if customer in self.skipped:
+                continue
             self.DNP_dict[customer].update_objective(customer, dual_vars, dual_index)
 
     def solve(self, customer):
@@ -116,6 +130,8 @@ class DNP_worker:
 
     def solve_all(self):
         for customer in self.cus_list:
+            if customer in self.skipped:
+                continue
             self.DNP_dict[customer].solve()
 
     def get_model_objval(self, customer):
@@ -135,6 +151,9 @@ class DNP_worker:
         for customer in self.cus_list:
             status.append(self.DNP_dict[customer].get_model_status())
         return status
+
+    def set_scope(self, skipped):
+        self.skipped = skipped
 
 
 class DNP:
@@ -889,8 +908,8 @@ class DNP:
                 # if self.used_edge_capacity.get(t) !={}:
                 #     i = i+1
                 #     print("edge",edge,"left_capacity", left_capacity,i)
-                if left_capacity < 0:
-                    print("t", t, "edge", edge, "left_capacity", left_capacity)
+                # if left_capacity < 0:
+                #    print("t", t, "edge", edge, "left_capacity", left_capacity)
                 bound = (
                     self.variables["select_edge"][t, edge]
                     if self.bool_covering

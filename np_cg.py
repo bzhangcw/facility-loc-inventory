@@ -28,22 +28,24 @@ import ray
 
 
 class NetworkColumnGeneration:
+    CG_BCD_FRACTION = 0.5
+
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            bool_covering=False,
-            bool_edge_lb=False,
-            bool_node_lb=False,
-            max_iter=500,
-            init_primal=None,
-            init_sweeping=True,
-            init_dual=None,
-            init_ray=False,
-            num_workers=8,
-            num_cpus=8
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        bool_covering=False,
+        bool_edge_lb=False,
+        bool_node_lb=False,
+        max_iter=500,
+        init_primal=None,
+        init_sweeping=True,
+        init_dual=None,
+        init_ray=False,
+        num_workers=8,
+        num_cpus=8,
     ) -> None:
         self._logger = utils.logger
         self._logger.setLevel(
@@ -101,6 +103,7 @@ class NetworkColumnGeneration:
             if ray.is_initialized():
                 ray.shutdown()
             ray.init(num_cpus=num_cpus)
+        self.skip_customers = set()
 
     def get_subgraph(self):
         """
@@ -166,7 +169,7 @@ class NetworkColumnGeneration:
         cus_per_worker = int(np.ceil(self.cus_num / self.num_workers))
         for customer, n in zip(self.customer_list, range(self.cus_num)):
             if n % cus_per_worker == 0:
-                cus_list = self.customer_list[n: min(n + cus_per_worker, self.cus_num)]
+                cus_list = self.customer_list[n : min(n + cus_per_worker, self.cus_num)]
                 worker = dnp_model.DNP_worker.remote(
                     cus_list,
                     self.arg,
@@ -180,8 +183,8 @@ class NetworkColumnGeneration:
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-            self,
-            customer: Customer,
+        self,
+        customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -369,13 +372,16 @@ class NetworkColumnGeneration:
                     # modify for parallel
                     if self.init_ray:
                         for worker in tqdm(self.worker_list, ncols=80, leave=False):
+                            worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
                             worker.update_objective_all.remote(dual_vars, dual_index)
                             worker.solve_all.remote()
                     else:
                         for col_ind, customer in tqdm(
-                                enumerate(self.customer_list), ncols=80, leave=False
+                            enumerate(self.customer_list), ncols=80, leave=False
                         ):
+                            if customer in self.skip_customers:
+                                continue
                             oracle = self.oracles[customer]
                             oracle.model.reset()
                             oracle.update_objective(customer, dual_vars, dual_index)
@@ -405,7 +411,7 @@ class NetworkColumnGeneration:
                         v = []
                         model_status_list = []
                         for new_col, _v, _model_status in zip(
-                                all_new_cols, all_v, all_model_status_list
+                            all_new_cols, all_v, all_model_status_list
                         ):
                             new_cols.extend(new_col)
                             v.extend(_v)
@@ -419,19 +425,30 @@ class NetworkColumnGeneration:
                         model_status_list = [
                             oracle.model.status for oracle in self.oracles.values()
                         ]
-
+                    self.skip_customers = set()
                     for col_ind, customer in enumerate(self.customer_list):
                         self.red_cost[self.iter, col_ind] = v[col_ind]
-                        added = (v[col_ind] < -1e-9 or dual_vars is None) or added
+                        this_added = (
+                            v[col_ind] / self.RMP_model.objval
+                        ) < -1e-8 or dual_vars is None
+                        # 1. is there a deterministic criterion?
+                        # this is not true,
+                        # it will not update any more
+                        # if not this_added:
+                        #     self.skip_customers.add(customer)
+                        # 2. randomized block coordinate descend
+                        if np.random.random() > self.CG_BCD_FRACTION:
+                            self.skip_customers.add(customer)
+                        added = added or this_added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
                         model_status = model_status_list[col_ind]
                         if (
-                                # self.oracles[customer].model.status
-                                # ray.get(self.oracles[customer].get_model_status.remote())
-                                model_status
-                                == coptpy.COPT.INTERRUPTED
+                            # self.oracles[customer].model.status
+                            # ray.get(self.oracles[customer].get_model_status.remote())
+                            model_status
+                            == coptpy.COPT.INTERRUPTED
                         ):
                             bool_early_stop = True
                             self._logger.info("early terminated")
@@ -441,7 +458,8 @@ class NetworkColumnGeneration:
                 self.iter += 1
 
                 self._logger.info(
-                    f"k: {self.iter:5d} / {self.max_iter:d} f: {self.RMP_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
+                    f"{self.iter:5d} / {self.max_iter:d}\t"
+                    + f"f: {self.RMP_model.objval:+.6e}\t c'(relative): {np.min(self.red_cost[self.iter - 1, :])/ self.RMP_model.objval:+.4e} \t to-skip-next: {self.skip_customers.__len__()}/{self.cus_num}",
                 )
 
                 if not added or self.iter >= self.max_iter:
@@ -609,15 +627,15 @@ class NetworkColumnGeneration:
 
                     for number in range(len(self.columns[customer])):
                         transportation += self.vars["column_weights"][
-                                              customer, number
-                                          ] * (
-                                              # self.columns[customer][number]["sku_flow_sum"][t][edge]
-                                              # mismatch bug of edge as keys, use idx instead
-                                              # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
-                                              self.columns[customer][number]["sku_flow_sum"][t][edge]
-                                              if e in self.subgraph[customer].edges
-                                              else 0.0
-                                          )
+                            customer, number
+                        ] * (
+                            # self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            # mismatch bug of edge as keys, use idx instead
+                            # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
+                            self.columns[customer][number]["sku_flow_sum"][t][edge]
+                            if e in self.subgraph[customer].edges
+                            else 0.0
+                        )
 
                 if type(transportation) == float:
                     # continue
@@ -646,17 +664,17 @@ class NetworkColumnGeneration:
                     for customer in self.customer_list:
                         for number in range(len(self.columns[customer])):
                             production += self.vars["column_weights"][
-                                              customer, number
-                                          ] * (
-                                              self.columns[customer][number]["sku_production_sum"][t][
-                                                  # node
-                                                  # mismatch bug of node as keys, use idx instead
-                                                  # node.idx
-                                                  node
-                                              ]
-                                              if node in self.subgraph[customer].nodes
-                                              else 0.0
-                                          )
+                                customer, number
+                            ] * (
+                                self.columns[customer][number]["sku_production_sum"][t][
+                                    # node
+                                    # mismatch bug of node as keys, use idx instead
+                                    # node.idx
+                                    node
+                                ]
+                                if node in self.subgraph[customer].nodes
+                                else 0.0
+                            )
 
                     if type(production) == float:
                         # continue
@@ -734,8 +752,8 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             for number in range(len(self.columns[customer])):
                 obj += (
-                        self.vars["column_weights"][customer, number]
-                        * self.columns[customer][number]["beta"]
+                    self.vars["column_weights"][customer, number]
+                    * self.columns[customer][number]["beta"]
                 )
 
         self.RMP_model.setObjective(obj, COPT.MINIMIZE)
@@ -783,7 +801,7 @@ class NetworkColumnGeneration:
         )
 
         with open(
-                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:

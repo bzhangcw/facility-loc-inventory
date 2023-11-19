@@ -23,7 +23,7 @@ if __name__ == "__main__":
         arg.add_cardinality,
     ) = (1, 1, 1, 1, 1, 0, 1)
     datapath = "data/data_0401_0inv.xlsx"
-    pick_instance = 1
+    pick_instance = 2
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         init_primal = None
         init_dual = None  # 'dual'
         init_ray = True
-        num_workers = 4
+        num_workers = 12
 
         np_cg = NetworkColumnGeneration(
             arg,
