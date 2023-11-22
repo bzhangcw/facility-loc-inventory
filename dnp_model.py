@@ -309,7 +309,11 @@ class DNP:
                         "sku_inventory"
                     ].sum(t, node, "*")
 
-        col_helper["beta"] = self.original_obj.getExpr()
+        col_helper["beta"] = (
+            self.original_obj
+            if type(self.original_obj) == float
+            else self.original_obj.getExpr()
+        )
 
         self.columns_helpers = col_helper
         self.columns = []
@@ -336,7 +340,13 @@ class DNP:
         # _vals = {
         #     t: {attr: {k: v.getValue() for k, v in col_helper[attr][t].items()}
         #     for attr in ATTR_IN_RMP} for t in range(7)}
-        _vals["beta"] = self.columns_helpers["beta"].getValue()
+        # _vals["beta"] = self.columns_helpers["beta"].getValue()
+        _vals["beta"] = (
+            self.columns_helpers["beta"]
+            if type(self.columns_helpers["beta"]) == float
+            else self.columns_helpers["beta"].getValue()
+        )
+
         return _vals
 
     def query_columns(self):
@@ -1272,17 +1282,15 @@ class DNP:
                 elif node.type == const.WAREHOUSE:
                     # this_node_fixed_cost = node.holding_fixed_cost
                     this_node_fixed_cost = 500
-                elif node.type == const.CUSTOMER:
-                    # break
-                    this_node_fixed_cost = 0
+                else:
+                    continue
             else:
                 if node.type == const.PLANT:
                     this_node_fixed_cost = node.production_fixed_cost
                 elif node.type == const.WAREHOUSE:
                     this_node_fixed_cost = node.holding_fixed_cost
-                elif node.type == const.CUSTOMER:
-                    # break
-                    this_node_fixed_cost = 0
+                else:
+                    continue
 
             y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
             for t in range(self.T):

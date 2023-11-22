@@ -17,11 +17,10 @@ from read_data import read_data
 from update_constr import *
 from utils import get_in_edges, get_out_edges, logger
 
-
 import coptpy as cp
 from coptpy import COPT
 
-ATTR_IN_RMPSLIM = []
+ATTR_IN_RMPSLIM = ["sku_flow"]
 
 
 class Pricing(object):
@@ -30,20 +29,20 @@ class Pricing(object):
     """
 
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        model_name: str = "PricingDelivery",
-        bool_edge_lb: bool = True,
-        bool_node_lb: bool = True,
-        bool_fixed_cost: bool = True,
-        bool_covering: bool = True,
-        bool_dp: bool = False,
-        logging: int = 0,
-        gap: float = 1e-4,
-        threads: int = None,
-        limit: int = 3600,
-        customer: Customer = None,
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            model_name: str = "PricingDelivery",
+            bool_edge_lb: bool = True,
+            bool_node_lb: bool = True,
+            bool_fixed_cost: bool = True,
+            bool_covering: bool = True,
+            bool_dp: bool = False,
+            logging: int = 0,
+            gap: float = 1e-4,
+            threads: int = None,
+            limit: int = 3600,
+            customer: Customer = None,
     ) -> None:
         self.customer: Customer = customer
         assert isinstance(customer, Customer)
@@ -134,92 +133,29 @@ class Pricing(object):
             edge = self.network.edges[e]["object"]
             yield edge
 
-    def init_col_helpers(self):
-        """
-        Initialize the column helpers to extract frequently
-            needed quantities for the subproblems
-
-        """
-        # utils.logger.info("generating column helpers for %s" % self.cus_list[0].idx)
-
-        # col_helper = {attr: {t: {} for t in range(self.oracles[customer].T)} for attr in ATTR_IN_RMP}
-        col_helper = {
-            attr: {
-                # t: {} for t in range(ray.get(self.oracles[customer].getT.remote()))
-                t: {}
-                for t in range(self.arg.T)
-            }
-            for attr in ATTR_IN_RMPSLIM
-        }
-
-        # saving column LinExpr
-        # for t in range(self.arg.T):
-        #     for e in self.network.edges:
-        #         edge = self.network.edges[e]["object"]
-        #         if edge.capacity == np.inf:
-        #             continue
-        #         # can we do better?
-        #         # col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
-        #         # col_helper["sku_flow_sum"][t][edge.idx] = self.variables[
-        #         col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
-        #             t, edge, "*"
-        #         )
-
-        #     for node in self.network.nodes:
-        #         if node.type == const.PLANT:
-        #             if node.production_capacity == np.inf:
-        #                 continue
-        #             # col_helper["sku_production_sum"][t][node] = self.variables[
-        #             # col_helper["sku_production_sum"][t][node.idx] = self.variables[
-        #             col_helper["sku_production_sum"][t][node] = self.variables[
-        #                 "sku_production"
-        #             ].sum(t, node, "*")
-        #         elif node.type == const.WAREHOUSE:
-        #             # node holding capacity
-        #             if node.inventory_capacity == np.inf:
-        #                 continue
-        #             # col_helper["sku_inventory_sum"][t][node] = self.variables[
-        #             # col_helper["sku_inventory_sum"][t][node.idx] = self.variables[
-        #             col_helper["sku_inventory_sum"][t][node] = self.variables[
-        #                 "sku_inventory"
-        #             ].sum(t, node, "*")
-
-        try:
-            col_helper["beta"] = self.original_obj.getExpr()
-        except:
-            logger.warning(f"customer {self.customer} has null objective")
-
-        self.columns_helpers = col_helper
-        self.columns = []
-
     def add_vars(self):
         """
         add variables
         """
-        self.var_types = {
-            "sku_flow": {
-                "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
-                "nameprefix": "w",
-                "index": "(t, edge, k)",
-            },
-            "sku_backorder": {
-                "lb": 0,
-                "ub": [],  # TBD
-                "vtype": COPT.CONTINUOUS,
-                "nameprefix": "s",
-                "index": "(t, k)",
-            },
-        }
-
-        self.var_types["select_edge"] = {
+        self.var_types = {"sku_flow": {
+            "lb": 0,
+            "ub": COPT.INFINITY,
+            "vtype": COPT.CONTINUOUS,
+            "nameprefix": "w",
+            "index": "(t, edge, k)",
+        }, "sku_backorder": {
+            "lb": 0,
+            "ub": [],  # TBD
+            "vtype": COPT.CONTINUOUS,
+            "nameprefix": "s",
+            "index": "(t, k)",
+        }, "select_edge": {
             "lb": 0,
             "ub": 1,
             "vtype": COPT.BINARY,
             "nameprefix": "p",
             "index": "(t, edge)",
-        }
+        }}
 
         # generate index tuple
         idx = dict()
@@ -360,37 +296,21 @@ class Pricing(object):
 
         return obj, hc, pc, tc, ud, nf, ef
 
-    def extra_objective(self, customer, dualvar=None, dual_index=None):
-        obj = 0.0
-        if dualvar is None:
-            return obj
-        for t, edge in tuple(dual_index["transportation_capacity"].keys()):
-            obj -= dualvar[
-                dual_index["transportation_capacity"][(t, edge)]
-            ] * self.variables["sku_flow"].sum(t, edge, "*")
-
-        for t, node in tuple(dual_index["node_capacity"].keys()):
-            if node.type == const.PLANT:
-                obj -= dualvar[dual_index["node_capacity"][(t, node)]] * self.variables[
-                    "sku_production"
-                ].sum(t, node, "*")
-            elif node.type == const.WAREHOUSE:
-                obj -= dualvar[dual_index["node_capacity"][(t, node)]] * self.variables[
-                    "sku_inventory"
-                ].sum(t, node, "*")
-            else:
-                continue
-
-        obj -= dualvar[dual_index["weights_sum"][customer]]
+    def extra_objective(self, customer, dual_packs=None):
+        if dual_packs is None:
+            return 0.0
+        dual, dual_ws = dual_packs
+        obj = sum(self.variables["sku_flow"].get((t, ee, k), 0) * v for (ee, k, t), v in dual.items())
+        obj -= dual_ws[customer]
 
         return obj
 
-    def update_objective(self, customer, dualvar, dual_index):
+    def update_objective(self, customer, dual_packs):
         """
         Use dual variables to calculate the reduced cost
         """
 
-        obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
+        obj = self.original_obj + self.extra_objective(customer, dual_packs)
 
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
@@ -429,28 +349,28 @@ class Pricing(object):
             ) = edge.get_edge_sku_list_with_transportation_cost(t, self.sku_list)
             for k in sku_list_with_fixed_transportation_cost:
                 if (
-                    edge.transportation_sku_fixed_cost is not None
-                    and k in edge.transportation_sku_fixed_cost
+                        edge.transportation_sku_fixed_cost is not None
+                        and k in edge.transportation_sku_fixed_cost
                 ):
                     edge_transportation_cost = (
-                        edge_transportation_cost
-                        + edge.transportation_sku_fixed_cost[k]
-                        * self.variables["sku_select_edge"].get((t, edge, k), 0)
+                            edge_transportation_cost
+                            + edge.transportation_sku_fixed_cost[k]
+                            * self.variables["sku_select_edge"].get((t, edge, k), 0)
                     )
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
+                        edge.transportation_sku_unit_cost is not None
+                        and k in edge.transportation_sku_unit_cost
                 ):
                     transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
                 edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"].get((t, edge, k), 0)
+                        edge_transportation_cost
+                        + transportation_sku_unit_cost
+                        * self.variables["sku_flow"].get((t, edge, k), 0)
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -459,9 +379,33 @@ class Pricing(object):
 
         return transportation_cost
 
-    def cal_sku_unfulfill_demand_cost(self, t):
-        return 0
-        pass
+    def cal_sku_unfulfill_demand_cost(self, t: int):
+        unfulfill_demand_cost = 0.0
+
+        if self.customer.has_demand(t):
+            for k in self.customer.demand_sku[t]:
+
+                if self.customer.unfulfill_sku_unit_cost is not None:
+                    unfulfill_sku_unit_cost = self.customer.unfulfill_sku_unit_cost[
+                        (t, k)
+                    ]
+                else:
+                    unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+
+                unfulfill_node_sku_cost = (
+                        unfulfill_sku_unit_cost
+                        * self.variables["sku_backorder"][(t, k)]
+                )
+
+                unfulfill_demand_cost = (
+                        unfulfill_demand_cost + unfulfill_node_sku_cost
+                )
+
+                self.obj["unfulfill_demand_cost"][
+                    (t, k)
+                ] = unfulfill_node_sku_cost
+
+        return unfulfill_demand_cost
 
     def cal_fixed_node_cost(self, t):
         return 0
@@ -477,28 +421,18 @@ class Pricing(object):
     def write(self, name):
         self.model.write(name)
 
-    def test_cost(self):
-        print("HC:", self.hc.getExpr().getValue())
-        print("PC:", self.pc.getExpr().getValue())
-        print("TC:", self.tc.getExpr().getValue())
-        print("NF:", self.nf.getExpr().getValue())
-        print("EF:", self.ef.getExpr().getValue())
-        print("UD:", self.ud.getExpr().getValue())
-
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         pass
 
+    @staticmethod
+    def _query_a_expr_or_float_or_variable(v):
+        if isinstance(v, float):
+            return v
+        return v.getValue()
+
     def eval_helper(self):
-        _vals = {
-            attr: {
-                t: {
-                    k: v.getValue() if type(v) is not float else 0
-                    for k, v in self.columns_helpers[attr][t].items()
-                }
-                for t in range(self.arg.T)
-            }
-            for attr in ATTR_IN_RMPSLIM
-        }
+        _vals = {}
+        _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
         # for t in range(T):
         #     for attr in ATTR_IN_RMP:
         #         if col_helper[attr][t] != {}:
@@ -510,8 +444,25 @@ class Pricing(object):
         # _vals = {
         #     t: {attr: {k: v.getValue() for k, v in col_helper[attr][t].items()}
         #     for attr in ATTR_IN_RMP} for t in range(7)}
-        _vals["beta"] = self.columns_helpers["beta"].getValue()
+        _vals["beta"] = self._query_a_expr_or_float_or_variable(self.columns_helpers["beta"])
         return _vals
+
+    def init_col_helpers(self):
+        """
+        Initialize the column helpers to extract frequently
+            needed quantities for the subproblems
+
+        """
+        col_helper = {}
+
+        try:
+            col_helper["beta"] = self.original_obj.getExpr()
+        except:
+            logger.warning(f"customer {self.customer} has null objective")
+            col_helper["beta"] = 0.0
+
+        self.columns_helpers = col_helper
+        self.columns = []
 
     def query_columns(self):
         new_col = self.eval_helper()

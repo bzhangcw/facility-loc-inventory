@@ -4,8 +4,8 @@ from coptpy import COPT
 
 import const
 import utils
-from slim.slim_dnp_model import DNPSlim
-from slim.slim_np_cg import NetworkColumnGenerationSlim as NCS
+from slim.slim_rmp_model import DNPSlim
+from slim.slim_cg import NetworkColumnGenerationSlim as NCS
 from network import construct_network
 from param import Param
 
@@ -19,7 +19,7 @@ if __name__ == "__main__":
     arg.capacity = 1
     # arg.lowerbound = 1
     datapath = "data/data_0401_0inv.xlsx"
-    pick_instance = 1
+    pick_instance = 3
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
@@ -92,17 +92,6 @@ if __name__ == "__main__":
             if n.type == const.PLANT:
                 n.production_lb = lb_df["lb"].get(n.idx, np.inf)
     network = construct_network(node_list, edge_list, sku_list)
-    ###############################################################
-
-    model = DNPSlim(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.model.setParam("Threads", 8)
-    model.model.setParam("TimeLimit", 3600)
-    model.model.write("md.mps")
-    model.model.write("md.lp")
-    # model.model.setParam("RelGap", 1.3)
-    # model.model.setParam("LpMethod", 2)  # interior point method
 
     ###############################################################
     # get the LP relaxation

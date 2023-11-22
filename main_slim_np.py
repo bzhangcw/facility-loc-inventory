@@ -4,7 +4,7 @@ from coptpy import COPT
 
 import const
 import utils
-from slim.slim_dnp_model import DNPSlim
+from slim.slim_rmp_model import DNPSlim
 from network import construct_network
 from param import Param
 

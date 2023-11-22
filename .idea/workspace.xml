@@ -5,15 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4267578e-2220-45a9-811e-7b17fad63d98" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cp_gfc.py" beforeDir="false" afterPath="$PROJECT_DIR$/cp_gfc.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/debug.py" beforeDir="false" afterPath="$PROJECT_DIR$/debug.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dnp_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/dnp_model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/entity.py" beforeDir="false" afterPath="$PROJECT_DIR$/entity.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ipynb/sol_mip_1_DCG_NL/cus4_details.json" beforeDir="false" afterPath="$PROJECT_DIR$/ipynb/sol_mip_1_DCG_NL/cus4_details.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ipynb/test_cp_gfc .ipynb" beforeDir="false" afterPath="$PROJECT_DIR$/ipynb/test_cp_gfc .ipynb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ipynb/test_cp_gfc.py" beforeDir="false" afterPath="$PROJECT_DIR$/ipynb/test_cp_gfc.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/param.py" beforeDir="false" afterPath="$PROJECT_DIR$/param.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/overleaf/headerfancy.tex" beforeDir="false" afterPath="$PROJECT_DIR$/docs/overleaf/headerfancy.tex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/overleaf/notes/CP.tex" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/overleaf/notes/ref.bib" beforeDir="false" afterPath="$PROJECT_DIR$/docs/overleaf/notes/ref.bib" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main_cg_np.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_cg_np.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main_slim_cg.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_slim_cg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main_slim_np.py" beforeDir="false" afterPath="$PROJECT_DIR$/main_slim_np.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/slim/slim_dnp_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/slim/slim_rmp_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/slim/slim_np_cg.py" beforeDir="false" afterPath="$PROJECT_DIR$/slim/slim_cg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/slim/slim_pricing.py" beforeDir="false" afterPath="$PROJECT_DIR$/slim/slim_pricing.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -27,17 +31,28 @@
       </list>
     </option>
   </component>
+  <component name="FlaskConsoleOptions" custom-start-script="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))">
+    <envs>
+      <env key="FLASK_APP" value="app" />
+    </envs>
+    <option name="myCustomStartScript" value="import sys&#10;sys.path.extend([WORKING_DIR_AND_PYTHON_PATHS])&#10;from flask.cli import ScriptInfo&#10;locals().update(ScriptInfo(create_app=None).load_app().make_shell_context())&#10;print(&quot;Python %s on %s\nApp: %s [%s]\nInstance: %s&quot; % (sys.version, sys.platform, app.import_name, app.env, app.instance_path))" />
+    <option name="myEnvs">
+      <map>
+        <entry key="FLASK_APP" value="app" />
+      </map>
+    </option>
+  </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
-  </component>
-  <component name="HighlightingSettingsPerFile">
-    <setting file="file://$USER_HOME$/miniforge3/lib/python3.10/os.py" root0="SKIP_INSPECTION" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
   <component name="ProjectId" id="2T1K26CG74neQRA5P6RSUclBRF1" />
-  <component name="ProjectLevelVcsManager">
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
     <ConfirmationsSetting value="1" id="Add" />
   </component>
   <component name="ProjectViewState">
@@ -56,17 +71,49 @@
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RdControllerToolWindowsLayoutState" isNewUi="false">
+    <layout>
+      <window_info id="Commit_Guest" />
+      <window_info id="Space Code Reviews" order="0" />
+      <window_info id="Bookmarks" order="1" side_tool="true" />
+      <window_info id="Merge Requests" order="2" />
+      <window_info id="Structure" order="3" side_tool="true" />
+      <window_info id="Pull Requests" order="4" weight="0.3298828" />
+      <window_info active="true" content_ui="combo" id="Project" order="5" visible="true" weight="0.10292968" />
+      <window_info id="Commit" order="6" />
+      <window_info id="VcsChanges" order="7" weight="0.3298828" />
+      <window_info id="Learn" order="7" show_stripe_button="false" />
+      <window_info anchor="bottom" id="Version Control" order="0" />
+      <window_info anchor="bottom" id="Database Changes" order="1" />
+      <window_info anchor="bottom" id="TypeScript" order="2" />
+      <window_info anchor="bottom" id="Endpoints" order="3" />
+      <window_info anchor="bottom" x="2609" y="25" width="960" height="1055" id="Debug" internal_type="SLIDING" order="4" type="WINDOWED" weight="0.33020833" />
+      <window_info anchor="bottom" id="Python Packages" order="5" />
+      <window_info anchor="bottom" id="TODO" order="6" />
+      <window_info anchor="bottom" id="File Transfer" order="7" />
+      <window_info anchor="bottom" id="Python Console" order="8" />
+      <window_info anchor="bottom" id="Run" order="9" />
+      <window_info anchor="bottom" id="Problems View" order="10" />
+      <window_info anchor="bottom" id="Terminal" order="11" />
+      <window_info anchor="bottom" id="Services" order="12" />
+      <window_info anchor="right" id="Database" order="0" />
+      <window_info anchor="right" id="documentation.v2" order="1" side_tool="true" />
+      <window_info anchor="right" id="SciView" order="2" />
+      <window_info anchor="right" id="Notifications" order="3" weight="0.25" />
+    </layout>
+  </component>
   <component name="RunManager">
-    <configuration name="debug" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="facility-loc-inventory" />
+    <configuration name="main_cg_np" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="facloc" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
         <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="COPT_LICENSE_DIR" value="$USER_HOME$" />
       </envs>
       <option name="SDK_HOME" value="" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
@@ -74,8 +121,8 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/debug.py" />
-      <option name="PARAMETERS" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main_cg_np.py" />
+      <option name="PARAMETERS" value="--T 7" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
@@ -83,9 +130,37 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="main_slim_cg" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="facloc" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+        <env name="COPT_LICENSE_DIR" value="$USER_HOME$" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main_slim_cg.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.main_cg_np" />
+      <item itemvalue="Python.main_slim_cg" />
+    </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.debug" />
+        <item itemvalue="Python.main_slim_cg" />
+        <item itemvalue="Python.main_cg_np" />
       </list>
     </recent_temporary>
   </component>
@@ -125,6 +200,9 @@
       <workItem from="1698981866936" duration="36000" />
       <workItem from="1698983658810" duration="5000" />
       <workItem from="1698997566693" duration="19464000" />
+      <workItem from="1700618807988" duration="450000" />
+      <workItem from="1700619455626" duration="17307000" />
+      <workItem from="1700664268534" duration="5995000" />
     </task>
     <servers />
   </component>
@@ -150,7 +228,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/dnp_model.py</url>
-          <line>675</line>
+          <line>685</line>
           <option name="timeStamp" value="40" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
@@ -158,28 +236,43 @@
           <line>227</line>
           <option name="timeStamp" value="65" />
         </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/slim/slim_rmp_model.py</url>
+          <line>717</line>
+          <option name="timeStamp" value="70" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/slim/slim_cg.py</url>
+          <line>295</line>
+          <option name="timeStamp" value="72" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/np_cg.py</url>
+          <line>527</line>
+          <option name="timeStamp" value="75" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/slim/slim_cg.py</url>
+          <line>511</line>
+          <option name="timeStamp" value="84" />
+        </line-breakpoint>
       </breakpoints>
-      <default-breakpoints>
-        <breakpoint type="python-exception">
-          <properties notifyOnTerminate="true" exception="BaseException">
-            <option name="notifyOnTerminate" value="true" />
-          </properties>
-        </breakpoint>
-      </default-breakpoints>
     </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$cp_gfc.coverage" NAME="cp_gfc Coverage Results" MODIFIED="1698740672195" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$main_np.coverage" NAME="main_np Coverage Results" MODIFIED="1690206492884" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$dnp_model.coverage" NAME="dnp_model Coverage Results" MODIFIED="1690284455053" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$test_cp_gfc.coverage" NAME="test_cp_gfc Coverage Results" MODIFIED="1698731569561" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ipynb" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$cg_col_helper.coverage" NAME="cg_col_helper Coverage Results" MODIFIED="1691593082523" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$Gurobi.coverage" NAME="Gurobi Coverage Results" MODIFIED="1690363012391" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$Check.coverage" NAME="Check Coverage Results" MODIFIED="1692076628384" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$main.coverage" NAME="main Coverage Results" MODIFIED="1690860503258" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$pydevd.coverage" NAME="pydevd Coverage Results" MODIFIED="1691593074272" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$APPLICATION_HOME_DIR$/plugins/python/helpers/pydev" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$cg_col_helper.coverage" NAME="cg_col_helper Coverage Results" MODIFIED="1691593082523" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$main_np.coverage" NAME="main_np Coverage Results" MODIFIED="1690206492884" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$cp_gfc.coverage" NAME="cp_gfc Coverage Results" MODIFIED="1698740672195" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$debug.coverage" NAME="debug Coverage Results" MODIFIED="1699071843133" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$main_cg_np.coverage" NAME="main_cg_np Coverage Results" MODIFIED="1690263636589" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$read_data.coverage" NAME="read_data Coverage Results" MODIFIED="1690287715849" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$Check.coverage" NAME="Check Coverage Results" MODIFIED="1692076628384" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facloc$main_slim_cg.coverage" NAME="main_slim_cg Coverage Results" MODIFIED="1700669534050" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facloc$main_cg_np.coverage" NAME="main_cg_np Coverage Results" MODIFIED="1700667837509" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$Gurobi.coverage" NAME="Gurobi Coverage Results" MODIFIED="1690363012391" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$main.coverage" NAME="main Coverage Results" MODIFIED="1690860503258" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$main_cg_np.coverage" NAME="main_cg_np Coverage Results" MODIFIED="1690263636589" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$test_cp_gfc.coverage" NAME="test_cp_gfc Coverage Results" MODIFIED="1698731569561" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ipynb" />
   </component>
 </project>
