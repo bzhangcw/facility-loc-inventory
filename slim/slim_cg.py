@@ -175,7 +175,7 @@ class NetworkColumnGenerationSlim(object):
                 customer=customer,
             )  # for initial column, set obj = 0
             oracle.modeling()
-            oracle.write(f"{customer}.pricing.lp")
+            # oracle.write(f"{customer}.pricing.lp")
 
         return oracle
 

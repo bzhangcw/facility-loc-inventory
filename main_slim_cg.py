@@ -97,7 +97,7 @@ if __name__ == "__main__":
     # get the LP relaxation
     print("----------DCG Model------------")
     # max_iter = 1000
-    max_iter = 50
+    max_iter = 100
 
     init_primal = None
     init_dual = None
