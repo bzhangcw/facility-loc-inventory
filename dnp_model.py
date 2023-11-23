@@ -18,6 +18,10 @@ from utils import get_in_edges, get_out_edges, logger
 import time
 import ray
 
+from solver_wrapper import GurobiWrapper, CoptWrapper
+from solver_wrapper.CoptConstant import CoptConstant
+from solver_wrapper.GurobiConstant import GurobiConstant
+
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
@@ -35,7 +39,14 @@ class DNP_worker:
     """
 
     def __init__(
-        self, cus_list, arg, bool_covering, bool_capacity, bool_edge_lb, bool_node_lb
+        self,
+        cus_list,
+        arg,
+        bool_covering,
+        bool_capacity,
+        bool_edge_lb,
+        bool_node_lb,
+        solver="COPT",
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -44,6 +55,14 @@ class DNP_worker:
         self.bool_capacity = bool_capacity
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
+        self.solver = solver
+
+        if solver == "COPT":
+            self.solver_constant = CoptConstant
+        elif solver == "GUROBI":
+            self.solver_constant = GurobiConstant
+        else:
+            raise ValueError("solver must be either COPT or GUROBI")
 
     def construct_DNPs(self, subgraph_dict):
         for customer in self.cus_list:
@@ -67,18 +86,27 @@ class DNP_worker:
                 gap=CG_SUBP_GAP,
                 limit=CG_SUBP_TIMELIMIT,
                 cus_list=[customer],
+                solver=self.solver,
             )
             oracle.modeling()
             for k, v in oracle.variables["select_edge"].items():
                 if k[1].end.type != "C":
-                    v.setType(COPT.CONTINUOUS)
+                    # v.setType(self.solver_constant.CONTINUOUS)
+                    oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
+
             for k, v in oracle.variables["sku_select_edge"].items():
                 if k[1].end.type != "C":
-                    v.setType(COPT.CONTINUOUS)
+                    # v.setType(self.solver_constant.CONTINUOUS)
+                    oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
+
             for k, v in oracle.variables["open"].items():
-                v.setType(COPT.CONTINUOUS)
+                # v.setType(self.solver_constant.CONTINUOUS)
+                oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
+
             for k, v in oracle.variables["sku_open"].items():
-                v.setType(COPT.CONTINUOUS)
+                # v.setType(self.solver_constant.CONTINUOUS)
+                oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
+
             self.DNP_dict[customer] = oracle
 
     # for primal sweeping
@@ -183,7 +211,17 @@ class DNP:
         cus_num: int = 1,
         env=None,
         cus_list=None,
+        solver="COPT",
     ) -> None:
+        if solver == "COPT":
+            self.solver = CoptWrapper.CoptWrapper(model_name)
+            self.solver_constant = CoptConstant
+        elif solver == "GUROBI":
+            self.solver = GurobiWrapper.GurobiWrapper(model_name)
+            self.solver_constant = GurobiConstant
+        else:
+            raise ValueError("solver must be either COPT or GUROBI")
+
         self.cus_list = cus_list
         self.arg = arg
         self.T = arg.T
@@ -193,16 +231,19 @@ class DNP:
             if full_sku_list is not None
             else self.network.graph["sku_list"]
         )
-        if env is None:
-            self.env = cp.Envr(env_name)
-        else:
-            self.env = env
-        self.model = self.env.createModel(model_name)
-        self.model.setParam(COPT.Param.Logging, logging)
-        self.model.setParam(COPT.Param.RelGap, gap)
-        self.model.setParam(COPT.Param.TimeLimit, limit)
+        # if env is None:
+        #     self.env = cp.Envr(env_name)
+        # else:
+        #     self.env = env
+        # self.model = self.env.createModel(model_name)
+        self.env = self.solver.ENVR
+        self.model = self.solver.model
+
+        self.model.setParam(self.solver_constant.Param.Logging, logging)
+        self.model.setParam(self.solver_constant.Param.RelGap, gap)
+        self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
         if threads is not None:
-            self.model.setParam(COPT.Param.Threads, threads)
+            self.model.setParam(self.solver_constant.Param.Threads, threads)
 
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
@@ -330,7 +371,8 @@ class DNP:
         col_helper["beta"] = (
             self.original_obj
             if type(self.original_obj) == float
-            else self.original_obj.getExpr()
+            # else self.original_obj.getExpr() #copt
+            else self.solver.getExpr(self.original_obj)  # gurobi
         )
 
         self.columns_helpers = col_helper
@@ -433,29 +475,31 @@ class DNP:
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_inventory": {
-                "lb": -COPT.INFINITY if self.arg.backorder is True else 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "lb": -self.solver_constant.INFINITY
+                if self.arg.backorder is True
+                else 0,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
             },
             "sku_demand_slack": {
                 "lb": 0,
                 "ub": [],  # TBD
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "s",
                 "index": "(t, warehouse with demand / customer, k)",
             },
@@ -465,28 +509,28 @@ class DNP:
             self.var_types["select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.BINARY,
+                "vtype": self.solver_constant.BINARY,
                 "nameprefix": "p",
                 "index": "(t, edge)",
             }
             self.var_types["sku_select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.BINARY,
+                "vtype": self.solver_constant.BINARY,
                 "nameprefix": "pk",
                 "index": "(t, edge, k)",
             }
             self.var_types["open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.BINARY,
+                "vtype": self.solver_constant.BINARY,
                 "nameprefix": "y",
                 "index": "(t, node)",
             }
             self.var_types["sku_open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.BINARY,
+                "vtype": self.solver_constant.BINARY,
                 "nameprefix": "yk",
                 "index": "(t, plant, k)",
             }
@@ -559,7 +603,8 @@ class DNP:
         ##########################
         # add variables
         for vt, param in self.var_types.items():
-            self.variables[vt] = self.model.addVars(
+            # self.variables[vt] = self.model.addVars(
+            self.variables[vt] = self.solver.addVars(
                 idx[vt],
                 lb=param["lb"],
                 ub=param["ub"],
@@ -1110,7 +1155,7 @@ class DNP:
 
         obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
 
-        self.model.setObjective(obj, sense=COPT.MINIMIZE)
+        self.model.setObjective(obj, sense=self.solver_constant.MINIMIZE)
 
     def set_objective(self):
         self.obj_types = {
@@ -1139,7 +1184,7 @@ class DNP:
             self.ef,
         ) = self.get_original_objective()
 
-        self.model.setObjective(self.original_obj, sense=COPT.MINIMIZE)
+        self.model.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
 
         return
 
@@ -1342,7 +1387,7 @@ class DNP:
                     # break
                     this_node_fixed_cost = 0
 
-            y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
+            y = self.model.addVar(vtype=self.solver_constant.BINARY, name=f"y_{node}")
             for t in range(self.T):
                 self.model.addConstr(self.variables["open"][(t, node)] <= y)
 
@@ -1362,7 +1407,7 @@ class DNP:
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 
-            p = self.model.addVar(vtype=COPT.BINARY, name=f"p_{edge}")
+            p = self.model.addVar(vtype=self.solver_constant.BINARY, name=f"p_{edge}")
 
             for t in range(self.T):
                 self.model.addConstr(self.variables["select_edge"][(t, edge)] <= p)
@@ -1378,7 +1423,8 @@ class DNP:
         return fixed_edge_cost
 
     def solve(self):
-        self.model.solve()
+        # self.model.solve()
+        self.solver.solve()
 
     def write(self, name):
         self.model.write(name)

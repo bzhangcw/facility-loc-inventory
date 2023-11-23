@@ -25,6 +25,9 @@ from read_data import read_data
 import dnp_model
 from param import Param
 import ray
+from solver_wrapper import GurobiWrapper, CoptWrapper
+from solver_wrapper.CoptConstant import CoptConstant
+from solver_wrapper.GurobiConstant import GurobiConstant
 
 
 class NetworkColumnGeneration:
@@ -46,7 +49,19 @@ class NetworkColumnGeneration:
         init_ray=False,
         num_workers=8,
         num_cpus=8,
+        solver="COPT",
     ) -> None:
+        if solver == "COPT":
+            self.solver_name = "COPT"
+            self.solver = CoptWrapper.CoptWrapper("RMP")
+            self.solver_constant = CoptConstant
+        elif solver == "GUROBI":
+            self.solver_name = "GUROBI"
+            self.solver = GurobiWrapper.GurobiWrapper("RMP")
+            self.solver_constant = GurobiConstant
+        else:
+            raise ValueError("solver must be either COPT or GUROBI")
+
         self._logger = utils.logger
         self._logger.setLevel(
             logging.DEBUG if cg_col_helper.CG_EXTRA_VERBOSITY else logging.INFO
@@ -62,8 +77,11 @@ class NetworkColumnGeneration:
             else self.network.graph["sku_list"]
         )
 
-        self.RMP_env = cp.Envr("RMP_env")
-        self.RMP_model = self.RMP_env.createModel("RMP")
+        # self.RMP_env = cp.Envr("RMP_env")
+        # self.RMP_model = self.RMP_env.createModel("RMP")
+        self.RMP_env = self.solver.ENVR
+        self.RMP_model = self.solver.model
+
         self.customer_list = customer_list  # List[Customer]
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
@@ -177,6 +195,7 @@ class NetworkColumnGeneration:
                     True,
                     self.bool_edge_lb,
                     self.bool_node_lb,
+                    self.solver_name,
                 )
                 self.worker_list.append(worker)
             cus_worker_id = n // cus_per_worker
@@ -224,21 +243,26 @@ class NetworkColumnGeneration:
                 bool_node_lb=self.bool_node_lb,
                 env=self.RMP_env,
                 cus_list=[customer],
+                solver=self.solver_name,
             )  # for initial column, set obj = 0
             oracle.modeling()
 
         return oracle
 
     def solve_lp_relaxation(self):
-        full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network)
+        full_lp_relaxation = dnp_model.DNP(
+            self.arg,
+            self.full_network,
+            solver=self.solver_name,
+        )
         full_lp_relaxation.modeling()
         # get the LP relaxation
         vars = full_lp_relaxation.model.getVars()
         binary_vars_index = []
         for v in vars:
-            if v.getType() == COPT.BINARY:
+            if v.getType() == self.solver_constant.BINARY:
                 binary_vars_index.append(v.getIdx())
-                v.setType(COPT.CONTINUOUS)
+                v.setType(self.solver_constant.CONTINUOUS)
         ######################
         full_lp_relaxation.model.setParam("Logging", 1)
         full_lp_relaxation.solve()
@@ -258,8 +282,10 @@ class NetworkColumnGeneration:
         # m.setParam('TimeLimit', 3600)
         # m.setParam('MIPGap', 0.01)
         # m.optimize()
-        self.RMP_model.solve()
-        self.RMP_model.setParam(COPT.Param.Logging, 0)
+        # self.RMP_model.solve()
+
+        self.RMP_model.setParam(self.solver_constant.Param.Logging, 0)
+        self.solver.solve()
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         """
@@ -345,7 +371,7 @@ class NetworkColumnGeneration:
         cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_RMP()
-        self.RMP_model.setParam(COPT.Param.Logging, 1)
+        self.RMP_model.setParam(self.solver_constant.Param.Logging, 1)
 
         self._logger.info("initialization of restricted master finished")
         self._logger.info("solving the first rmp")
@@ -355,7 +381,7 @@ class NetworkColumnGeneration:
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_RMP()
 
-                if self.RMP_model.status == COPT.INFEASIBLE:
+                if self.RMP_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     self.RMP_model.write(f"rmp@{self.iter}.lp")
                     self.RMP_model.computeIIS()
@@ -363,7 +389,8 @@ class NetworkColumnGeneration:
                     break
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    rmp_dual_vars = self.RMP_model.getDuals()
+                    # rmp_dual_vars = self.RMP_model.getDuals()
+                    rmp_dual_vars = self.solver.getDuals()
                     dual_vars = rmp_dual_vars
                     dual_index = self.dual_index
                 ######################################
@@ -448,7 +475,7 @@ class NetworkColumnGeneration:
                             # self.oracles[customer].model.status
                             # ray.get(self.oracles[customer].get_model_status.remote())
                             model_status
-                            == coptpy.COPT.INTERRUPTED
+                            == self.solver_constant.INTERRUPTED
                         ):
                             bool_early_stop = True
                             self._logger.info("early terminated")
@@ -543,7 +570,8 @@ class NetworkColumnGeneration:
                             # node_capacity_cons_name.append((t, node))
             capacity_cons_coef = [*edge_capacity_cons_coef, *node_capacity_cons_coef]
             # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
-            new_col = cp.Column(
+            # new_col = cp.Column(
+            new_col = self.solver.addColumn(
                 [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
                 [*capacity_cons_coef, 1.0],
             )
@@ -562,14 +590,14 @@ class NetworkColumnGeneration:
         """
         Initialize the RMP with initial columns
         """
-        self.RMP_model.setParam(COPT.Param.Logging, 0)
+        self.RMP_model.setParam(self.solver_constant.Param.Logging, 0)
 
         ################# add variables #################
         self.var_types = {
             "column_weights": {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "lambda",
                 "index": "(customer, number)",
             },
@@ -587,7 +615,8 @@ class NetworkColumnGeneration:
         # add variables
         self.vars = dict()
         for vt, param in self.var_types.items():
-            self.vars[vt] = self.RMP_model.addVars(
+            # self.vars[vt] = self.RMP_model.addVars(
+            self.vars[vt] = self.solver.addVars(
                 idx[vt],
                 lb=param["lb"],
                 ub=param["ub"],
@@ -641,7 +670,8 @@ class NetworkColumnGeneration:
                     # continue
                     transportation = 0 * self.vars["column_weights"].sum(customer, "*")
                 sumcoef = 0
-                for i in range(transportation.getSize()):
+                # for i in range(transportation.getSize()):
+                for i in range(self.solver.getExprSize(transportation)):
                     sumcoef += transportation.getCoeff(i)
                 if sumcoef == 0:
                     # continue
@@ -681,7 +711,8 @@ class NetworkColumnGeneration:
                         production = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     sumcoef = 0
-                    for i in range(production.getSize()):
+                    # for i in range(production.getSize()):
+                    for i in range(self.solver.getExprSize(production)):
                         sumcoef += production.getCoeff(i)
                     if sumcoef == 0:
                         # continue
@@ -717,7 +748,8 @@ class NetworkColumnGeneration:
                         holding = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     sumcoef = 0
-                    for i in range(holding.getSize()):
+                    # for i in range(holding.getSize()):
+                    for i in range(self.solver.getExprSize(holding)):
                         sumcoef += holding.getCoeff(i)
                     if sumcoef == 0:
                         # continue
@@ -756,7 +788,7 @@ class NetworkColumnGeneration:
                     * self.columns[customer][number]["beta"]
                 )
 
-        self.RMP_model.setObjective(obj, COPT.MINIMIZE)
+        self.RMP_model.setObjective(obj, self.solver_constant.MINIMIZE)
         self.rmp_capacity_cnstr = [
             *self.RMP_constrs["transportation_capacity"].values(),
             *self.RMP_constrs["node_capacity"].values(),
@@ -780,9 +812,9 @@ class NetworkColumnGeneration:
                     cus_col_value.loc[number, customer.idx] = self.columns[customer][
                         number
                     ]["beta"]
-                    cus_col_weights.loc[number, customer.idx] = self.vars[
-                        "column_weights"
-                    ][customer, number].value
+                    cus_col_weights.loc[number, customer.idx] = self.solver.getVarValue(
+                        self.vars["column_weights"][customer, number]
+                    )
                 else:
                     cus_col_value.loc[number, customer.idx] = 0
                     cus_col_weights.loc[number, customer.idx] = 0

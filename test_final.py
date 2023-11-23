@@ -7,6 +7,12 @@ from network import construct_network
 from param import Param
 from entity import Warehouse, Edge
 
+"""
+Run following command in the command line of Turing:
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+"""
+
+
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
@@ -23,7 +29,7 @@ if __name__ == "__main__":
         arg.add_cardinality,
     ) = (1, 1, 1, 1, 1, 0, 1)
     datapath = "data/data_0401_0inv.xlsx"
-    pick_instance = 2
+    pick_instance = 1
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
@@ -115,13 +121,15 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
 
-    # run_model = 'DNP'
+    # run_model = "DNP"
     run_model = "CG"
+    # solver = "GUROBI"
+    solver = "COPT"
 
     if run_model == "DNP":
         ############################   DNP   #########################
         # arg.add_in_upper = 1
-        model = DNP(arg, network)
+        model = DNP(arg, network, solver=solver)
         model.modeling()
         model.model.setParam("Logging", 1)
         model.model.setParam("Threads", 8)
@@ -133,7 +141,7 @@ if __name__ == "__main__":
         # NU: 每日仓库入库上限
         # Fn: node cost Fe: edge cost NL: node lowerbound
         # Ca: 每期履约消费者的仓库个数上限 FR: fulfill rate
-        model.model.write(
+        model.solver.write(
             "finaltest/C{}_L{}_CL{}_NU{}_Fn{}_Fe{}_NL{}_Ca{}.mps".format(
                 arg.cus_num,
                 arg.lowerbound,
@@ -145,7 +153,7 @@ if __name__ == "__main__":
                 arg.add_cardinality,
             )
         )
-        model.model.solve()
+        model.solver.solve()
         # model.get_solution(f"sol_mip_{pick_instance}_DNP/")
     elif run_model == "CG":
         ############################    CG    #########################
@@ -167,6 +175,7 @@ if __name__ == "__main__":
             bool_edge_lb=True,
             init_ray=init_ray,
             num_workers=num_workers,
+            solver=solver,
         )
         np_cg.run()
         np_cg.get_solution("New_sol/")
