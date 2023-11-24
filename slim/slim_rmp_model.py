@@ -1,5 +1,7 @@
 from dnp_model import *
-
+from solver_wrapper import GurobiWrapper, CoptWrapper
+from solver_wrapper.CoptConstant import CoptConstant
+from solver_wrapper.GurobiConstant import GurobiConstant
 
 class DNPSlim(DNP):
     """
@@ -28,7 +30,18 @@ class DNPSlim(DNP):
             limit: int = 3600,
             customer_list=None,
             env=None,
+            solver="COPT",
     ) -> None:
+        
+        if solver == "COPT":
+            self.solver = CoptWrapper.CoptWrapper(model_name)
+            self.solver_constant = CoptConstant
+        elif solver == "GUROBI":
+            self.solver = GurobiWrapper.GurobiWrapper(model_name)
+            self.solver_constant = GurobiConstant
+        else:
+            raise ValueError("solver must be either COPT or GUROBI")
+
         self.arg = arg
         self.T = arg.T
         self.network = network
@@ -39,16 +52,19 @@ class DNPSlim(DNP):
         )
         self.customer_list = customer_list
 
-        if env is None:
-            self.env = cp.Envr(env_name)
-        else:
-            self.env = env
-        self.model = self.env.createModel(model_name)
-        self.model.setParam(COPT.Param.Logging, logging)
-        self.model.setParam(COPT.Param.RelGap, gap)
-        self.model.setParam(COPT.Param.TimeLimit, limit)
+        # if env is None:
+        #     self.env = cp.Envr(env_name)
+        # else:
+        #     self.env = env
+        # self.model = self.env.createModel(model_name)
+        self.env = self.solver.ENVR
+        self.model = self.solver.model
+
+        self.model.setParam(self.solver_constant.Param.Logging, logging)
+        self.model.setParam(self.solver_constant.Param.RelGap, gap)
+        self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
         if threads is not None:
-            self.model.setParam(COPT.Param.Threads, threads)
+            self.model.setParam(self.solver_constant.Param.Threads, threads)
 
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
@@ -145,36 +161,36 @@ class DNPSlim(DNP):
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_delivery": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "d",
                 "index": "(t, warehouse, k)",
             },
             "sku_inventory": {
-                "lb": -COPT.INFINITY if self.arg.backorder is True else 0,
-                "ub": COPT.INFINITY,
-                "vtype": COPT.CONTINUOUS,
+                "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
+                "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
             },
             "sku_demand_slack": {
                 "lb": 0,
                 "ub": [],  # TBD
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "s",
                 "index": "(t, warehouse with demand / customer, k)",
             },
@@ -184,28 +200,28 @@ class DNPSlim(DNP):
             self.var_types["select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "p",
                 "index": "(t, edge)",
             }
             self.var_types["sku_select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "pk",
                 "index": "(t, edge, k)",
             }
             self.var_types["open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "y",
                 "index": "(t, node)",
             }
             self.var_types["sku_open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
+                "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "yk",
                 "index": "(t, plant, k)",
             }
@@ -275,14 +291,16 @@ class DNPSlim(DNP):
         ##########################
         # add variables
         for vt, param in self.var_types.items():
-            self.variables[vt] = self.model.addVars(
+            # self.variables[vt] = self.model.addVars(
+            self.variables[vt] = self.solver.addVars(
                 idx[vt],
                 lb=param["lb"],
                 ub=param["ub"],
                 vtype=param["vtype"],
                 nameprefix=f"{param['nameprefix']}_",
             )
-        self.variables["cg_temporary"] = self.model.addVars(
+        # self.variables["cg_temporary"] = self.model.addVars(
+        self.variables["cg_temporary"] = self.solver.addVars(
             [c.idx for c in self.customer_list], nameprefix="lbdtempo"
         )
         self.variables["column_weights"] = {}
@@ -301,7 +319,8 @@ class DNPSlim(DNP):
                 constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
 
                 if node.type == const.PLANT:
-                    constr = self.model.addConstr(
+                    # constr = self.model.addConstr(
+                    constr = self.solver.addConstr(
                         self.variables["sku_production"][t, node, k]
                         - self.variables["sku_flow"].sum(t, out_edges_master, k)
                         == 0,
@@ -321,7 +340,8 @@ class DNPSlim(DNP):
                     if t == 0:
                         if node.initial_inventory is not None:
                             # if self.open_relationship:
-                            self.model.addConstr(
+                            # self.model.addConstr(
+                            self.solver.addConstr(
                                 self.variables["open"][self.T - 1, node] == 1
                             )
                             last_period_inventory = (
@@ -337,7 +357,8 @@ class DNPSlim(DNP):
                         ]
                     # last_period_inventory *= self.cus_ratio
 
-                    constr = self.model.addConstr(
+                    # constr = self.model.addConstr(
+                    constr = self.solver.addConstr(
                         self.variables["sku_flow"].sum(t, in_edges, k)
                         + last_period_inventory
                         - fulfilled_demand
@@ -358,7 +379,8 @@ class DNPSlim(DNP):
         for e, edge in self._iterate_no_c_edges():
             sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
-            constr = self.model.addConstr(
+            # constr = self.model.addConstr(
+            constr = self.solver.addConstr(
                 self.variables["select_edge"][t, edge]
                 <= self.variables["open"][t, edge.start]
             )
@@ -367,15 +389,20 @@ class DNPSlim(DNP):
                 (t, edge, edge.start)
             ] = constr
 
-            self.constrs["open_relationship"]["select_edge"][
-                (t, edge, edge.end)
-            ] = constr = self.model.addConstr(
+
+            # constr = self.model.addConstr(
+            constr = self.solver.addConstr(
                 self.variables["select_edge"][t, edge]
                 <= self.variables["open"][t, edge.end]
             )
 
+            self.constrs["open_relationship"]["select_edge"][
+                (t, edge, edge.end)
+            ] = constr
+
             for k in sku_list:
-                constr = self.model.addConstr(
+                # constr = self.model.addConstr(
+                constr = self.solver.addConstr(
                     self.variables["sku_select_edge"][t, edge, k]
                     <= self.variables["select_edge"][t, edge]
                 )
@@ -391,15 +418,18 @@ class DNPSlim(DNP):
                     and node.has_demand(t)
                     and len(node.demand_sku[t]) > 0
             ):
-                constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                # constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                constr = self.solver.addConstr(self.variables["open"][t, node] == 1)
                 self.constrs["open_relationship"]["open"][(t, node)] = constr
             elif node.type == const.CUSTOMER:
-                constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                # constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+                constr = self.solver.addConstr(self.variables["open"][t, node] == 1)
                 self.constrs["open_relationship"]["open"][(t, node)] = constr
 
             for k in sku_list:
                 if node.type == const.PLANT:
-                    constr = self.model.addConstr(
+                    # constr = self.model.addConstr(
+                    constr = self.solver.addConstr(
                         self.variables["sku_open"][t, node, k]
                         <= self.variables["open"][t, node]
                     )
@@ -420,7 +450,8 @@ class DNPSlim(DNP):
                             <= 23
                     ):
                         # self.variables["select_edge"][t, edge] = 1
-                        self.model.addConstr(
+                        # self.model.addConstr(
+                        self.solver.addConstr(
                             self.variables["select_edge"][t, edge] == 1
                         )
                         print("Fixed select_edge", t, edge)
@@ -431,7 +462,8 @@ class DNPSlim(DNP):
             if self.bool_edge_lb and edge.variable_lb < np.inf:
                 self.constrs["transportation_variable_lb"][
                     (t, edge)
-                ] = self.model.addConstr(
+                # ] = self.model.addConstr(
+                ] = self.solver.addConstr(
                     flow_sum
                     >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
@@ -456,7 +488,8 @@ class DNPSlim(DNP):
 
                 self.constrs["transportation_capacity"][
                     (t, edge)
-                ] = self.model.addConstr(
+                # ] = self.model.addConstr(
+                ] = self.solver.addConstr(
                     flow_sum <= left_capacity * bound,
                     name=f"edge_capacity{t, edge}",
                 )
@@ -478,7 +511,8 @@ class DNPSlim(DNP):
             if self.bool_node_lb and node.production_lb < np.inf:
                 self.constrs["production_variable_lb"][
                     (t, node)
-                ] = self.model.addConstr(
+                # ] = self.model.addConstr(
+                ] = self.solver.addConstr(
                     node_sum >= node.production_lb * self.variables["open"][t, node],
                     name=f"node_lb{t, node}",
                 )
@@ -497,7 +531,8 @@ class DNPSlim(DNP):
                 if left_capacity < 0:
                     print("t", t, "node", node, "left_capacity", left_capacity)
 
-                self.constrs["production_capacity"][(t, node)] = self.model.addConstr(
+                # self.constrs["production_capacity"][(t, node)] = self.model.addConstr(
+                self.constrs["production_capacity"][(t, node)] = self.solver.addConstr(
                     node_sum <= bound * left_capacity,
                     name=f"node_capacity{t, node}",
                 )
@@ -519,7 +554,8 @@ class DNPSlim(DNP):
 
             # lower bound constraint
             if self.bool_node_lb and node.inventory_lb < np.inf:
-                self.constrs["holding_variable_lb"][(t, node)] = self.model.addConstr(
+                # self.constrs["holding_variable_lb"][(t, node)] = self.model.addConstr(
+                self.constrs["holding_variable_lb"][(t, node)] = self.solver.addConstr(
                     node_sum >= node.inventory_lb * self.variables["open"][(t, node)]
                 )
 
@@ -535,7 +571,8 @@ class DNPSlim(DNP):
                     print("t", t, "node", node, "left_capacity", left_capacity)
                 bound = self.variables["open"][(t, node)] if self.bool_covering else 1.0
 
-                constr = self.model.addConstr(
+                # constr = self.model.addConstr(
+                constr = self.solver.addConstr(
                     self.variables["sku_inventory"].sum(t, node, "*")
                     <= left_capacity * bound
                 )
@@ -546,12 +583,14 @@ class DNPSlim(DNP):
 
             if self.arg.backorder is True:
                 if self.bool_covering:
-                    self.model.addConstr(
+                    # self.model.addConstr(
+                    self.solver.addConstr(
                         self.variables["sku_inventory"].sum(t, node, "*")
                         >= -self.arg.M * self.variables["open"][t, node]
                     )
                 else:
-                    self.model.addConstr(
+                    # self.model.addConstr(
+                    self.solver.addConstr(
                         self.variables["sku_inventory"].sum(t, node, "*") >= -self.arg.M
                     )
                 self.index_for_dual_var += 1
@@ -562,7 +601,8 @@ class DNPSlim(DNP):
                     edge = self.network.edges[e]["object"]
                     if edge.end == node:
                         in_inventory_sum += self.variables["sku_flow"].sum(t, edge, "*")
-                self.model.addConstr(in_inventory_sum <= node.inventory_capacity * 0.4)
+                # self.model.addConstr(in_inventory_sum <= node.inventory_capacity * 0.4)
+                self.solver.addConstr(in_inventory_sum <= node.inventory_capacity * 0.4)
                 self.index_for_dual_var += 1
 
         return
@@ -625,7 +665,8 @@ class DNPSlim(DNP):
 
         obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
 
-        self.model.setObjective(obj, sense=COPT.MINIMIZE)
+        # self.model.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+        self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
 
     def set_objective(self):
         self.obj_types = {
@@ -654,7 +695,8 @@ class DNPSlim(DNP):
             self.ef,
         ) = self.get_original_objective()
 
-        self.model.setObjective(self.original_obj, sense=COPT.MINIMIZE)
+        # self.model.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+        self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
 
         return
 
@@ -725,11 +767,13 @@ class DNPSlim(DNP):
             for t in range(self.T):
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 for k in sku_list:
-                    self.cg_binding_constrs[node, k, t] = self.model.addConstr(
+                    # self.cg_binding_constrs[node, k, t] = self.model.addConstr(
+                    self.cg_binding_constrs[node, k, t] = self.solver.addConstr(
                         self.variables["sku_delivery"][t, node, k] == 0
                     )
         for c in self.customer_list:
-            self.cg_binding_constrs_ws[c] = self.model.addConstr(
+            # self.cg_binding_constrs_ws[c] = self.model.addConstr(
+            self.cg_binding_constrs_ws[c] = self.solver.addConstr(
                 self.variables["cg_temporary"][c.idx] == 0.0
             )
 

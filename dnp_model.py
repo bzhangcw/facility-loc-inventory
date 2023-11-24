@@ -312,7 +312,8 @@ class DNP:
         col_helper["beta"] = (
             self.original_obj
             if type(self.original_obj) == float
-            else self.original_obj.getExpr()
+            # else self.original_obj.getExpr()
+            else self.solver.getExpr(self.original_obj)
         )
 
         self.columns_helpers = col_helper

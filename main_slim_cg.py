@@ -9,6 +9,11 @@ from slim.slim_cg import NetworkColumnGenerationSlim as NCS
 from network import construct_network
 from param import Param
 
+"""
+Run following command in the command line of Turing when using Ray:
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+"""
+
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
@@ -19,7 +24,7 @@ if __name__ == "__main__":
     arg.capacity = 1
     # arg.lowerbound = 1
     datapath = "data/data_0401_0inv.xlsx"
-    pick_instance = 3
+    pick_instance = 1
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
@@ -101,9 +106,11 @@ if __name__ == "__main__":
 
     init_primal = None
     init_dual = None
-    init_ray = False
-    num_workers = 10
-    num_cpus = 36
+    init_ray = True
+    num_workers = 4
+    num_cpus = 8
+    # solver = "COPT"
+    solver = "GUROBI"
 
     np_cg = NCS(
         arg,
@@ -118,6 +125,7 @@ if __name__ == "__main__":
         init_ray=init_ray,
         num_workers=num_workers,
         num_cpus=num_cpus,
+        solver=solver,
     )
     np_cg.run()
     np_cg.get_solution("new_sol_1/")
