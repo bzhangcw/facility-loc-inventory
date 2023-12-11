@@ -56,3 +56,7 @@ class GurobiWrapper(SolverWrapper):
 
     def getVarValue(self, var):
         return var.getAttr("x")
+    
+    def setEqualConstr(self, constr, value):
+        constr.setAttr("RHS", value)
+        constr.setAttr("Sense", GRB.EQUAL)

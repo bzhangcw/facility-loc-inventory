@@ -1,15 +1,15 @@
-from np_cg import *
+import os
+import time
+
 import numpy as np
 import pandas as pd
+from coptpy import COPT
 
 import utils
 from dnp_model import DNP
 from network import construct_network
+from np_cg import *
 from param import Param
-from coptpy import COPT
-
-import os
-import time
 
 
 def write1dict2csv(

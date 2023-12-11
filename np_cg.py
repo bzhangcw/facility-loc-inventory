@@ -1,67 +1,50 @@
+import argparse
 import json
 import logging
+import os
 import pickle
+from typing import *
+from typing import List
 
 # import gurobipy as gp
 import coptpy
 import coptpy as cp
-from coptpy import COPT
-from typing import *
-
-import cg_col_helper
-import const
-import utils
-import cg_init
 import networkx as nx
 import numpy as np
 import pandas as pd
-from typing import List
-import argparse
-from entity import SKU, Customer
-from tqdm import tqdm
-import os
-from network import construct_network, get_pred_reachable_nodes
-from read_data import read_data
-import dnp_model
-from param import Param
 import ray
-from solver_wrapper import GurobiWrapper, CoptWrapper
-from solver_wrapper.CoptConstant import CoptConstant
-from solver_wrapper.GurobiConstant import GurobiConstant
+from coptpy import COPT
+from tqdm import tqdm
+
+import cg_col_helper
+import cg_init
+import const
+import dnp_model
+import utils
+from entity import SKU, Customer
+from network import construct_network, get_pred_reachable_nodes
+from param import Param
+from read_data import read_data
 
 
 class NetworkColumnGeneration:
-    CG_BCD_FRACTION = 0.5
-
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        bool_covering=False,
-        bool_edge_lb=False,
-        bool_node_lb=False,
-        max_iter=500,
-        init_primal=None,
-        init_sweeping=True,
-        init_dual=None,
-        init_ray=False,
-        num_workers=8,
-        num_cpus=8,
-        solver="COPT",
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            bool_covering=False,
+            bool_edge_lb=False,
+            bool_node_lb=False,
+            max_iter=500,
+            init_primal=None,
+            init_sweeping=True,
+            init_dual=None,
+            init_ray=False,
+            num_workers=8,
+            num_cpus=8
     ) -> None:
-        if solver == "COPT":
-            self.solver_name = "COPT"
-            self.solver = CoptWrapper.CoptWrapper("RMP")
-            self.solver_constant = CoptConstant
-        elif solver == "GUROBI":
-            self.solver_name = "GUROBI"
-            self.solver = GurobiWrapper.GurobiWrapper("RMP")
-            self.solver_constant = GurobiConstant
-        else:
-            raise ValueError("solver must be either COPT or GUROBI")
-
         self._logger = utils.logger
         self._logger.setLevel(
             logging.DEBUG if cg_col_helper.CG_EXTRA_VERBOSITY else logging.INFO
@@ -77,11 +60,8 @@ class NetworkColumnGeneration:
             else self.network.graph["sku_list"]
         )
 
-        # self.RMP_env = cp.Envr("RMP_env")
-        # self.RMP_model = self.RMP_env.createModel("RMP")
-        self.RMP_env = self.solver.ENVR
-        self.RMP_model = self.solver.model
-
+        self.RMP_env = cp.Envr("RMP_env")
+        self.RMP_model = self.RMP_env.createModel("RMP")
         self.customer_list = customer_list  # List[Customer]
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
@@ -121,7 +101,6 @@ class NetworkColumnGeneration:
             if ray.is_initialized():
                 ray.shutdown()
             ray.init(num_cpus=num_cpus)
-        self.skip_customers = set()
 
     def get_subgraph(self):
         """
@@ -187,7 +166,7 @@ class NetworkColumnGeneration:
         cus_per_worker = int(np.ceil(self.cus_num / self.num_workers))
         for customer, n in zip(self.customer_list, range(self.cus_num)):
             if n % cus_per_worker == 0:
-                cus_list = self.customer_list[n : min(n + cus_per_worker, self.cus_num)]
+                cus_list = self.customer_list[n: min(n + cus_per_worker, self.cus_num)]
                 worker = dnp_model.DNP_worker.remote(
                     cus_list,
                     self.arg,
@@ -195,15 +174,14 @@ class NetworkColumnGeneration:
                     True,
                     self.bool_edge_lb,
                     self.bool_node_lb,
-                    self.solver_name,
                 )
                 self.worker_list.append(worker)
             cus_worker_id = n // cus_per_worker
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-        self,
-        customer: Customer,
+            self,
+            customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -243,26 +221,21 @@ class NetworkColumnGeneration:
                 bool_node_lb=self.bool_node_lb,
                 env=self.RMP_env,
                 cus_list=[customer],
-                solver=self.solver_name,
             )  # for initial column, set obj = 0
             oracle.modeling()
 
         return oracle
 
     def solve_lp_relaxation(self):
-        full_lp_relaxation = dnp_model.DNP(
-            self.arg,
-            self.full_network,
-            solver=self.solver_name,
-        )
+        full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network)
         full_lp_relaxation.modeling()
         # get the LP relaxation
         vars = full_lp_relaxation.model.getVars()
         binary_vars_index = []
         for v in vars:
-            if v.getType() == self.solver_constant.BINARY:
+            if v.getType() == COPT.BINARY:
                 binary_vars_index.append(v.getIdx())
-                v.setType(self.solver_constant.CONTINUOUS)
+                v.setType(COPT.CONTINUOUS)
         ######################
         full_lp_relaxation.model.setParam("Logging", 1)
         full_lp_relaxation.solve()
@@ -282,10 +255,8 @@ class NetworkColumnGeneration:
         # m.setParam('TimeLimit', 3600)
         # m.setParam('MIPGap', 0.01)
         # m.optimize()
-        # self.RMP_model.solve()
-
-        self.RMP_model.setParam(self.solver_constant.Param.Logging, 0)
-        self.solver.solve()
+        self.RMP_model.solve()
+        self.RMP_model.setParam(COPT.Param.Logging, 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         """
@@ -371,7 +342,7 @@ class NetworkColumnGeneration:
         cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_RMP()
-        self.RMP_model.setParam(self.solver_constant.Param.Logging, 1)
+        self.RMP_model.setParam(COPT.Param.Logging, 1)
 
         self._logger.info("initialization of restricted master finished")
         self._logger.info("solving the first rmp")
@@ -381,7 +352,7 @@ class NetworkColumnGeneration:
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_RMP()
 
-                if self.RMP_model.status == self.solver_constant.INFEASIBLE:
+                if self.RMP_model.status == COPT.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     self.RMP_model.write(f"rmp@{self.iter}.lp")
                     self.RMP_model.computeIIS()
@@ -389,8 +360,7 @@ class NetworkColumnGeneration:
                     break
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    # rmp_dual_vars = self.RMP_model.getDuals()
-                    rmp_dual_vars = self.solver.getDuals()
+                    rmp_dual_vars = self.RMP_model.getDuals()
                     dual_vars = rmp_dual_vars
                     dual_index = self.dual_index
                 ######################################
@@ -399,16 +369,13 @@ class NetworkColumnGeneration:
                     # modify for parallel
                     if self.init_ray:
                         for worker in tqdm(self.worker_list, ncols=80, leave=False):
-                            worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
                             worker.update_objective_all.remote(dual_vars, dual_index)
                             worker.solve_all.remote()
                     else:
                         for col_ind, customer in tqdm(
-                            enumerate(self.customer_list), ncols=80, leave=False
+                                enumerate(self.customer_list), ncols=80, leave=False
                         ):
-                            if customer in self.skip_customers:
-                                continue
                             oracle = self.oracles[customer]
                             oracle.model.reset()
                             oracle.update_objective(customer, dual_vars, dual_index)
@@ -438,7 +405,7 @@ class NetworkColumnGeneration:
                         v = []
                         model_status_list = []
                         for new_col, _v, _model_status in zip(
-                            all_new_cols, all_v, all_model_status_list
+                                all_new_cols, all_v, all_model_status_list
                         ):
                             new_cols.extend(new_col)
                             v.extend(_v)
@@ -452,30 +419,19 @@ class NetworkColumnGeneration:
                         model_status_list = [
                             oracle.model.status for oracle in self.oracles.values()
                         ]
-                    self.skip_customers = set()
+
                     for col_ind, customer in enumerate(self.customer_list):
                         self.red_cost[self.iter, col_ind] = v[col_ind]
-                        this_added = (
-                            v[col_ind] / self.RMP_model.objval
-                        ) < -1e-8 or dual_vars is None
-                        # 1. is there a deterministic criterion?
-                        # this is not true,
-                        # it will not update any more
-                        # if not this_added:
-                        #     self.skip_customers.add(customer)
-                        # 2. randomized block coordinate descend
-                        if np.random.random() > self.CG_BCD_FRACTION:
-                            self.skip_customers.add(customer)
-                        added = added or this_added
+                        added = (v[col_ind] < -1e-9 or dual_vars is None) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
                         model_status = model_status_list[col_ind]
                         if (
-                            # self.oracles[customer].model.status
-                            # ray.get(self.oracles[customer].get_model_status.remote())
-                            model_status
-                            == self.solver_constant.INTERRUPTED
+                                # self.oracles[customer].model.status
+                                # ray.get(self.oracles[customer].get_model_status.remote())
+                                model_status
+                                == coptpy.COPT.INTERRUPTED
                         ):
                             bool_early_stop = True
                             self._logger.info("early terminated")
@@ -485,8 +441,7 @@ class NetworkColumnGeneration:
                 self.iter += 1
 
                 self._logger.info(
-                    f"{self.iter:5d} / {self.max_iter:d}\t"
-                    + f"f: {self.RMP_model.objval:+.6e}\t c'(relative): {np.min(self.red_cost[self.iter - 1, :])/ self.RMP_model.objval:+.4e} \t to-skip-next: {self.skip_customers.__len__()}/{self.cus_num}",
+                    f"k: {self.iter:5d} / {self.max_iter:d} f: {self.RMP_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
                 )
 
                 if not added or self.iter >= self.max_iter:
@@ -570,8 +525,7 @@ class NetworkColumnGeneration:
                             # node_capacity_cons_name.append((t, node))
             capacity_cons_coef = [*edge_capacity_cons_coef, *node_capacity_cons_coef]
             # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
-            # new_col = cp.Column(
-            new_col = self.solver.addColumn(
+            new_col = cp.Column(
                 [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
                 [*capacity_cons_coef, 1.0],
             )
@@ -590,14 +544,14 @@ class NetworkColumnGeneration:
         """
         Initialize the RMP with initial columns
         """
-        self.RMP_model.setParam(self.solver_constant.Param.Logging, 0)
+        self.RMP_model.setParam(COPT.Param.Logging, 0)
 
         ################# add variables #################
         self.var_types = {
             "column_weights": {
                 "lb": 0,
                 "ub": 1,
-                "vtype": self.solver_constant.CONTINUOUS,
+                "vtype": COPT.CONTINUOUS,
                 "nameprefix": "lambda",
                 "index": "(customer, number)",
             },
@@ -615,8 +569,7 @@ class NetworkColumnGeneration:
         # add variables
         self.vars = dict()
         for vt, param in self.var_types.items():
-            # self.vars[vt] = self.RMP_model.addVars(
-            self.vars[vt] = self.solver.addVars(
+            self.vars[vt] = self.RMP_model.addVars(
                 idx[vt],
                 lb=param["lb"],
                 ub=param["ub"],
@@ -656,22 +609,21 @@ class NetworkColumnGeneration:
 
                     for number in range(len(self.columns[customer])):
                         transportation += self.vars["column_weights"][
-                            customer, number
-                        ] * (
-                            # self.columns[customer][number]["sku_flow_sum"][t][edge]
-                            # mismatch bug of edge as keys, use idx instead
-                            # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
-                            self.columns[customer][number]["sku_flow_sum"][t][edge]
-                            if e in self.subgraph[customer].edges
-                            else 0.0
-                        )
+                                              customer, number
+                                          ] * (
+                                              # self.columns[customer][number]["sku_flow_sum"][t][edge]
+                                              # mismatch bug of edge as keys, use idx instead
+                                              # self.columns[customer][number]["sku_flow_sum"][t][edge.idx]
+                                              self.columns[customer][number]["sku_flow_sum"][t][edge]
+                                              if e in self.subgraph[customer].edges
+                                              else 0.0
+                                          )
 
                 if type(transportation) == float:
                     # continue
                     transportation = 0 * self.vars["column_weights"].sum(customer, "*")
                 sumcoef = 0
-                # for i in range(transportation.getSize()):
-                for i in range(self.solver.getExprSize(transportation)):
+                for i in range(transportation.getSize()):
                     sumcoef += transportation.getCoeff(i)
                 if sumcoef == 0:
                     # continue
@@ -694,25 +646,24 @@ class NetworkColumnGeneration:
                     for customer in self.customer_list:
                         for number in range(len(self.columns[customer])):
                             production += self.vars["column_weights"][
-                                customer, number
-                            ] * (
-                                self.columns[customer][number]["sku_production_sum"][t][
-                                    # node
-                                    # mismatch bug of node as keys, use idx instead
-                                    # node.idx
-                                    node
-                                ]
-                                if node in self.subgraph[customer].nodes
-                                else 0.0
-                            )
+                                              customer, number
+                                          ] * (
+                                              self.columns[customer][number]["sku_production_sum"][t][
+                                                  # node
+                                                  # mismatch bug of node as keys, use idx instead
+                                                  # node.idx
+                                                  node
+                                              ]
+                                              if node in self.subgraph[customer].nodes
+                                              else 0.0
+                                          )
 
                     if type(production) == float:
                         # continue
                         production = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     sumcoef = 0
-                    # for i in range(production.getSize()):
-                    for i in range(self.solver.getExprSize(production)):
+                    for i in range(production.getSize()):
                         sumcoef += production.getCoeff(i)
                     if sumcoef == 0:
                         # continue
@@ -748,8 +699,7 @@ class NetworkColumnGeneration:
                         holding = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     sumcoef = 0
-                    # for i in range(holding.getSize()):
-                    for i in range(self.solver.getExprSize(holding)):
+                    for i in range(holding.getSize()):
                         sumcoef += holding.getCoeff(i)
                     if sumcoef == 0:
                         # continue
@@ -784,11 +734,11 @@ class NetworkColumnGeneration:
         for customer in self.customer_list:
             for number in range(len(self.columns[customer])):
                 obj += (
-                    self.vars["column_weights"][customer, number]
-                    * self.columns[customer][number]["beta"]
+                        self.vars["column_weights"][customer, number]
+                        * self.columns[customer][number]["beta"]
                 )
 
-        self.RMP_model.setObjective(obj, self.solver_constant.MINIMIZE)
+        self.RMP_model.setObjective(obj, COPT.MINIMIZE)
         self.rmp_capacity_cnstr = [
             *self.RMP_constrs["transportation_capacity"].values(),
             *self.RMP_constrs["node_capacity"].values(),
@@ -812,9 +762,9 @@ class NetworkColumnGeneration:
                     cus_col_value.loc[number, customer.idx] = self.columns[customer][
                         number
                     ]["beta"]
-                    cus_col_weights.loc[number, customer.idx] = self.solver.getVarValue(
-                        self.vars["column_weights"][customer, number]
-                    )
+                    cus_col_weights.loc[number, customer.idx] = self.vars[
+                        "column_weights"
+                    ][customer, number].value
                 else:
                     cus_col_value.loc[number, customer.idx] = 0
                     cus_col_weights.loc[number, customer.idx] = 0
@@ -833,7 +783,7 @@ class NetworkColumnGeneration:
         )
 
         with open(
-            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:

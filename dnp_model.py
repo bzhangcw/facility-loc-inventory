@@ -1,26 +1,23 @@
 import argparse
+import asyncio
 import logging
 import os
+import time
 from typing import List
-import numpy as np
+
 import coptpy as cp
-import pandas as pd
 import networkx as nx
+import numpy as np
+import pandas as pd
+import ray
 from coptpy import COPT
 
-import asyncio
-import update_constr
-from update_constr import *
 import const
+import update_constr
 from entity import SKU
 from read_data import read_data
+from update_constr import *
 from utils import get_in_edges, get_out_edges, logger
-import time
-import ray
-
-from solver_wrapper import GurobiWrapper, CoptWrapper
-from solver_wrapper.CoptConstant import CoptConstant
-from solver_wrapper.GurobiConstant import GurobiConstant
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging
@@ -39,14 +36,7 @@ class DNP_worker:
     """
 
     def __init__(
-        self,
-        cus_list,
-        arg,
-        bool_covering,
-        bool_capacity,
-        bool_edge_lb,
-        bool_node_lb,
-        solver="COPT",
+        self, cus_list, arg, bool_covering, bool_capacity, bool_edge_lb, bool_node_lb
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -55,14 +45,6 @@ class DNP_worker:
         self.bool_capacity = bool_capacity
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
-        self.solver = solver
-
-        if solver == "COPT":
-            self.solver_constant = CoptConstant
-        elif solver == "GUROBI":
-            self.solver_constant = GurobiConstant
-        else:
-            raise ValueError("solver must be either COPT or GUROBI")
 
     def construct_DNPs(self, subgraph_dict):
         for customer in self.cus_list:
@@ -70,7 +52,7 @@ class DNP_worker:
             full_sku_list = subgraph.graph["sku_list"]
             env_name = customer.idx + "_oracle_env"
             model_name = customer.idx + "_oracle"
-            oracle = DNP(
+            oracle = dnp_model.DNP(
                 self.arg,
                 subgraph,
                 full_sku_list,
@@ -86,27 +68,8 @@ class DNP_worker:
                 gap=CG_SUBP_GAP,
                 limit=CG_SUBP_TIMELIMIT,
                 cus_list=[customer],
-                solver=self.solver,
             )
             oracle.modeling()
-            for k, v in oracle.variables["select_edge"].items():
-                if k[1].end.type != "C":
-                    # v.setType(self.solver_constant.CONTINUOUS)
-                    oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
-
-            for k, v in oracle.variables["sku_select_edge"].items():
-                if k[1].end.type != "C":
-                    # v.setType(self.solver_constant.CONTINUOUS)
-                    oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
-
-            for k, v in oracle.variables["open"].items():
-                # v.setType(self.solver_constant.CONTINUOUS)
-                oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
-
-            for k, v in oracle.variables["sku_open"].items():
-                # v.setType(self.solver_constant.CONTINUOUS)
-                oracle.solver.setVarType(v, self.solver_constant.CONTINUOUS)
-
             self.DNP_dict[customer] = oracle
 
     # for primal sweeping
@@ -140,8 +103,6 @@ class DNP_worker:
 
     def model_reset_all(self):
         for customer in self.cus_list:
-            if customer in self.skipped:
-                continue
             self.DNP_dict[customer].model_reset()
 
     def update_objective(self, customer, dual_vars, dual_index):
@@ -149,8 +110,6 @@ class DNP_worker:
 
     def update_objective_all(self, dual_vars, dual_index):
         for customer in self.cus_list:
-            if customer in self.skipped:
-                continue
             self.DNP_dict[customer].update_objective(customer, dual_vars, dual_index)
 
     def solve(self, customer):
@@ -158,8 +117,6 @@ class DNP_worker:
 
     def solve_all(self):
         for customer in self.cus_list:
-            if customer in self.skipped:
-                continue
             self.DNP_dict[customer].solve()
 
     def get_model_objval(self, customer):
@@ -179,9 +136,6 @@ class DNP_worker:
         for customer in self.cus_list:
             status.append(self.DNP_dict[customer].get_model_status())
         return status
-
-    def set_scope(self, skipped):
-        self.skipped = skipped
 
 
 class DNP:
@@ -211,17 +165,7 @@ class DNP:
         cus_num: int = 1,
         env=None,
         cus_list=None,
-        solver="COPT",
     ) -> None:
-        if solver == "COPT":
-            self.solver = CoptWrapper.CoptWrapper(model_name)
-            self.solver_constant = CoptConstant
-        elif solver == "GUROBI":
-            self.solver = GurobiWrapper.GurobiWrapper(model_name)
-            self.solver_constant = GurobiConstant
-        else:
-            raise ValueError("solver must be either COPT or GUROBI")
-
         self.cus_list = cus_list
         self.arg = arg
         self.T = arg.T
@@ -231,19 +175,16 @@ class DNP:
             if full_sku_list is not None
             else self.network.graph["sku_list"]
         )
-        # if env is None:
-        #     self.env = cp.Envr(env_name)
-        # else:
-        #     self.env = env
-        # self.model = self.env.createModel(model_name)
-        self.env = self.solver.ENVR
-        self.model = self.solver.model
-
-        self.model.setParam(self.solver_constant.Param.Logging, logging)
-        self.model.setParam(self.solver_constant.Param.RelGap, gap)
-        self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
+        if env is None:
+            self.env = cp.Envr(env_name)
+        else:
+            self.env = env
+        self.model = self.env.createModel(model_name)
+        self.model.setParam(COPT.Param.Logging, logging)
+        self.model.setParam(COPT.Param.RelGap, gap)
+        self.model.setParam(COPT.Param.TimeLimit, limit)
         if threads is not None:
-            self.model.setParam(self.solver_constant.Param.Threads, threads)
+            self.model.setParam(COPT.Param.Threads, threads)
 
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
@@ -340,8 +281,9 @@ class DNP:
         for t in range(self.arg.T):
             for e in self.network.edges:
                 edge = self.network.edges[e]["object"]
-                if edge.capacity == np.inf:
-                    continue
+                #lk：没必要加这个限制
+                # if edge.capacity == np.inf:
+                #     continue
                 # can we do better?
                 # col_helper["sku_flow_sum"][t][edge] = self.variables["sku_flow"].sum(
                 # col_helper["sku_flow_sum"][t][edge.idx] = self.variables[
@@ -371,8 +313,8 @@ class DNP:
         col_helper["beta"] = (
             self.original_obj
             if type(self.original_obj) == float
-            # else self.original_obj.getExpr() #copt
-            else self.solver.getExpr(self.original_obj)  # gurobi
+            # else self.original_obj.getExpr()
+            else self.solver.getExpr(self.original_obj)
         )
 
         self.columns_helpers = col_helper
@@ -465,7 +407,7 @@ class DNP:
         self.set_objective()
 
         # for remote
-        self.init_col_helpers()
+        # self.init_col_helpers()
 
     def add_vars(self):
         """
@@ -475,31 +417,29 @@ class DNP:
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                "vtype": self.solver_constant.CONTINUOUS,
+                "ub": COPT.INFINITY,
+                "vtype": COPT.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                "vtype": self.solver_constant.CONTINUOUS,
+                "ub": COPT.INFINITY,
+                "vtype": COPT.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_inventory": {
-                "lb": -self.solver_constant.INFINITY
-                if self.arg.backorder is True
-                else 0,
-                "ub": self.solver_constant.INFINITY,
-                "vtype": self.solver_constant.CONTINUOUS,
+                "lb": -COPT.INFINITY if self.arg.backorder is True else 0,
+                "ub": COPT.INFINITY,
+                "vtype": COPT.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
             },
             "sku_demand_slack": {
                 "lb": 0,
                 "ub": [],  # TBD
-                "vtype": self.solver_constant.CONTINUOUS,
+                "vtype": COPT.CONTINUOUS,
                 "nameprefix": "s",
                 "index": "(t, warehouse with demand / customer, k)",
             },
@@ -509,28 +449,28 @@ class DNP:
             self.var_types["select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": self.solver_constant.BINARY,
+                "vtype": COPT.BINARY,
                 "nameprefix": "p",
                 "index": "(t, edge)",
             }
             self.var_types["sku_select_edge"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": self.solver_constant.BINARY,
+                "vtype": COPT.BINARY,
                 "nameprefix": "pk",
                 "index": "(t, edge, k)",
             }
             self.var_types["open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": self.solver_constant.BINARY,
+                "vtype": COPT.BINARY,
                 "nameprefix": "y",
                 "index": "(t, node)",
             }
             self.var_types["sku_open"] = {
                 "lb": 0,
                 "ub": 1,
-                "vtype": self.solver_constant.BINARY,
+                "vtype": COPT.BINARY,
                 "nameprefix": "yk",
                 "index": "(t, plant, k)",
             }
@@ -603,8 +543,7 @@ class DNP:
         ##########################
         # add variables
         for vt, param in self.var_types.items():
-            # self.variables[vt] = self.model.addVars(
-            self.variables[vt] = self.solver.addVars(
+            self.variables[vt] = self.model.addVars(
                 idx[vt],
                 lb=param["lb"],
                 ub=param["ub"],
@@ -618,42 +557,28 @@ class DNP:
         # # for debug
 
     def add_constraints(self):
-        if self.arg.add_cardinality:
-            self.constr_types = {
-                "flow_conservation": {"index": "(t, node, k)"},
-                "open_relationship": {
-                    "select_edge": {"index": "(t, edge, node)"},
-                    "sku_select_edge": {"index": "(t, edge, k)"},
-                    "open": {"index": "(t, warehouse with demand / customer)"},
-                    "sku_open": {"index": "(t, node, k)"},
-                    "cardinality": {"index": "(t, node)"},
-                },
-                "transportation_capacity": {"index": "(t, edge)"},
-                # "transportation_variable_lb": {"index": "(t, edge)"},
-                "production_capacity": {"index": "(t, node)"},
-                # "production_variable_lb": {"index": "(t, node)"},
-                "holding_capacity": {"index": "(t, node)"},
-                # "holding_variable_lb": {"index": "(t, node)"},
-                "holding_capacity_back_order": {"index": "(t, node)"},
-            }
-        else:
-            self.constr_types = {
-                "flow_conservation": {"index": "(t, node, k)"},
-                "open_relationship": {
-                    "select_edge": {"index": "(t, edge, node)"},
-                    "sku_select_edge": {"index": "(t, edge, k)"},
-                    "open": {"index": "(t, warehouse with demand / customer)"},
-                    "sku_open": {"index": "(t, node, k)"},
-                },
-                "transportation_capacity": {"index": "(t, edge)"},
-                # "transportation_variable_lb": {"index": "(t, edge)"},
-                "production_capacity": {"index": "(t, node)"},
-                # "production_variable_lb": {"index": "(t, node)"},
-                "holding_capacity": {"index": "(t, node)"},
-                # "holding_variable_lb": {"index": "(t, node)"},
-                "holding_capacity_back_order": {"index": "(t, node)"},
-            }
 
+        self.constr_types = {
+            "flow_conservation": {"index": "(t, node, k)"},
+            "open_relationship": {
+                "select_edge": {"index": "(t, edge, node)"},
+                "sku_select_edge": {"index": "(t, edge, k)"},
+                "open": {"index": "(t, warehouse with demand / customer)"},
+                "sku_open": {"index": "(t, node, k)"},
+            },
+            "transportation_capacity": {"index": "(t, edge)"},
+            # "transportation_variable_lb": {"index": "(t, edge)"},
+            "production_capacity": {"index": "(t, node)"},
+            # "production_variable_lb": {"index": "(t, node)"},
+            "holding_capacity": {"index": "(t, node)"},
+            # "holding_variable_lb": {"index": "(t, node)"},
+            "holding_capacity_back_order": {"index": "(t, node)"},
+        }
+
+        if self.arg.add_cardinality:
+            self.constr_types["cardinality"] = {"index": "(t, node)"}
+        if self.arg.add_distance:
+            self.constr_types["distance"] = {"index": "(t, node)"}
         if self.bool_edge_lb:
             self.constr_types["transportation_variable_lb"] = {"index": "(t, edge)"}
         if self.bool_node_lb:
@@ -674,12 +599,15 @@ class DNP:
             if self.bool_covering:
                 # node status and open relationship
                 self.add_constr_open_relationship(t)
-
+                if self.arg.add_cardinality:
+                    self.add_constr_cardinality(t)
             if self.bool_capacity:
                 # transportation/production/holding capacity
                 self.add_constr_transportation_capacity(t)
                 self.add_constr_production_capacity(t)
                 self.add_constr_holding_capacity(t)
+            if self.arg.add_distance:
+                self.add_constr_distance(t)
 
     def del_constr_capacity(self):
         # for debug
@@ -718,6 +646,29 @@ class DNP:
             if node.type == const.WAREHOUSE:
                 self.constrs["holding_capacity"][(t, node)].remove()
 
+    def add_constr_cardinality(self, t: int):
+        for node in self.network.nodes:
+            if node.type == const.CUSTOMER:
+                used_edge = 0
+                for e in self.network.edges:
+                    edge = self.network.edges[e]["object"]
+                    if edge.end == node:
+                        used_edge += self.variables["select_edge"][t, edge]
+                constr = self.model.addConstr(used_edge <= 2)
+                self.constrs["cardinality"][(t, node)] = constr
+                self.index_for_dual_var += 1
+
+    def add_constr_distance(self, t: int):
+        for node in self.network.nodes:
+            if node.type == const.CUSTOMER:
+                used_distance = 0
+                for e in self.network.edges:
+                    edge = self.network.edges[e]["object"]
+                    if edge.end == node:
+                        used_distance += self.variables["select_edge"][t, edge]*edge.distance
+                constr = self.model.addConstr(used_distance <= 1000)
+                self.constrs["distance"][(t, node)] = constr
+                self.index_for_dual_var += 1
     def add_constr_flow_conservation(self, t: int):
         for node in self.network.nodes:
             sku_list = node.get_node_sku_list(t, self.full_sku_list)
@@ -786,16 +737,17 @@ class DNP:
                     last_period_inventory = 0.0
 
                     if t == 0:
-                        if node.initial_inventory is not None:
-                            # if self.open_relationship:
-                            self.model.addConstr(
-                                self.variables["open"][self.T - 1, node] == 1
-                            )
-                            last_period_inventory = (
-                                node.initial_inventory[k]
-                                if k in node.initial_inventory
-                                else 0.0
-                            )
+                        if self.bool_covering:
+                            if node.initial_inventory is not None:
+                                # if self.open_relationship:
+                                self.model.addConstr(
+                                    self.variables["open"][self.T - 1, node] == 1
+                                )
+                                last_period_inventory = (
+                                    node.initial_inventory[k]
+                                    if k in node.initial_inventory
+                                    else 0.0
+                                )
                         else:
                             last_period_inventory = 0.0
                     else:
@@ -814,33 +766,32 @@ class DNP:
                     )
 
                 elif node.type == const.CUSTOMER:
-                    fulfilled_demand = (
-                        node.demand[t, k]
-                        - self.variables["sku_demand_slack"][t, node, k]
-                    )
-                    constr = self.model.addConstr(
-                        self.variables["sku_flow"].sum(t, in_edges, k)
-                        - fulfilled_demand
-                        == 0,
-                        name=constr_name,
-                    )
+                    if self.arg.customer_backorder:
+                        constr = self.model.addConstr(
+                            self.variables["sku_flow"].sum(t, in_edges, k)
+                            + self.variables["sku_demand_slack"][t,node, k]
+                            == self.variables["sku_demand_slack"].get((t - 1,node, k), 0)
+                            + node.demand.get((t, k), 0),
+                            name=constr_name,
+                        )
+                    else:
+                        fulfilled_demand = (
+                            node.demand[t, k]
+                            - self.variables["sku_demand_slack"][t, node, k]
+                        )
+                        constr = self.model.addConstr(
+                            self.variables["sku_flow"].sum(t, in_edges, k)
+                            - fulfilled_demand
+                            == 0,
+                            name=constr_name,
+                        )
 
                 self.constrs["flow_conservation"][(t, node, k)] = constr
 
         return
 
     def add_constr_open_relationship(self, t: int):
-        if self.arg.add_cardinality:
-            for node in self.network.nodes:
-                if node.type == const.CUSTOMER:
-                    used_edge = 0
-                    for e in self.network.edges:
-                        edge = self.network.edges[e]["object"]
-                        if edge.end == node:
-                            used_edge += self.variables["select_edge"][t, edge]
-                    constr = self.model.addConstr(used_edge <= 2)
-                    self.constrs["open_relationship"]["cardinality"][(t, node)] = constr
-                    self.index_for_dual_var += 1
+
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 
@@ -953,8 +904,8 @@ class DNP:
                 # if self.used_edge_capacity.get(t) !={}:
                 #     i = i+1
                 #     print("edge",edge,"left_capacity", left_capacity,i)
-                # if left_capacity < 0:
-                #    print("t", t, "edge", edge, "left_capacity", left_capacity)
+                if left_capacity < 0:
+                    print("t", t, "edge", edge, "left_capacity", left_capacity)
                 bound = (
                     self.variables["select_edge"][t, edge]
                     if self.bool_covering
@@ -1155,7 +1106,7 @@ class DNP:
 
         obj = self.original_obj + self.extra_objective(customer, dualvar, dual_index)
 
-        self.model.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+        self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
         self.obj_types = {
@@ -1184,7 +1135,7 @@ class DNP:
             self.ef,
         ) = self.get_original_objective()
 
-        self.model.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+        self.model.setObjective(self.original_obj, sense=COPT.MINIMIZE)
 
         return
 
@@ -1239,6 +1190,7 @@ class DNP:
 
                     # I_hat = max(I, 0)
                     I_hat = self.model.addVar(name=f"I_hat_({t},_{node},_{k})")
+                    # lk：不是很懂啊 这个约束加上去干嘛 也不好计算dual
                     self.model.addConstr(
                         I_hat >= self.variables["sku_inventory"][t, node, k]
                     )
@@ -1253,6 +1205,7 @@ class DNP:
         return holding_cost
 
     def cal_sku_backorder_cost(self, t: int):
+        # lk：感觉不需要加这部分就是说 因为backorder 也不是warehouse backorder 也是customer的backorder
         backorder_cost = 0.0
 
         for node in self.network.nodes:
@@ -1330,6 +1283,7 @@ class DNP:
 
         return transportation_cost
 
+    # 咱就是说这部分应该也没有 因为unfulfill cost 也是customer的
     def cal_sku_unfulfill_demand_cost(self, t: int):
         unfulfill_demand_cost = 0.0
 
@@ -1362,8 +1316,8 @@ class DNP:
         return unfulfill_demand_cost
 
     def cal_fixed_node_cost(self):
+        # 计算fixed_cost的部分要重新写一下（lk）
         fixed_node_cost = 0.0
-
         if not self.bool_covering:
             return fixed_node_cost
 
@@ -1375,19 +1329,17 @@ class DNP:
                 elif node.type == const.WAREHOUSE:
                     # this_node_fixed_cost = node.holding_fixed_cost
                     this_node_fixed_cost = 500
-                elif node.type == const.CUSTOMER:
-                    # break
-                    this_node_fixed_cost = 0
+                else:
+                    continue
             else:
                 if node.type == const.PLANT:
                     this_node_fixed_cost = node.production_fixed_cost
                 elif node.type == const.WAREHOUSE:
                     this_node_fixed_cost = node.holding_fixed_cost
-                elif node.type == const.CUSTOMER:
-                    # break
-                    this_node_fixed_cost = 0
+                else:
+                    continue
 
-            y = self.model.addVar(vtype=self.solver_constant.BINARY, name=f"y_{node}")
+            y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
             for t in range(self.T):
                 self.model.addConstr(self.variables["open"][(t, node)] <= y)
 
@@ -1398,6 +1350,38 @@ class DNP:
             self.obj["fixed_node_cost"][node] = node_fixed_node_cost
 
         return fixed_node_cost
+        # if not self.bool_covering:
+        #     return fixed_node_cost
+        #
+        # for node in self.network.nodes:
+        #     if self.arg.node_cost:
+        #         if node.type == const.PLANT:
+        #             # this_node_fixed_cost = node.production_fixed_cost
+        #             this_node_fixed_cost = 100
+        #         elif node.type == const.WAREHOUSE:
+        #             # this_node_fixed_cost = node.holding_fixed_cost
+        #             this_node_fixed_cost = 500
+        #         else:
+        #             continue
+        #     else:
+        #         if node.type == const.PLANT:
+        #             this_node_fixed_cost = node.production_fixed_cost
+        #         elif node.type == const.WAREHOUSE:
+        #             this_node_fixed_cost = node.holding_fixed_cost
+        #         else:
+        #             continue
+        #
+        #     y = self.model.addVar(vtype=COPT.BINARY, name=f"y_{node}")
+        #     for t in range(self.T):
+        #         self.model.addConstr(self.variables["open"][(t, node)] <= y)
+        #
+        #     node_fixed_node_cost = this_node_fixed_cost * y
+        #
+        #     fixed_node_cost = fixed_node_cost + node_fixed_node_cost
+        #
+        #     self.obj["fixed_node_cost"][node] = node_fixed_node_cost
+        #
+        # return fixed_node_cost
 
     def cal_fixed_edge_cost(self):
         fixed_edge_cost = 0.0
@@ -1407,7 +1391,7 @@ class DNP:
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 
-            p = self.model.addVar(vtype=self.solver_constant.BINARY, name=f"p_{edge}")
+            p = self.model.addVar(vtype=COPT.BINARY, name=f"p_{edge}")
 
             for t in range(self.T):
                 self.model.addConstr(self.variables["select_edge"][(t, edge)] <= p)
@@ -1423,19 +1407,18 @@ class DNP:
         return fixed_edge_cost
 
     def solve(self):
-        # self.model.solve()
-        self.solver.solve()
+        self.model.solve()
 
     def write(self, name):
         self.model.write(name)
 
-    def Test_cost(self):
+    def test_cost(self):
         print("HC:", self.hc.getExpr().getValue())
         print("PC:", self.pc.getExpr().getValue())
         print("TC:", self.tc.getExpr().getValue())
-        print("NF:", self.nf.getExpr().getValue())
-        print("EF:", self.ef.getExpr().getValue())
-        print("UD:", self.ud.getExpr().getValue())
+        print("NF:", self.nf.getExpr().getValue() if type(self.nf) is not float else 0.0)
+        print("EF:", self.ef.getExpr().getValue() if type(self.ef) is not float else 0.0)
+        print("UD:", self.ud.getExpr().getValue() if type(self.ud) is not float else 0.0)
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         # node output
@@ -1721,11 +1704,13 @@ class DNP:
 
 
 if __name__ == "__main__":
-    from param import Param
-    from network import construct_network
-    import pandas as pd
     import datetime
+
+    import pandas as pd
+
     import utils
+    from network import construct_network
+    from param import Param
 
     starttime = datetime.datetime.now()
     param = Param()

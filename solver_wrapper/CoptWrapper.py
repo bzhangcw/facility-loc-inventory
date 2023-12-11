@@ -61,3 +61,7 @@ class CoptWrapper(SolverWrapper):
 
     def getVarValue(self, var):
         return var.value
+
+    def setEqualConstr(self, constr, value):
+        constr.lb = value
+        constr.ub = value

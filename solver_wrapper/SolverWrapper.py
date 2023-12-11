@@ -75,6 +75,9 @@ class SolverWrapper:
     def getVarValue(self, var):
         pass
 
+    def setEqualConstr(self, constr, value):
+        pass
+
     @property
     def status(self):
         return self.model.status

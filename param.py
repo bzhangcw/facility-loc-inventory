@@ -46,11 +46,11 @@ class Param:
             big M for modeling
             """,
         )
-
+        # lk更改点2: unfulfill 取的小点
         parser.add_argument(
             "--unfulfill_sku_unit_cost",
             type=float,
-            default=50000,
+            default=0.5,
             help="""
             default unfulfill_sku_unit_cost if not given
             """,
@@ -181,8 +181,8 @@ class Param:
             type=int,
             default=0,
             help="""
-                           whether add initial inventory for T0014 and T0015
-                           """,
+                   whether add initial inventory for T0014 and T0015
+                   """,
         )
         parser.add_argument(
             "--add_in_upper",
@@ -192,14 +192,35 @@ class Param:
                    whether add upper bound for daily inflow of inventories
                    """,
         )
+
+        parser.add_argument(
+            "--customer_backorder",
+            type=float,
+            default=0,
+            help="""
+                   whether add customer backorder cost or not
+                    """,
+        )
+
+        parser.add_argument(
+            "--add_distance",
+            type=float,
+            default=0,
+            help="""
+                whether add customer distance constraint or not
+                """,
+        )
+
+
         parser.add_argument(
             "--add_cardinality",
             type=int,
             default=0,
             help="""
-                   whether add cardinality constraints for customers or not
-                   """,
+               whether add cardinality constraints for customers or not
+               """,
         )
+
         return parser
 
 

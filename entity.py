@@ -1,8 +1,10 @@
-import const
+from abc import abstractmethod
+from typing import List
+
 import numpy as np
 import pandas as pd
-from typing import List
-from abc import abstractmethod
+from geopy.distance import geodesic
+import const
 
 
 class SKU:
@@ -317,7 +319,8 @@ class Edge:
         self.transportation_sku_unit_cost = transportation_sku_unit_cost
 
     def cal_distance(self):
-        return np.linalg.norm(self.start.location - self.end.location)
+        # return np.linalg.norm(self.start.location - self.end.location)
+        return geodesic(self.start.location, self.end.location).km
 
     def cal_performance(self):
         return self.transportation_sku_unit_cost.sum()
@@ -407,10 +410,10 @@ class Edge:
         pass
 
     def __str__(self) -> str:
-        return f"Edge_{self.idx}_({self.start}, {self.end})"
+        return f"E({self.start}, {self.end})"
 
     def __repr__(self) -> str:
-        return f"Edge_{self.idx}_({self.start}, {self.end})"
+        return f"E({self.start}, {self.end})"
 
     def __hash__(self) -> int:
         return hash(self.__repr__())
