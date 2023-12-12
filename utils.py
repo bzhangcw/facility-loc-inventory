@@ -74,6 +74,8 @@ def configuration(conf_label,arg):
         arg.capacity = 1
         arg.lowerbound = 1
         arg.cp_lowerbound = 1
+        arg.distance = 1
+        arg.cardinality = 1
         arg.nodelb = 0
     elif conf_label == 4:
         # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges
@@ -111,16 +113,24 @@ def scale(pick_instance,datapath,arg):
             one_period=arg.T == 1,
         )
     elif pick_instance == 2:
-        # smallest instance causing bug
         cfg = dict(
             data_dir=datapath,
-            sku_num=100,
+            sku_num=10,
+            plant_num=20,
+            warehouse_num=20,
+            customer_num=4,
+            one_period=arg.T == 1,
+        )
+    elif pick_instance == 3:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=20,
             plant_num=20,
             warehouse_num=20,
             customer_num=100,
-            one_period=True,
+            one_period=arg.T == 1,
         )
-    elif pick_instance == 3:
+    elif pick_instance == 4:
         cfg = dict(
             data_dir=datapath,
             sku_num=30,
@@ -129,14 +139,14 @@ def scale(pick_instance,datapath,arg):
             customer_num=10,
             one_period=True,
         )
-    elif pick_instance == 4:
+    elif pick_instance == 5:
         cfg = dict(
             data_dir=datapath,
-            sku_num=10,
+            sku_num=100,
             plant_num=20,
             warehouse_num=20,
-            customer_num=4,
-            one_period=arg.T == 1,
+            customer_num=100,
+            one_period=True,
         )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
@@ -150,7 +160,7 @@ def add_attr(edge_list, node_list, arg,const):
         cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
-            e.capacity = cap["qty"].get(e.idx, 0.4e8)*10000
+            e.capacity = cap["qty"].get(e.idx, 1000000)*100
     if arg.lowerbound == 1:
         lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:

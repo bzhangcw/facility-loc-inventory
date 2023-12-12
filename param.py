@@ -220,6 +220,17 @@ class Param:
                whether add cardinality constraints for customers or not
                """,
         )
+        parser.add_argument(
+            "--conf_label",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--pick_instance",
+            type=int,
+            default=0,
+        )
 
         return parser
 

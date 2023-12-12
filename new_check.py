@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from coptpy import COPT
-
+from dnp_model import DNP
 import const
 import utils
 from slim.slim_rmp_model import DNPSlim
@@ -17,12 +17,11 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    conf_label = 1
-
-    utils.configuration(conf_label, arg)
-    datapath = "data/data_0401_0inv.xlsx"
-    # datapath = "data/data_0401_V4.xlsx"
-    pick_instance = 5
+    # conf_label = 5
+    utils.configuration(arg.conf_label, arg)
+    # datapath = "data/data_0401_0inv.xlsx"
+    datapath = "data/data_0401_V4.xlsx"
+    # pick_instance = 1
     (
         sku_list,
         plant_list,
@@ -32,7 +31,7 @@ if __name__ == "__main__":
         network,
         node_list,
         *_,
-    ) = utils.scale(pick_instance, datapath, arg)
+    ) = utils.scale(arg.pick_instance, datapath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
@@ -65,3 +64,11 @@ if __name__ == "__main__":
     )
     np_cg.run()
     np_cg.get_solution("New_sol/")
+###############################################################
+    solver = "COPT"
+    model = DNP(arg, network, bool_covering=True, bool_fixed_cost= arg.node_cost)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 3600)
+    model.model.solve()

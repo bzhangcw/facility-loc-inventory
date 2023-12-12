@@ -28,6 +28,7 @@ class DNPSlim(DNP):
             gap: float = 1e-4,
             threads: int = None,
             limit: int = 3600,
+            cg: bool = True,
             customer_list: List[Customer] = None,
             env=None,
             solver="COPT",
@@ -59,6 +60,7 @@ class DNPSlim(DNP):
         # self.model = self.env.createModel(model_name)
         self.env = self.solver.ENVR
         self.model = self.solver.model
+        self.cg = cg
 
         self.model.setParam(self.solver_constant.Param.Logging, logging)
         self.model.setParam(self.solver_constant.Param.RelGap, gap)
@@ -201,18 +203,27 @@ class DNPSlim(DNP):
         self.columns_helpers = col_helper
         self.columns = []
     def _iterate_no_c_edges(self):
-        for e in self.network.edges:
-            edge = self.network.edges[e]["object"]
+        if self.cg:
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
 
-            if edge.end.type == const.CUSTOMER or edge.start.type == const.CUSTOMER:
-                continue
-            yield e, edge
+                if edge.end.type == const.CUSTOMER or edge.start.type == const.CUSTOMER:
+                    continue
+                yield e, edge
+        else:
+            for e in self.network.edges:
+                edge = self.network.edges[e]["object"]
+                yield e, edge
 
     def _iterate_no_c_nodes(self):
-        for node in self.network.nodes:
-            if node.type == const.CUSTOMER:
-                continue
-            yield node
+        if self.cg:
+            for node in self.network.nodes:
+                if node.type == const.CUSTOMER:
+                    continue
+                yield node
+        else:
+            for node in self.network.nodes:
+                yield node
 
     def add_vars(self):
         """
@@ -241,7 +252,8 @@ class DNPSlim(DNP):
                 "index": "(t, warehouse, k)",
             },
             "sku_inventory": {
-                "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
+                # "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
+                "lb": -self.solver_constant.INFINITY,
                 "ub": self.solver_constant.INFINITY,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
@@ -410,6 +422,8 @@ class DNPSlim(DNP):
         if self.bool_node_lb:
             self.constr_types["production_variable_lb"] = {"index": "(t, node)"}
             self.constr_types["holding_variable_lb"] = {"index": "(t, node)"}
+        if self.arg.add_distance:
+            self.constr_types["distance"] = {"index": "(t, node)"}
 
         for constr in self.constr_types.keys():
             self.constrs[constr] = dict()
@@ -425,13 +439,15 @@ class DNPSlim(DNP):
             if self.bool_covering:
                 # node status and open relationship
                 self.add_constr_open_relationship(t)
-
+                # if self.arg.add_cardinality:
+                #     self.add_constr_cardinality(t)
             if self.bool_capacity:
                 # transportation/production/holding capacity
                 self.add_constr_transportation_capacity(t)
                 self.add_constr_production_capacity(t)
                 self.add_constr_holding_capacity(t)
-
+            # if self.arg.add_distance:
+            #     self.add_constr_distance(t)
 
     def add_constr_flow_conservation(self, t: int):
         for node in self._iterate_no_c_nodes():
@@ -507,7 +523,8 @@ class DNPSlim(DNP):
                             name=constr_name,
                         )
                 elif node.type == const.CUSTOMER:
-                    raise ValueError("flow in RMP do not contain customers")
+                    if self.cg:
+                        raise ValueError("flow in RMP do not contain customers")
 
                 self.constrs["flow_conservation"][(t, node, k)] = constr
 
@@ -628,9 +645,16 @@ class DNPSlim(DNP):
                     (t, edge)
                 # ] = self.model.addConstr(
                 ] = self.solver.addConstr(
-                    flow_sum <= left_capacity * bound,
+                    flow_sum <= left_capacity * bound*1000,
                     name=f"edge_capacity{t, edge}",
                 )
+                # self.constrs["transportation_capacity"][
+                #     (t, edge)
+                # # ] = self.model.addConstr(
+                # ] = self.solver.addConstr(
+                #     flow_sum <= 1e10,
+                #     name=f"edge_capacity{t, edge}",
+                # )
                 self.dual_index_for_RMP["transportation_capacity"][
                     edge
                 ] = self.index_for_dual_var
@@ -743,7 +767,29 @@ class DNPSlim(DNP):
                 self.index_for_dual_var += 1
 
         return
+    def add_constr_cardinality(self, t: int):
+        for node in self._iterate_no_c_nodes():
+            if node.type == const.CUSTOMER:
+                used_edge = 0
+                for e in self.network.edges:
+                    edge = self.network.edges[e]["object"]
+                    if edge.end == node:
+                        used_edge += self.variables["select_edge"][t, edge]
+                constr = self.model.addConstr(used_edge <= 2)
+                self.constrs["cardinality"][(t, node)] = constr
+                self.index_for_dual_var += 1
 
+    def add_constr_distance(self, t: int):
+        for node in self._iterate_no_c_nodes():
+            if node.type == const.CUSTOMER:
+                used_distance = 0
+                for e in self.network.edges:
+                    edge = self.network.edges[e]["object"]
+                    if edge.end == node:
+                        used_distance += self.variables["select_edge"][t, edge]*edge.distance
+                constr = self.model.addConstr(used_distance <= 1000)
+                self.constrs["distance"][(t, node)] = constr
+                self.index_for_dual_var += 1
     def get_original_objective(self):
         """
         get the original objective value
@@ -1077,7 +1123,8 @@ class DNPSlim(DNP):
         super().get_solution(data_dir, preserve_zeros)
 
     def fetch_dual_info(self):
-        # TODO：RMP的dual要都重新写一下或者check一下不知道这种分成三类的对不对
+        # TODO：RMP的dual要都重新写一下或者check一下不知道这种分成三类的对不对'
+
         node_dual = {
             k: v.pi if v is not None else 0 for k, v in self.cg_binding_constrs.items()
         }

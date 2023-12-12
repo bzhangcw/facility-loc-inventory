@@ -317,9 +317,14 @@ class NetworkColumnGenerationSlim(object):
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_rmp()
+                if self.rmp_model.status != self.solver_constant.OPTIMAL:
+                    print(self.rmp_model.status, iter)
+                if self.rmp_model.status == self.solver_constant.NUMERICAL:
+                    print("NUMERICAL",self.rmp_model.status, iter)
+                    self.rmp_model.write("rmp{}.lp".format(self.iter))
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
-                    self.rmp_model.write("1109/rmp.lp")
+                    # self.rmp_model.write("1109/rmp.lp")
                     self.rmp_model.computeIIS()
                     self.rmp_model.write("1109/rmp.iis")
                     # vv = self.rmp_oracle.constrs.get("flow_conservation")
