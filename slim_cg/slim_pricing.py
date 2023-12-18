@@ -10,11 +10,9 @@ import numpy as np
 import pandas as pd
 import ray
 
-import const
-import update_constr
-from entity import SKU
-from read_data import read_data
-from update_constr import *
+import const as const
+from entity import *
+from config.read_data import read_data
 from utils import get_in_edges, get_out_edges, logger
 
 import coptpy as cp
@@ -166,11 +164,11 @@ class Pricing(object):
         arg: argparse.Namespace,
         network: nx.DiGraph,
         model_name: str = "PricingDelivery",
-        bool_capacity: bool = False,
-        bool_edge_lb: bool = False,
-        bool_node_lb: bool = False,
-        bool_fixed_cost: bool = False,
-        bool_covering: bool = False,
+        # bool_capacity: bool = False,
+        # bool_edge_lb: bool = False,
+        # bool_node_lb: bool = False,
+        # bool_fixed_cost: bool = False,
+        # bool_covering: bool = False,
         bool_dp: bool = False,
         logging: int = 0,
         gap: float = 1e-4,
@@ -194,24 +192,30 @@ class Pricing(object):
         self.T = arg.T
         self.network = network
         self.sku_list = self.network.graph["sku_list"]
-        self.bool_capacity = bool_capacity
-        self.bool_fixed_cost = bool_fixed_cost
-        self.bool_covering = bool_covering
-
+        # self.bool_capacity = bool_capacity
+        # self.bool_fixed_cost = bool_fixed_cost
+        # self.bool_covering = bool_covering
+        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_covering = self.arg.covering
+        self.bool_capacity = self.arg.capacity
+        self.add_in_upper = self.arg.add_in_upper
+        self.add_distance = self.arg.add_distance
+        self.add_cardinality = self.arg.add_cardinality
+        # self.bool_edge_lb = self.arg.edgelb
         # whether to add edge lower bound constraints
         if self.bool_covering:
-            self.bool_edge_lb = bool_edge_lb
+            self.bool_edge_lb = self.arg.edgelb
         else:
-            if bool_edge_lb:
+            if self.bool_edge_lb:
                 logger.warning(
                     "bool_edge_lb is set to False because bool_covering is False."
                 )
             self.bool_edge_lb = False
         # whether to add node lower bound constraints
         if self.bool_covering:
-            self.bool_node_lb = bool_node_lb
+            self.bool_node_lb = self.arg.nodelb
         else:
-            if bool_node_lb:
+            if self.bool_node_lb:
                 logger.warning(
                     "bool_node_lb is set to False because bool_covering is False."
                 )
@@ -286,10 +290,9 @@ class Pricing(object):
 
         # print("set objective ...")
         self.set_objective()
-
-
         # for remote
         self.init_col_helpers()
+
 
     def _iterate_edges(self):
         for e in self.network.edges:
@@ -329,6 +332,13 @@ class Pricing(object):
                     "vtype": self.solver_constant.BINARY,
                     "nameprefix": "p",
                     "index": "(t, edge)",
+                },
+                "sku_select_edge": {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.BINARY,
+                    "nameprefix": "p",
+                    "index": "(t, edge,k)",
                 },
             # lk：更改点1 变成select_node
                 "open": {
@@ -370,7 +380,6 @@ class Pricing(object):
         idx = dict()
         for vt in self.var_types.keys():
             idx[vt] = list()
-        #更改点1:select_node
         if self.bool_covering:
             for node in self._iterate_nodes():
                 for t in range(self.T):
@@ -380,7 +389,8 @@ class Pricing(object):
                 for t in range(self.T):
                     # select edge (i,j) at t
                     idx["select_edge"].append((t, edge))
-
+                    for k in self.sku_list:
+                        idx["sku_select_edge"].append((t, edge, k))
         # if self.arg.customer_backorder:
         for t in range(self.T):
             for k in self.sku_list:
@@ -413,7 +423,10 @@ class Pricing(object):
             self.constr_types = {
                 "flow_conservation": {"index": "(t, node, k)"},
                 "open_relationship": {
-                    "select_edge": {"index": "(t, edge)"},
+                    "select_edge": {"index": "(t, edge, node)"},
+                    "sku_select_edge": {"index": "(t, edge, k)"},
+                    "open": {"index": "(t, warehouse with demand / customer)"},
+                    "sku_open": {"index": "(t, node, k)"},
                 },
                 # "transportation_capacity": {"index": "(t, edge)"},
             }
@@ -442,14 +455,16 @@ class Pricing(object):
             if self.bool_covering:
                 # node status and open relationship
                 self.add_constr_open_relationship(t)
-                if self.arg.add_cardinality:
-                    self.add_constr_cardinality(t)
+                # if self.arg.add_cardinality:
+                #     self.add_constr_cardinality(t)
             if self.bool_capacity:
                 # transportation/production/holding capacity
                 self.add_constr_transportation_capacity(t)
-            if self.arg.add_distance:
+            if self.bool_edge_lb:
+                self.add_constr_transportation_lb(t)
+            if self.add_distance:
                 self.add_constr_distance(t,customer)
-            if self.arg.add_cardinality:
+            if self.add_cardinality:
                 self.add_constr_cardinality(t,customer)
 
     def add_constr_flow_conservation(self, t: int):
@@ -500,22 +515,56 @@ class Pricing(object):
             #     <= self.variables["open"][t, edge.end]
             # )
 
-            # for k in sku_list:
-            #     constr = self.model.addConstr(
-            #         self.variables["sku_select_edge"][t, edge, k]
-            #         <= self.variables["select_edge"][t, edge]
-            #     )
-            #     self.constrs["open_relationship"]["sku_select_edge"][
-            #         (t, edge, k)
-            #     ] = constr
-        return
+            for k in self.sku_list:
+                constr = self.model.addConstr(
+                    self.variables["sku_select_edge"][t, edge, k]
+                    <= self.variables["select_edge"][t, edge]
+                )
+                self.constrs["open_relationship"]["sku_select_edge"][
+                    (t, edge, k)
+                ] = constr
+            for k in self.sku_list:
+                # constr = self.model.addConstr(
+                constr = self.model.addConstr(
+                    self.variables["sku_select_edge"][t, edge, k]
+                    <= self.variables["select_edge"][t, edge]
+                )
+                self.constrs["open_relationship"]["sku_select_edge"][
+                    (t, edge, k)
+                ] = constr
+        # todo
+        # for node in self._iterate_no_c_nodes():
+        #     sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
-    def add_constr_transportation_capacity(self, t: int, verbose=False):
+        #     if (
+        #             node.type == const.WAREHOUSE
+        #             and node.has_demand(t)
+        #             and len(node.demand_sku[t]) > 0
+        #     ):
+        #         # constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+        #         constr = self.solver.addConstr(self.variables["open"][t, node] == 1)
+        #         self.constrs["open_relationship"]["open"][(t, node)] = constr
+        #     elif node.type == const.CUSTOMER:
+        #         # constr = self.model.addConstr(self.variables["open"][t, node] == 1)
+        #         constr = self.solver.addConstr(self.variables["open"][t, node] == 1)
+        #         self.constrs["open_relationship"]["open"][(t, node)] = constr
+
+        #     for k in sku_list:
+        #         if node.type == const.PLANT:
+        #             # constr = self.model.addConstr(
+        #             constr = self.solver.addConstr(
+        #                 self.variables["sku_open"][t, node, k]
+        #                 <= self.variables["open"][t, node]
+        #             )
+
+        #         self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
+        return
+    def add_constr_transportation_lb(self, t: int, verbose=False):
         for edge in self._iterate_edges():
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
 
             # variable lower bound
-            if self.bool_edge_lb and edge.variable_lb < np.inf:
+            if edge.variable_lb < np.inf:
                 self.constrs["transportation_variable_lb"][
                     (t, edge)
                     # ] = self.model.addConstr(
@@ -526,6 +575,25 @@ class Pricing(object):
                 )
 
                 self.index_for_dual_var += 1
+
+        return
+
+    def add_constr_transportation_capacity(self, t: int, verbose=False):
+        for edge in self._iterate_edges():
+            flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
+
+            # variable lower bound
+            # if self.bool_edge_lb and edge.variable_lb < np.inf:
+            #     self.constrs["transportation_variable_lb"][
+            #         (t, edge)
+            #         # ] = self.model.addConstr(
+            #     ] = self.solver.addConstr(
+            #         flow_sum
+            #         >= edge.variable_lb * self.variables["select_edge"][t, edge],
+            #         name=f"edge_lb_{t}_{edge.start}_{edge.end}",
+            #     )
+
+            #     self.index_for_dual_var += 1
 
             # capacity constraint
             if edge.capacity < np.inf:
@@ -549,7 +617,7 @@ class Pricing(object):
         used_edge = 0
         for edge in self._iterate_edges():
             used_edge += self.variables["select_edge"][t, edge]
-        constr = self.model.addConstr(used_edge <= 2)
+        constr = self.model.addConstr(used_edge <= self.arg.cardinality_limit)
         self.constrs["cardinality"][(t, customer)] = constr
         self.index_for_dual_var += 1
 
@@ -557,7 +625,7 @@ class Pricing(object):
         used_distance = 0
         for edge in self._iterate_edges():
             used_distance += self.variables["select_edge"][t, edge] * edge.distance
-        constr = self.model.addConstr(used_distance <= 1000)
+        constr = self.model.addConstr(used_distance <= self.arg.distance_limit)
         self.constrs["distance"][(t, customer)] = constr
         self.index_for_dual_var += 1
     def get_original_objective(self):

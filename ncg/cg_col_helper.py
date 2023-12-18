@@ -6,8 +6,8 @@ import pandas as pd
 import ray
 from tqdm import tqdm
 
-import const
-import utils
+import const as const
+import utils as utils
 
 ATTR_IN_RMP = ["sku_flow_sum", "sku_production_sum", "sku_inventory_sum"]
 # macro for debugging

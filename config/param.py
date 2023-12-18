@@ -27,6 +27,32 @@ class Param:
             number of periods for the problem
             """,
         )
+        parser.add_argument(
+            "--cardinality_limit",
+            type=int,
+            default=2,
+
+        )
+        parser.add_argument(
+            "--distance_limit",
+            type=int,
+            default=1000,
+            
+        )
+        parser.add_argument(
+            "--in_upper_ratio",
+            type=int,
+            default=1000,
+            
+        )
+        parser.add_argument(
+            "--covering",
+            type=int,
+            default=1,
+            help="""
+            covering
+            """,
+        )
 
         parser.add_argument(
             "--backorder",
@@ -153,6 +179,14 @@ class Param:
                    """,
         )
         parser.add_argument(
+            "--fixed_cost",
+            type=int,
+            default=0,
+            help="""
+                   whether add fixed cost for nodes or not
+                   """,
+        )
+        parser.add_argument(
             "--node_cost",
             type=int,
             default=0,
@@ -168,6 +202,15 @@ class Param:
                    whether add lower bound for nodes or not
                    """,
         )
+        parser.add_argument(
+            "--edgelb",
+            type=int,
+            default=0,
+            help="""
+                   whether add lower bound for nodes or not
+                   """,
+        )
+
         parser.add_argument(
             "--edge_cost",
             type=int,
@@ -228,6 +271,18 @@ class Param:
 
         parser.add_argument(
             "--pick_instance",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--rmp_relaxation",
+            type=int,
+            default=0,
+        )
+        
+        parser.add_argument(
+            "--pricing_relaxation",
             type=int,
             default=0,
         )

@@ -4,7 +4,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 from geopy.distance import geodesic
-import const
+import const as const
 
 
 class SKU:

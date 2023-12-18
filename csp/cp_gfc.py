@@ -1,7 +1,7 @@
 import gurobipy as grb
 import numpy as np
 
-import const
+import const as const
 from utils import *
 
 

@@ -14,12 +14,12 @@ import pandas as pd
 import ray
 from coptpy import COPT
 from tqdm import tqdm
-from network import *
-import const
-import utils
+from config.network import *
+import const as const
+import utils as utils
 from entity import SKU, Customer
-from slim.slim_rmp_model import DNPSlim
-from slim.slim_pricing import Pricing, PricingWorker
+from slim_cg.slim_rmp_model import DNPSlim
+from slim_cg.slim_pricing import Pricing, PricingWorker
 
 from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
@@ -80,9 +80,15 @@ class NetworkColumnGenerationSlim(object):
         # @note: new,
         #   the oracle extension saves extra constraints for primal feasibility
         #   every time it is used, remove this
-        self.bool_covering = bool_covering
-        self.bool_edge_lb = bool_edge_lb
-        self.bool_node_lb = bool_node_lb
+        # self.bool_covering = bool_covering
+        self.bool_edge_lb = self.arg.edgelb
+        self.bool_node_lb = self.arg.nodelb
+        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_covering = self.arg.covering
+        self.bool_capacity = self.arg.capacity
+        self.add_in_upper = self.arg.add_in_upper
+        # self.add_distance = self.arg.add_distance
+        # self.add_cardinality = self.arg.add_cardinality
         self.dual_index = dict()
         self.variables = dict()  # variables
         self.iter = 0
@@ -184,11 +190,11 @@ class NetworkColumnGenerationSlim(object):
                 subgraph,
                 model_name=model_name,
                 # lk: bool_covering应该是False比较好
-                bool_covering=self.bool_covering,
-                bool_capacity=self.arg.capacity,
-                bool_edge_lb=self.arg.lowerbound,
-                bool_node_lb=self.arg.nodelb,
-                bool_fixed_cost=self.arg.node_cost,
+                # bool_covering=self.bool_covering,
+                # bool_capacity=self.arg.capacity,
+                # bool_edge_lb=self.arg.lowerbound,
+                # bool_node_lb=self.arg.nodelb,
+                # bool_fixed_cost=self.arg.node_cost,
                 customer=customer,
                 solver=self.solver_name,
             )  # for initial column, set obj = 0
@@ -222,6 +228,13 @@ class NetworkColumnGenerationSlim(object):
         """
         self.rmp_model.setParam("LpMethod", 2)
         self.rmp_model.setParam("Crossover", 0)
+        if self.arg.rmp_relaxation:
+            variables = self.rmp_model.getVars()
+            binary_vars_index = []
+            for v in variables:
+                if v.getType() == COPT.BINARY:
+                    binary_vars_index.append(v.getIdx())
+                    v.setType(COPT.CONTINUOUS)
         # self.rmp_model.solve()
         self.solver.solve()
         self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
@@ -242,6 +255,13 @@ class NetworkColumnGenerationSlim(object):
             oracle = self.oracles[customer]
             oracle.model.reset()
             oracle.update_objective(customer, dual_vars, dual_index)
+            if self.arg.pricing_relaxation:
+                variables = oracle.model.getVars()
+                binary_vars_index = []
+                for v in variables:
+                    if v.getType() == COPT.BINARY:
+                        binary_vars_index.append(v.getIdx())
+                        v.setType(COPT.CONTINUOUS)
             oracle.solve()
             v = oracle.model.objval
 
@@ -278,6 +298,37 @@ class NetworkColumnGenerationSlim(object):
 
         return added
 
+    def init_column(self,customer):
+        _vals = {}
+        _vals["sku_flow"] = {k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()}
+        unfulfilled_cost = 0.0
+        for t in range(self.arg.T):
+            unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t,customer)
+        _vals["beta"] = unfulfilled_cost
+        return _vals
+
+    def init_sku_unfulfill_demand_cost(self, t: int,customer:Customer):
+            # lk：check完了没问题 就是把unfulfill_demand_cost取小了
+            unfulfill_demand_cost = 0.0
+            if customer.has_demand(t):
+                for k in customer.demand_sku[t]:
+                    if customer.unfulfill_sku_unit_cost is not None:
+                        unfulfill_sku_unit_cost = customer.unfulfill_sku_unit_cost[
+                            (t, k)
+                        ]
+                    else:
+                        unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+
+                    unfulfill_node_sku_cost = (
+                        unfulfill_sku_unit_cost * customer.demand.get((t, k), 0)
+                    )
+
+                    unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_node_sku_cost
+
+                    # self.obj["unfulfill_demand_cost"][(t, k)] = unfulfill_node_sku_cost
+
+            return unfulfill_demand_cost
+
     def run(self):
         """
         The main loop of column generation algorithm
@@ -299,7 +350,9 @@ class NetworkColumnGenerationSlim(object):
                 )
             for customer in tqdm(self.customer_list):
                 self.oracles[customer] = self.construct_oracle(customer)
+                init_col = self.init_column(customer)
                 self.columns[customer] = []
+                self.columns[customer].append(init_col)
 
         # use the sweeping method to initialize
         # @note,
@@ -308,6 +361,9 @@ class NetworkColumnGenerationSlim(object):
         # cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
+            self.rmp_model.write('init_rmp0.lp')
+            self.init_rmp_by_cols()
+            self.rmp_model.write('init_rmp1.lp')
         self.rmp_model.setParam(self.solver_constant.Param.Logging, 1)
 
         self._logger.info("initialization of restricted master finished")
@@ -319,14 +375,15 @@ class NetworkColumnGenerationSlim(object):
                     self.solve_rmp()
                 if self.rmp_model.status != self.solver_constant.OPTIMAL:
                     print(self.rmp_model.status, iter)
-                if self.rmp_model.status == self.solver_constant.NUMERICAL:
-                    print("NUMERICAL",self.rmp_model.status, iter)
                     self.rmp_model.write("rmp{}.lp".format(self.iter))
+                # if self.rmp_model.status == self.solver_constant.NUMERICAL:
+                #     # print("NUMERICAL",self.rmp_model.status, iter)
+                #     self.rmp_model.write("rmp{}.lp".format(self.iter))
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     # self.rmp_model.write("1109/rmp.lp")
                     self.rmp_model.computeIIS()
-                    self.rmp_model.write("1109/rmp.iis")
+                    self.rmp_model.write("12.14/rmp.iis")
                     # vv = self.rmp_oracle.constrs.get("flow_conservation")
                     # if vv is not None:
                     #     self.rmp_model.remove(vv)
@@ -362,6 +419,13 @@ class NetworkColumnGenerationSlim(object):
                             oracle.model.reset()
                             # 把对偶变量加上后update oracle 然后solve 这是第一次求解
                             oracle.update_objective(customer, dual_packs=dual_packs)
+                            if self.arg.pricing_relaxation:
+                                variables = oracle.model.getVars()
+                                binary_vars_index = []
+                                for v in variables:
+                                    if v.getType() == COPT.BINARY:
+                                        binary_vars_index.append(v.getIdx())
+                                        v.setType(COPT.CONTINUOUS)
                             oracle.solve()
                             if oracle.model.status == self.solver_constant.INFEASIBLE:
                                 self._logger.info("oracle is infeasible")
@@ -451,6 +515,69 @@ class NetworkColumnGenerationSlim(object):
         self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
         self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
+    def init_rmp_by_cols(self):
+        """
+        update the RMP with new columns
+        """
+        # lk：就是说没看懂这个update_rmp_by_cols的东西 和上面的solve_columns的东西有什么关系吗？？？ lambda的体现呢？
+        # self.rmp_model.reset()
+        if not self.bool_rmp_update_initialized:
+            # 这个是放binding约束的
+            self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
+            # 这个是放sku_flow的值的
+            self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
+            # 这个是放ws的约束的
+            self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
+            # lk:cg_binding_constrs要加点名字啊不然都不知道谁是谁
+            for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
+                edges = self.rmp_oracle.cg_downstream[node]
+                for ee in edges:
+                    c = ee.end
+                    self.delievery_cons_idx[c].append(v)
+
+            for c, v in self.rmp_oracle.cg_binding_constrs_ws.items():
+                self.ws_cons_idx[c] = v
+                # v.lb = 1.0
+                # v.ub = 1.0
+                self.solver.setEqualConstr(v, 1.0)
+
+        for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
+            edges = self.rmp_oracle.cg_downstream[node]
+            for ee in edges:
+                c = ee.end
+                this_col = self.columns[c][-1]
+                self.delievery_cons_coef[c].append(-this_col["sku_flow"].get((t, ee, k), 0))
+
+        for c in self.customer_list:
+            _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
+            _cons_coef = [*self.delievery_cons_coef[c], 1]
+            col_idxs = list(zip(_cons_idx, _cons_coef))
+            # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
+            try:
+                # new_col = cp.Column(
+                #     col_idxs,
+                # )
+                new_col = self.solver.addColumn(_cons_idx, _cons_coef)
+                # 这块还要再看看怎么搞
+                self.rmp_oracle.variables["column_weights"][
+                    c, self.columns[c].__len__() - 1
+                ] = self.rmp_model.addVar(
+                    obj=self.columns[c][-1]["beta"],
+                    name=f"lambda_{c.idx}_{len(self.columns[c])}",
+                    lb=0.0,
+                    ub=1.0,
+                    column=new_col,
+                )
+            except Exception as e:
+                print(f"failed at {c}\n\t{col_idxs}")
+                raise e
+
+        vv = self.rmp_oracle.variables.get("cg_temporary")
+        if vv is not None:
+            self.rmp_model.remove(vv)
+            self.rmp_oracle.variables["cg_temporary"] = None
+            print(f"removed initial skeleton")
+
     def update_rmp_by_cols(self):
         """
         update the RMP with new columns
@@ -507,11 +634,11 @@ class NetworkColumnGenerationSlim(object):
             except Exception as e:
                 print(f"failed at {c}\n\t{col_idxs}")
                 raise e
-        vv = self.rmp_oracle.variables.get("cg_temporary")
-        if vv is not None:
-            self.rmp_model.remove(vv)
-            self.rmp_oracle.variables["cg_temporary"] = None
-            print(f"removed initial skeleton")
+        # vv = self.rmp_oracle.variables.get("cg_temporary")
+        # if vv is not None:
+        #     self.rmp_model.remove(vv)
+        #     self.rmp_oracle.variables["cg_temporary"] = None
+        #     print(f"removed initial skeleton")
 
     def init_rmp(self):
         """
@@ -522,11 +649,11 @@ class NetworkColumnGenerationSlim(object):
             network=self.network,
             full_sku_list=self.full_sku_list,
             customer_list=self.customer_list,
-            bool_covering=self.bool_covering,
-            bool_edge_lb=self.arg.lowerbound,
-            bool_node_lb=self.arg.nodelb,
-            bool_fixed_cost=self.arg.node_cost,
-            bool_capacity=self.arg.capacity,
+            # bool_covering=self.bool_covering,
+            # bool_edge_lb=self.bool_edge_lb,
+            # bool_node_lb=self.bool_node_lb,
+            # bool_fixed_cost=self.arg.node_cost,
+            # bool_capacity=self.arg.capacity,
             used_edge_capacity=None,
             used_warehouse_capacity=None,
             used_plant_capacity=None,
@@ -652,10 +779,10 @@ class NetworkColumnGenerationSlim(object):
         self.variables["column_weights"] = self.rmp_oracle.variables["column_weights"]
 
         cus_col_value = pd.DataFrame(
-            index=range(self.iter), columns=[c.idx for c in self.customer_list]
+            index=range(self.iter+1), columns=[c.idx for c in self.customer_list]
         )
         cus_col_weights = pd.DataFrame(
-            index=range(self.iter), columns=[c.idx for c in self.customer_list]
+            index=range(self.iter+1), columns=[c.idx for c in self.customer_list]
         )
         reduced_cost = pd.DataFrame(
             self.red_cost, columns=[c.idx for c in self.customer_list]
@@ -664,6 +791,7 @@ class NetworkColumnGenerationSlim(object):
         for customer in self.customer_list:
             # for number in range(self.num_cols):
             for number in range(self.iter - 1):
+                number = number + 1
                 if self.columns[customer][number] != {}:
                     cus_col_value.loc[number, customer.idx] = self.columns[customer][
                         number

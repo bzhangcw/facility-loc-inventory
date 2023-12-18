@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-import const
+import const as const
 from entity import SKU, Customer, Edge, Node, Plant, Warehouse
 
 

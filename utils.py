@@ -10,8 +10,8 @@ import networkx as nx
 import pandas as pd
 
 from entity import Edge, Node
-from network import construct_network
-from read_data import read_data
+from config.network import construct_network
+from config.read_data import read_data
 
 import numpy as np
 class CONF:
@@ -99,6 +99,45 @@ def configuration(conf_label,arg):
         arg.nodelb = 0
         arg.distance = 1
         arg.cardinality = 1
+    elif conf_label == 6:
+        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        arg.backorder = 1
+        arg.customer_backorder = 1
+        arg.node_cost = 1
+        arg.edge_cost = 1
+        arg.capacity = 1
+        arg.lowerbound = 1
+        arg.cp_lowerbound = 1
+        arg.nodelb = 0
+        arg.distance = 1
+        arg.cardinality = 1
+        arg.T = 7
+    elif conf_label == 7:
+        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        arg.backorder = 0
+        arg.customer_backorder = 0
+        arg.node_cost = 1
+        arg.edge_cost = 1
+        arg.capacity = 1
+        arg.lowerbound = 1
+        arg.cp_lowerbound = 1
+        arg.nodelb = 0
+        arg.distance = 1
+        arg.cardinality = 1
+        arg.T = 7
+    elif conf_label == 8:
+        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        arg.backorder = 0
+        arg.customer_backorder = 1
+        arg.fixed_cost = 1
+        arg.capacity = 1
+        arg.edgelb = 1
+        arg.nodelb = 0
+        arg.distance = 0
+        arg.cardinality = 1
+        arg.add_in_upper = 1
+        arg.T = 7
+        
 
 
 def scale(pick_instance,datapath,arg):
@@ -110,7 +149,7 @@ def scale(pick_instance,datapath,arg):
             plant_num=20,
             warehouse_num=2,
             customer_num=2,
-            one_period=arg.T == 1,
+            one_period=(True if arg.T == 1 else False),
         )
     elif pick_instance == 2:
         cfg = dict(
@@ -119,7 +158,7 @@ def scale(pick_instance,datapath,arg):
             plant_num=20,
             warehouse_num=20,
             customer_num=4,
-            one_period=arg.T == 1,
+            one_period=(True if arg.T == 1 else False),
         )
     elif pick_instance == 3:
         cfg = dict(
@@ -128,7 +167,7 @@ def scale(pick_instance,datapath,arg):
             plant_num=20,
             warehouse_num=20,
             customer_num=100,
-            one_period=arg.T == 1,
+            one_period=(True if arg.T == 1 else False),
         )
     elif pick_instance == 4:
         cfg = dict(
@@ -137,7 +176,7 @@ def scale(pick_instance,datapath,arg):
             plant_num=20,
             warehouse_num=20,
             customer_num=10,
-            one_period=True,
+            one_period=(True if arg.T == 1 else False),
         )
     elif pick_instance == 5:
         cfg = dict(
@@ -146,7 +185,16 @@ def scale(pick_instance,datapath,arg):
             plant_num=20,
             warehouse_num=20,
             customer_num=100,
-            one_period=True,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 6:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=140,
+            plant_num=20,
+            warehouse_num=20,
+            customer_num=519,
+            one_period=(True if arg.T == 1 else False),
         )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
@@ -160,18 +208,28 @@ def add_attr(edge_list, node_list, arg,const):
         cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
-            e.capacity = cap["qty"].get(e.idx, 1000000)*100
-    if arg.lowerbound == 1:
+            e.capacity = cap["qty"].get(e.idx, 1000000)
+    # if arg.lowerbound == 1:
+    #     lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
+    #     for e in edge_list:
+    #         if e.idx in lb_end["lb"]:
+    #             e.variable_lb = lb_end["lb"].get(e.idx, 0)
+    # if arg.cp_lowerbound == 1:
+    #     lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
+    #     for e in edge_list:
+    #         if e.idx in lb_inter["lb"]:
+    #             e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+    #             print(f"setting {e.idx} to {e.variable_lb}")
+    if arg.edgelb == 1:
         lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-    if arg.cp_lowerbound == 1:
         lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
                 e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
-                print(f"setting {e.idx} to {e.variable_lb}")
+                # print(f"setting {e.idx} to {e.variable_lb}")
     if arg.nodelb == 1:
         lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
         for n in node_list:
