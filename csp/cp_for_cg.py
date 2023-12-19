@@ -17,7 +17,7 @@ if __name__ == "__main__":
     arg.lowerbound = 1
     arg.cp_lowerbound = 1
     arg.partial_fixed = False
-    datapath = "/Users/xue/github/facility-loc-inventory/data/data_0401_0inv.xlsx"
+    datapath = "./data/data_0401_0inv.xlsx"
     pick_instance = 1
     if pick_instance == 1:
         cfg = dict(
@@ -66,18 +66,18 @@ if __name__ == "__main__":
         e.cp_variable_lb = 0
 
     if arg.capacity == 1:
-        cap = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/random_capacity_updated.csv").set_index("id")
+        cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
             # 修改点6 因为论文中uhat是inf
             e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
-        lb_end = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/lb_end.csv").set_index("id")
+        lb_end = pd.read_csv("./data/lb_end.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
     if arg.cp_lowerbound == 1:
-        lb_inter = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/lb_inter.csv").set_index("id")
+        lb_inter = pd.read_csv("./data/lb_inter.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
                 e.cp_variable_lb = lb_inter["lb"].get(e.idx, 0)

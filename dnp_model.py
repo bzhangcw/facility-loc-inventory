@@ -27,7 +27,7 @@ CG_SUBP_GAP = float(os.environ.get("CG_SUBP_GAP", 0.05))
 CG_SUBP_TIMELIMIT = float(os.environ.get("CG_SUBP_TIMELIMIT", 100))
 
 
-@ray.remote
+# @ray.remote
 class DNP_worker:
     """
     Worker class for DNP, each worker is responsible for num_cus customer

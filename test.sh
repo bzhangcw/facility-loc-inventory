@@ -30,6 +30,7 @@
 #gurobi_cl TimeLimit=3600 finaltest/C200_L1_CL1_NU1_Fn1_Fe1_NL0.mps &> finaltest/C200_L1_CL1_NU1_Fn1_Fe1_NL0.mps.log
 #gurobi_cl TimeLimit=3600 finaltest/C200_L1_CL1_NU1_Fn1_Fe1_NL1.mps &> finaltest/C200_L1_CL1_NU1_Fn1_Fe1_NL1.mps.log
 
+<<<<<<< Updated upstream
 # python main_ncs_np.py --conf_label 1 --pick_instance 1 &> feasibility/c1p1.log
 # python main_ncs_np.py --conf_label 1 --pick_instance 2 &> feasibility/c1p2.log
 # python main_ncs_np.py --conf_label 1 --pick_instance 3 &> feasibility/c1p3.log
@@ -68,3 +69,21 @@
 python main_ncs_np.py --conf_label 6 --pick_instance 6 &> feasibility/c6p6.log
 
 # python main_ncs_np.py &> feasibility/c8p6_cg.log
+=======
+#gurobi_cl TimeLimit=3600 finaltest/C4_L1_CL0_NU0_Fn0_Fe0_NL0_Ca0.mps &> finaltest/C4_L1_CL0_NU0_Fn0_Fe0_NL0_Ca0.mps.log
+
+
+gurobi_cl TimeLimit=3600 C200/C200_O0_E0.mps &> C200/C200_O0_E0.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O1_E0.mps &> C200/C200_O1_E0.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O2_E0.mps &> C200/C200_O2_E0.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O3_E0.mps &> C200/C200_O3_E0.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O3_E1.mps &> C200/C200_O3_E1.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O3_E2.mps &> C200/C200_O3_E2.mps.log
+gurobi_cl TimeLimit=3600 C200/C200_O3_E3.mps &> C200/C200_O3_E3.mps.log
+gurobi_cl TimeLimit=3600 finaltest/CL1_NU1_Fn0_Fe0.mps &> finaltest/CL1_NU1_Fn0_Fe0.mps.log
+gurobi_cl TimeLimit=3600 finaltest/CL1_NU1_Fn1_Fe0.mps &> finaltest/CL1_NU1_Fn1_Fe0.mps.log
+gurobi_cl TimeLimit=3600 finaltest/CL1_NU1_Fn0_Fe1.mps &> finaltest/CL1_NU1_Fn0_Fe1.mps.log
+gurobi_cl TimeLimit=3600 finaltest/CL1_NU1_Fn1_Fe1.mps &> finaltest/CL1_NU1_Fn1_Fe1_NL1.mps.log
+gurobi_cl TimeLimit=3600 finaltest/CL0_NU0_Fn0_Fe0_NL0.mps &> finaltest/CL0_NU0_Fn0_Fe0_NL0.mps.log
+gurobi_cl TimeLimit=3600 finaltest/L0_CL0_NU0_Fn0_Fe0_NL0.mps &> finaltest/L0_CL0_NU0_Fn0_Fe0_NL0.mps.log
+>>>>>>> Stashed changes

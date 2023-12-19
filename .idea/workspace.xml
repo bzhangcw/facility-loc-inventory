@@ -5,6 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="4267578e-2220-45a9-811e-7b17fad63d98" name="Changes" comment="">
+<<<<<<< Updated upstream
       <change beforePath="$PROJECT_DIR$/1109/cus4_details.json" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/1211.sh" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/1222.sh" beforeDir="false" />
@@ -38,6 +39,14 @@
       <change beforePath="$PROJECT_DIR$/slim/slim_cg.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/slim/slim_pricing.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/slim/slim_rmp_model.py" beforeDir="false" />
+=======
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cp_for_cg.py" beforeDir="false" afterPath="$PROJECT_DIR$/cp_for_cg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dnp_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/dnp_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/entity.py" beforeDir="false" afterPath="$PROJECT_DIR$/entity.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/param.py" beforeDir="false" afterPath="$PROJECT_DIR$/param.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/read_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/read_data.py" afterDir="false" />
+>>>>>>> Stashed changes
       <change beforePath="$PROJECT_DIR$/test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/test.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test_cg.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/test_final.py" beforeDir="false" />
@@ -161,9 +170,16 @@
       <workItem from="1698981866936" duration="36000" />
       <workItem from="1698983658810" duration="5000" />
       <workItem from="1698997566693" duration="19464000" />
+<<<<<<< Updated upstream
       <workItem from="1699943656350" duration="828000" />
       <workItem from="1702286954720" duration="54000" />
       <workItem from="1702553365701" duration="1117000" />
+=======
+      <workItem from="1699943656350" duration="1413000" />
+      <workItem from="1699957641194" duration="161000" />
+      <workItem from="1700726741124" duration="8688000" />
+      <workItem from="1701317491339" duration="2958000" />
+>>>>>>> Stashed changes
     </task>
     <servers />
   </component>
@@ -188,9 +204,20 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+<<<<<<< Updated upstream
           <url>file://$PROJECT_DIR$/dnp_model.py</url>
           <line>748</line>
           <option name="timeStamp" value="40" />
+=======
+          <url>file://$PROJECT_DIR$/debug.py</url>
+          <line>227</line>
+          <option name="timeStamp" value="65" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main_slim_cg.py</url>
+          <line>114</line>
+          <option name="timeStamp" value="66" />
+>>>>>>> Stashed changes
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
@@ -210,9 +237,10 @@
     <SUITE FILE_PATH="coverage/facility_loc_inventory$Check.coverage" NAME="Check Coverage Results" MODIFIED="1692076628384" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$main.coverage" NAME="main Coverage Results" MODIFIED="1690860503258" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$pydevd.coverage" NAME="pydevd Coverage Results" MODIFIED="1691593074272" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$APPLICATION_HOME_DIR$/plugins/python/helpers/pydev" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$debug.coverage" NAME="debug Coverage Results" MODIFIED="1699944123281" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$debug.coverage" NAME="debug Coverage Results" MODIFIED="1701326194705" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$read_data.coverage" NAME="read_data Coverage Results" MODIFIED="1690287715849" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/facility_loc_inventory$test_final.coverage" NAME="test_final Coverage Results" MODIFIED="1699944385701" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$test_final.coverage" NAME="test_final Coverage Results" MODIFIED="1700823436934" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/facility_loc_inventory$main_slim_cg.coverage" NAME="main_slim_cg Coverage Results" MODIFIED="1701326211689" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$test_cp_gfc.coverage" NAME="test_cp_gfc Coverage Results" MODIFIED="1698731569561" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/ipynb" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$cg_col_helper.coverage" NAME="cg_col_helper Coverage Results" MODIFIED="1691593082523" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/facility_loc_inventory$main_cg_np.coverage" NAME="main_cg_np Coverage Results" MODIFIED="1690263636589" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />

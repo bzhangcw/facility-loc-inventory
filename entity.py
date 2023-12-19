@@ -1,10 +1,11 @@
 from abc import abstractmethod
 from typing import List
-
+import const
 import numpy as np
 import pandas as pd
+from typing import List
+from abc import abstractmethod
 from geopy.distance import geodesic
-import const as const
 
 
 class SKU:
@@ -313,7 +314,8 @@ class Edge:
         self.capacity = capacity
         self.variable_lb = variable_lb
         self.cp_variable_lb = cp_variable_lb
-        self.distance = distance if distance is not None else self.cal_distance()
+        # self.distance = distance if distance is not None else self.cal_distance()
+        self.distance =None
         self.transportation_fixed_cost = transportation_fixed_cost
         self.transportation_sku_fixed_cost = transportation_sku_fixed_cost
         self.transportation_sku_unit_cost = transportation_sku_unit_cost

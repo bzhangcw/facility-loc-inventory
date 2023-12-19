@@ -100,8 +100,11 @@ def read_data(
         sku_dict[irow["id"]] = SKUi
 
     # ==================== construct plant ============================
+    # plant_df = node_df.query("id.str.startswith('P')", engine="python")[
+    #     ["id", "total_capacity"]
+    # ]
     plant_df = node_df.query("id.str.startswith('P')", engine="python")[
-        ["id", "total_capacity"]
+        ["x","y","id", "total_capacity"]
     ]
     plant_sku_df_dict = dict(
         list(node_sku_df.query("id.str.startswith('P')", engine="python").groupby("id"))
@@ -109,8 +112,12 @@ def read_data(
 
     for p in plant_df.index:
         items = plant_df.loc[p].values.tolist()
-        plant_id = items[0]
-        capacity = items[1]
+        # plant_id = items[0]
+        # capacity = items[1]
+        plant_x = items[0]
+        plant_y = items[1]
+        plant_id = items[2]
+        capacity = items[3]
 
         if plant_id in plant_sku_df_dict:
             plant_sku_df = plant_sku_df_dict[plant_id].replace({"sku": sku_dict})
@@ -125,7 +132,7 @@ def read_data(
             producible_sku = None
             sku_rate = None
             sku_unit_cost = None
-
+        loc = np.array([plant_x, plant_y])
         this_plant = Plant(
             idx=plant_id,
             location=loc,
@@ -138,8 +145,11 @@ def read_data(
             plant_list.append(this_plant)
             nodes_dict[plant_id] = this_plant
     # ==================== construct warehouse ============================
+    # warehouse_df = node_df.query("id.str.startswith('T')", engine="python")[
+    #     ["id", "total_capacity", "fixed_cost", "if_current"]
+    # ]
     warehouse_df = node_df.query("id.str.startswith('T')", engine="python")[
-        ["id", "total_capacity", "fixed_cost", "if_current"]
+        ["x", "y", "id", "total_capacity", "fixed_cost", "if_current"]
     ]
     warehouse_sku_df_dict = dict(
         list(node_sku_df.query("id.str.startswith('T')", engine="python").groupby("id"))
@@ -154,10 +164,16 @@ def read_data(
 
     for w in warehouse_df.index:
         items = warehouse_df.loc[w].values.tolist()
-        ws_id = items[0]
-        capacity = items[1]
-        fixed_cost = items[2] if not pd.isna(items[2]) else 0
-        if_current = bool(items[3])
+        ws_x = items[0]
+        ws_y = items[1]
+        # ws_id = items[0]
+        # capacity = items[1]
+        # fixed_cost = items[2] if not pd.isna(items[2]) else 0
+        # if_current = bool(items[3])
+        ws_id = items[2]
+        capacity = items[3]
+        fixed_cost = items[4] if not pd.isna(items[2]) else 0
+        if_current = bool(items[5])
 
         if ws_id in warehouse_sku_df_dict.keys():
             ws_df = warehouse_sku_df_dict[ws_id].replace({"sku": sku_dict})
@@ -186,6 +202,7 @@ def read_data(
             demand = None
             demand_sku = None
 
+        loc = np.array([ws_x, ws_y])
         this_warehouse = Warehouse(
             idx=ws_id,
             location=loc,
@@ -200,7 +217,7 @@ def read_data(
         warehouse_list.append(this_warehouse)
         nodes_dict[ws_id] = this_warehouse
     # ==================== construct customer ============================
-    customer_df = node_df.query("id.str.startswith('C')", engine="python")["id"]
+    customer_df = node_df.query("id.str.startswith('C')", engine="python")[["x", "y", "id"]]
     customer_sku_time_df_list = dict(
         list(
             node_sku_time_df.query("id.str.startswith('C')", engine="python").groupby(
@@ -210,7 +227,11 @@ def read_data(
     )
 
     for c in customer_df.index:
-        cst_id = customer_df.loc[c]
+        items = customer_df.loc[c].values.tolist()
+        cus_x = items[0]
+        cus_y = items[1]
+        cst_id = items[2]
+        # cst_id = customer_df.loc[c]
 
         if cst_id in customer_sku_time_df_list.keys():
             cst_df = customer_sku_time_df_list[cst_id].replace({"sku": sku_dict})
@@ -227,7 +248,7 @@ def read_data(
         else:
             demand = None
             demand_sku = None
-
+        loc = np.array([cus_x, cus_y])
         this_customer = Customer(
             idx=cst_id, location=loc, demand=demand, demand_sku=demand_sku
         )

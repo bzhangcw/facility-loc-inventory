@@ -137,6 +137,18 @@ def configuration(conf_label,arg):
         arg.cardinality = 1
         arg.add_in_upper = 1
         arg.T = 7
+    elif conf_label == 9:
+        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        arg.backorder = 0
+        arg.customer_backorder = 1
+        arg.fixed_cost = 1
+        arg.capacity = 1
+        arg.edgelb = 1
+        arg.nodelb = 1
+        arg.distance = 1
+        arg.cardinality = 1
+        arg.add_in_upper = 1
+        arg.T = 432
         
 
 
@@ -193,6 +205,15 @@ def scale(pick_instance,datapath,arg):
             sku_num=140,
             plant_num=20,
             warehouse_num=20,
+            customer_num=519,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 7:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
             customer_num=519,
             one_period=(True if arg.T == 1 else False),
         )
