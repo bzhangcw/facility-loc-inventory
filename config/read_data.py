@@ -240,6 +240,7 @@ def read_data(
                 .set_index(["time", "sku"])["demand"]
                 .dropna()
             )
+            demand.sort_index(level='time')
 
             demand_sku = {}
             for t in list(cst_df.groupby("time")):

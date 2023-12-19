@@ -224,12 +224,12 @@ class DNP:
                 )
             self.bool_node_lb = False
         self.original_obj = 0.0
-        self.hc = 0.0
-        self.pc = 0.0
-        self.tc = 0.0
-        self.ud = 0.0
-        self.nf = 0.0
-        self.ef = 0.0
+        # self.hc = 0.0
+        # self.pc = 0.0
+        # self.tc = 0.0
+        # self.ud = 0.0
+        # self.nf = 0.0
+        # self.ef = 0.0
         self.total_cus_num = cus_num
         self.var_idx = None
         self.dual_index_for_RMP = {
@@ -541,8 +541,20 @@ class DNP:
                                 )
                             else:
                                 idx["sku_demand_slack"].append((t, node, k))
+                                if type(node.demand.loc[(t, k)]) is not np.float64:
+                                    if type(node.demand.loc[(t, k)].loc[(t,k)]) is not np.float64:
+                                        demand = 200
+                                    else:
+                                        demand = node.demand.loc[(t, k)][t, k]
+                                else:
+                                    demand = node.demand.loc[(t, k)]
+                                    # print("----------------------Not float--------------")
+                                    # print(node, t,k)
+                                    # print(node.demand[(t, k)])
+                                    # print(node.demand[(t, k)][t,k])
+
                                 self.var_types["sku_demand_slack"]["ub"].append(
-                                    node.demand[t, k]
+                                    demand
                                 )
         # for initializaiton in CG
         self.var_idx = {}
@@ -703,8 +715,13 @@ class DNP:
                 elif node.type == const.WAREHOUSE:
                     fulfilled_demand = 0
                     if node.has_demand(t, k):
+                        if type(node.demand.loc[(t, k)]) is not np.float64:
+                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                                demand = 200
+                            else:
+                                demand = node.demand.loc[(t, k)][t, k]
                         fulfilled_demand = (
-                            node.demand[t, k]
+                            demand
                             - self.variables["sku_demand_slack"][t, node, k]
                         )
 
@@ -749,8 +766,15 @@ class DNP:
                             name=constr_name,
                         )
                     else:
+                        if type(node.demand.loc[(t, k)]) is not np.float64:
+                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                                demand = 200
+                            else:
+                                demand = node.demand.loc[(t, k)][t, k]
+                        else:
+                            demand = node.demand.loc[(t, k)]
                         fulfilled_demand = (
-                            node.demand[t, k]
+                            demand
                             - self.variables["sku_demand_slack"][t, node, k]
                         )
                         constr = self.model.addConstr(
@@ -1041,35 +1065,35 @@ class DNP:
         Get the original objective value
         """
         obj = 0.0
-        hc = 0.0
-        pc = 0.0
-        tc = 0.0
-        ud = 0.0
-        nf = 0.0
-        ef = 0.0
+        # hc = 0.0
+        # pc = 0.0
+        # tc = 0.0
+        # ud = 0.0
+        # nf = 0.0
+        # ef = 0.0
         # for t in tqdm(range(self.T)):
         for t in range(self.T):
             obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
-            hc = hc + self.cal_sku_holding_cost(t)
-            pc = pc + self.cal_sku_producing_cost(t)
+            # hc = hc + self.cal_sku_holding_cost(t)
+            # pc = pc + self.cal_sku_producing_cost(t)
 
             # if self.arg.backorder is True:
             #     obj = obj + self.cal_sku_backorder_cost(t)
 
             obj = obj + self.cal_sku_transportation_cost(t)
-            tc = tc + self.cal_sku_transportation_cost(t)
+            # tc = tc + self.cal_sku_transportation_cost(t)
 
             obj = obj + self.cal_sku_unfulfill_demand_cost(t)
-            ud = ud + self.cal_sku_unfulfill_demand_cost(t)
+            # ud = ud + self.cal_sku_unfulfill_demand_cost(t)
 
         if self.bool_fixed_cost:
-            nf = self.cal_fixed_node_cost()
-            ef = self.cal_fixed_edge_cost()
-            obj = obj + nf
-            obj = obj + ef
+            # nf = self.cal_fixed_node_cost()
+            # ef = self.cal_fixed_edge_cost()
+            obj = obj +  self.cal_fixed_node_cost()
+            obj = obj + self.cal_fixed_edge_cost()
 
-        return obj, hc, pc, tc, ud, nf, ef
+        return obj
 
     def extra_objective(self, customer, dualvar=None, dual_index=None):
         obj = 0.0
@@ -1126,15 +1150,7 @@ class DNP:
         for obj in self.obj_types.keys():
             self.obj[obj] = dict()
 
-        (
-            self.original_obj,
-            self.hc,
-            self.pc,
-            self.tc,
-            self.ud,
-            self.nf,
-            self.ef,
-        ) = self.get_original_objective()
+        self.original_obj = self.get_original_objective()
 
         self.model.setObjective(self.original_obj, sense=COPT.MINIMIZE)
 
@@ -1191,7 +1207,6 @@ class DNP:
 
                     # I_hat = max(I, 0)
                     I_hat = self.model.addVar(name=f"I_hat_({t},_{node},_{k})")
-                    # lk：不是很懂啊 这个约束加上去干嘛 也不好计算dual
                     self.model.addConstr(
                         I_hat >= self.variables["sku_inventory"][t, node, k]
                     )
@@ -1519,7 +1534,12 @@ class DNP:
                 for t in t_list:
                     for k in node.demand_sku[t]:
                         slack = self.variables["sku_demand_slack"][(t, node, k)].x
-                        demand = node.demand[t, k]
+
+                        if type(node.demand.loc[(t, k)]) is not np.float64:
+                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                                demand = 200
+                            else:
+                                demand = node.demand.loc[(t, k)][t, k]
                         if preserve_zeros or slack != 0 or demand != 0:
                             node_sku_t_demand_slack.iloc[demand_slack_index] = {
                                 "node": node.idx,

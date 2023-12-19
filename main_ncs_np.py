@@ -48,30 +48,37 @@ if __name__ == "__main__":
     solver = "COPT"
     # solver = "GUROBI"
 
-    np_cg = NCS(
-        arg,
-        network,
-        customer_list,
-        sku_list,
-        max_iter=max_iter,
-        # bool_covering= True,
-        init_primal=init_primal,
-        init_dual=init_dual,
-        init_ray=init_ray,
-        # num_workers=num_workers,
-        # num_cpus=num_cpus,
-        solver=solver,
-    )
-    np_cg.run()
-    np_cg.get_solution("New_sol/")
+    # np_cg = NCS(
+    #     arg,
+    #     network,
+    #     customer_list,
+    #     sku_list,
+    #     max_iter=max_iter,
+    #     # bool_covering= True,
+    #     init_primal=init_primal,
+    #     init_dual=init_dual,
+    #     init_ray=init_ray,
+    #     # num_workers=num_workers,
+    #     # num_cpus=num_cpus,
+    #     solver=solver,
+    # )
+    # np_cg.run()
+    # np_cg.get_solution("New_sol/")
     #####################DNP#######################################
-    # solver = "COPT"
-    # arg.cardinality_limit = 3
-    # model = DNP(arg, network)
-    # model.modeling()
-    # model.model.setParam("Logging", 1)
-    # model.model.setParam("Threads", 8)
-    # model.model.setParam("TimeLimit", 3600)
+    
+    solver = "COPT"
+    arg.cardinality_limit = 3
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 3600)
+    variables = model.model.getVars()
+    binary_vars_index = []
+    for v in variables:
+        if v.getType() == COPT.BINARY:
+            binary_vars_index.append(v.getIdx())
+            v.setType(COPT.CONTINUOUS)
     # model.model.solve()
     # if model.model.status == COPT.INFEASIBLE:
     #         model.model.computeIIS()

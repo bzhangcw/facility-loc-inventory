@@ -6,6 +6,8 @@ from dnp_model import DNP
 from config.network import construct_network
 from ncg.np_cg import *
 from config.param import Param
+import warnings
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
 
 if __name__ == "__main__":
     param = Param()
@@ -17,6 +19,8 @@ if __name__ == "__main__":
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4.xlsx"
     arg.pick_instance = 7
+    arg.customer_backorder = 0
+    arg.T = 432
     # arg.rmp_relaxation = 1
     # arg.pricing_relaxation = 1
     (
@@ -47,9 +51,10 @@ if __name__ == "__main__":
         if v.getType() == COPT.BINARY:
             binary_vars_index.append(v.getIdx())
             v.setType(COPT.CONTINUOUS)
+    # model.write("model.mps")
     model.solve()
 
-    lpval = model.get_model_objval()
+    # lpval = model.get_model_objval()
     #############################################################
     # starting from the LP relaxation to find a feasible MIP solution
     # for idx in binary_vars_index:
