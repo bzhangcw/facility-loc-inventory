@@ -1,30 +1,30 @@
-from np_cg import *
+import numpy as np
 import pandas as pd
+from coptpy import COPT
 
+import const
 import utils
-from dnp_model import DNP
+from slim.slim_rmp_model import DNPSlim
 from network import construct_network
 from param import Param
-from entity import Warehouse, Edge
 
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.T = 7
+    # # 工厂是100 仓库是500
+    # arg.node_cost = 0
+    # # 边是10
+    # arg.edge_cost = 0
     arg.capacity = 1
-    arg.bool_distance = 1
-    arg.node_cost, arg.edge_cost = 1, 1
-    arg.nodelb = 0
-    # arg.cus_num = 100
-    # arg.lowerbound, arg.cp_lowerbound, arg.add_in_upper, arg.node_cost, arg.edge_cost, arg.nodelb, arg.add_cardinality = 1, 1, 1, 1, 1, 0, 1
-    datapath = "data/data_0401_0inv_V2.xlsx"
-    pick_instance = 2
+    # arg.lowerbound = 1
+    datapath = "data/data_0401_0inv.xlsx"
+    pick_instance = 1
     if pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
             sku_num=2,
             plant_num=2,
-            warehouse_num=13,
+            warehouse_num=5,
             customer_num=5,
             one_period=True if arg.T == 1 else False,
         )
@@ -42,8 +42,8 @@ if __name__ == "__main__":
         cfg = dict(
             data_dir=datapath,
             sku_num=140,
-            plant_num=23,
-            warehouse_num=28,
+            plant_num=28,
+            warehouse_num=23,
             customer_num=arg.cus_num,
             one_period=False,
         )
@@ -69,14 +69,14 @@ if __name__ == "__main__":
         cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
+            # 修改点6 因为论文中uhat是inf
             e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
         lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-    # if arg.cp_lowerbound == 1:
-    if arg.lowerbound == 1:
+    if arg.cp_lowerbound == 1:
         lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
@@ -93,40 +93,35 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
 
-    max_iter = 10
-    init_primal = None
-    init_dual = None  # 'dual'
-    init_sweeping = True
-    # arg.add_in_upper = 1
-    model = DNP(arg, network)
+    model = DNPSlim(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)
     model.model.setParam("Threads", 8)
     model.model.setParam("TimeLimit", 3600)
+    model.model.write("md.mps")
+    model.model.write("md.lp")
     # model.model.setParam("RelGap", 1.3)
     # model.model.setParam("LpMethod", 2)  # interior point method
-    # model.model.write("mm.lp")
-    # C: Capacity L:Lowerbound CL:coupling lowerbound
-    # NU: 每日仓库入库上限
-    # Fn: node cost Fe: edge cost NL: node lowerbound
-    # Ca: 每期履约消费者的仓库个数上限 FR: fulfill rate
-    if arg.lowerbound == 0 and arg.add_in_upper == 0:
-        type1 = 0
-    elif arg.lowerbound == 1 and arg.add_in_upper == 1:
-        type1 = 3
-    elif arg.lowerbound == 1:
-        type1 = 1
-    elif arg.add_in_upper == 1:
-        type1 = 2
 
-    if arg.add_cardinality == 0 and arg.bool_distance == 0:
-        type2 = 0
-    elif arg.lowerbound == 1 and arg.bool_distance == 1:
-        type2 = 3
-    elif arg.lowerbound == 1:
-        type1 = 1
-    elif arg.bool_distance == 1:
-        type1 = 2
-    model.model.write("1123/C{}_O{}_E{}.mps".format(arg.cus_num, type1, type2))
-    # model.model.solve()
-    # model.get_solution(f"sol_mip_{pick_instance}_DNP/")
+    ###############################################################
+    # get the LP relaxation
+    variables = model.model.getVars()
+    binary_vars_index = []
+    for v in variables:
+        if v.getType() == COPT.BINARY:
+            binary_vars_index.append(v.getIdx())
+            v.setType(COPT.CONTINUOUS)
+    model.solve()
+
+    lpval = model.get_model_objval()
+    lpsol = model.get_solution
+    #############################################################
+    # starting from the LP relaxation to find a feasible MIP solution
+    for idx in binary_vars_index:
+        variables[idx].setType(COPT.BINARY)
+    model.model.write("mm.lp")
+    model.model.solve()
+    mipval = model.get_model_objval()
+    #############################################################
+
+    model.get_solution(data_dir=utils.CONF.DEFAULT_SOL_PATH)
