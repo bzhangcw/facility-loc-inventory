@@ -21,7 +21,7 @@ if __name__ == "__main__":
     utils.configuration(arg.conf_label, arg)
     datapath = "data/data_0401_0inv_V2.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
-    arg.pick_instance = 6
+    arg.pick_instance = 1
     arg.rmp_relaxation = 1
     arg.pricing_relaxation = 1
     (
@@ -48,21 +48,21 @@ if __name__ == "__main__":
     solver = "COPT"
     # solver = "GUROBI"
 
-    # np_cg = NCS(
-    #     arg,
-    #     network,
-    #     customer_list,
-    #     sku_list,
-    #     max_iter=max_iter,
-    #     # bool_covering= True,
-    #     init_primal=init_primal,
-    #     init_dual=init_dual,
-    #     init_ray=init_ray,
-    #     # num_workers=num_workers,
-    #     # num_cpus=num_cpus,
-    #     solver=solver,
-    # )
-    # np_cg.run()
+    np_cg = NCS(
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        # bool_covering= True,
+        init_primal=init_primal,
+        init_dual=init_dual,
+        init_ray=init_ray,
+        # num_workers=num_workers,
+        # num_cpus=num_cpus,
+        solver=solver,
+    )
+    np_cg.run()
     # np_cg.get_solution("New_sol/")
     #####################DNP#######################################
     

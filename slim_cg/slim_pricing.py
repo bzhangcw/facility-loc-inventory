@@ -39,13 +39,13 @@ class PricingWorker:
     """
 
     def __init__(
-        self,
-        cus_list,
-        arg,
-        bool_covering,
-        bool_edge_lb,
-        bool_node_lb,
-        solver="COPT",
+            self,
+            cus_list,
+            arg,
+            bool_covering,
+            bool_edge_lb,
+            bool_node_lb,
+            solver="COPT",
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -160,22 +160,22 @@ class Pricing(object):
     """
 
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        model_name: str = "PricingDelivery",
-        # bool_capacity: bool = False,
-        # bool_edge_lb: bool = False,
-        # bool_node_lb: bool = False,
-        # bool_fixed_cost: bool = False,
-        # bool_covering: bool = False,
-        bool_dp: bool = False,
-        logging: int = 0,
-        gap: float = 1e-4,
-        threads: int = None,
-        limit: int = 3600,
-        customer: Customer = None,
-        solver: str = "COPT",
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            model_name: str = "PricingDelivery",
+            # bool_capacity: bool = False,
+            # bool_edge_lb: bool = False,
+            # bool_node_lb: bool = False,
+            # bool_fixed_cost: bool = False,
+            # bool_covering: bool = False,
+            bool_dp: bool = False,
+            logging: int = 0,
+            gap: float = 1e-4,
+            threads: int = None,
+            limit: int = 3600,
+            customer: Customer = None,
+            solver: str = "COPT",
     ) -> None:
         self.solver_name = solver
         if solver == "COPT":
@@ -248,16 +248,16 @@ class Pricing(object):
     def get_model_status(self):
         return self.model.status
 
-    def modeling(self,customer):
+    def modeling(self, customer):
         bool_dp, model_name, gap, limit, threads, logging, *_ = self.args_modeling
         if bool_dp:
             raise ValueError("not implemented")
         else:
-            self.modeling_milp(model_name, gap, limit, threads, logging,customer)
+            self.modeling_milp(model_name, gap, limit, threads, logging, customer)
 
     #####################
 
-    def modeling_milp(self, model_name, gap, limit, threads, logging,customer):
+    def modeling_milp(self, model_name, gap, limit, threads, logging, customer):
         """
         build DNP model
         """
@@ -293,11 +293,14 @@ class Pricing(object):
         # for remote
         self.init_col_helpers()
 
+    def modeling_dp(self, customer):
+        pass
 
     def _iterate_edges(self):
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
             yield edge
+
     # 更改点1 iterate node约束
     def _iterate_nodes(self):
         for n in self.network.nodes:
@@ -309,7 +312,7 @@ class Pricing(object):
         add variables
         """
         if self.bool_covering:
-        # lk：更改点1-如果不加lowerbound约束 子问题的T-C网络中仍然是需要做open relationship的 当然 open relationship必然对应cost 如果cost都是0那干脆可以不用考虑open关系
+            # lk：更改点1-如果不加lowerbound约束 子问题的T-C网络中仍然是需要做open relationship的 当然 open relationship必然对应cost 如果cost都是0那干脆可以不用考虑open关系
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
@@ -340,7 +343,7 @@ class Pricing(object):
                     "nameprefix": "p",
                     "index": "(t, edge,k)",
                 },
-            # lk：更改点1 变成select_node
+                # lk：更改点1 变成select_node
                 "open": {
                     "lb": 0,
                     "ub": 1,
@@ -417,8 +420,8 @@ class Pricing(object):
                 nameprefix=f"{param['nameprefix']}_",
             )
 
-    def add_constraints(self,customer):
-        #lk: 和bool_open联系起来
+    def add_constraints(self, customer):
+        # lk: 和bool_open联系起来
         if self.bool_covering:
             self.constr_types = {
                 "flow_conservation": {"index": "(t, node, k)"},
@@ -436,7 +439,7 @@ class Pricing(object):
             }
         if self.bool_capacity:
             self.constr_types["transportation_capacity"] = {"index": "(t, edge)"}
-        #TODO：后续可以加仓库的出库限制及其他的customization约束
+        # TODO：后续可以加仓库的出库限制及其他的customization约束
 
         if self.bool_edge_lb:
             self.constr_types["transportation_variable_lb"] = {"index": "(t, edge)"}
@@ -463,9 +466,9 @@ class Pricing(object):
             if self.bool_edge_lb:
                 self.add_constr_transportation_lb(t)
             if self.add_distance:
-                self.add_constr_distance(t,customer)
+                self.add_constr_distance(t, customer)
             if self.add_cardinality:
-                self.add_constr_cardinality(t,customer)
+                self.add_constr_cardinality(t, customer)
 
     def add_constr_flow_conservation(self, t: int):
         """flow constraint in the pricing problem
@@ -494,7 +497,7 @@ class Pricing(object):
         return
 
     def add_constr_open_relationship(self, t: int):
-        #lk：更改点2 加了这个函数
+        # lk：更改点2 加了这个函数
         for edge in self._iterate_edges():
 
             # sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
@@ -559,6 +562,7 @@ class Pricing(object):
 
         #         self.constrs["open_relationship"]["sku_open"][(t, node, k)] = constr
         return
+
     def add_constr_transportation_lb(self, t: int, verbose=False):
         for edge in self._iterate_edges():
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
@@ -628,6 +632,7 @@ class Pricing(object):
         constr = self.model.addConstr(used_distance <= self.arg.distance_limit)
         self.constrs["distance"][(t, customer)] = constr
         self.index_for_dual_var += 1
+
     def get_original_objective(self):
         """
         Get the original objective value
@@ -645,7 +650,7 @@ class Pricing(object):
             tc += self.cal_sku_transportation_cost(t)
             # if self.arg.customer_backorder:
             ud += self.cal_sku_unfulfill_demand_cost(t)
-        # 问题： 应该加上fixed cost
+            # 问题： 应该加上fixed cost
             if self.bool_fixed_cost:
                 nf = self.cal_fixed_node_cost(t)
                 ef = self.cal_fixed_edge_cost(t)
@@ -718,28 +723,28 @@ class Pricing(object):
             ) = edge.get_edge_sku_list_with_transportation_cost(t, self.sku_list)
             for k in sku_list_with_fixed_transportation_cost:
                 if (
-                    edge.transportation_sku_fixed_cost is not None
-                    and k in edge.transportation_sku_fixed_cost
+                        edge.transportation_sku_fixed_cost is not None
+                        and k in edge.transportation_sku_fixed_cost
                 ):
                     edge_transportation_cost = (
-                        edge_transportation_cost
-                        + edge.transportation_sku_fixed_cost[k]
-                        * self.variables["sku_select_edge"].get((t, edge, k), 0)
+                            edge_transportation_cost
+                            + edge.transportation_sku_fixed_cost[k]
+                            * self.variables["sku_select_edge"].get((t, edge, k), 0)
                     )
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
+                        edge.transportation_sku_unit_cost is not None
+                        and k in edge.transportation_sku_unit_cost
                 ):
                     transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
                 edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"].get((t, edge, k), 0)
+                        edge_transportation_cost
+                        + transportation_sku_unit_cost
+                        * self.variables["sku_flow"].get((t, edge, k), 0)
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -762,7 +767,7 @@ class Pricing(object):
                     unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
 
                 unfulfill_node_sku_cost = (
-                    unfulfill_sku_unit_cost * self.variables["sku_backorder"].get((t, k), 0)
+                        unfulfill_sku_unit_cost * self.variables["sku_backorder"].get((t, k), 0)
                 )
 
                 unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_node_sku_cost
@@ -778,7 +783,7 @@ class Pricing(object):
         for node in self._iterate_nodes():
             if node.type == const.WAREHOUSE:
                 fixed_node_cost += (
-                    node.holding_fixed_cost * self.variables["open"][(t, node)]
+                        node.holding_fixed_cost * self.variables["open"][(t, node)]
                 )
         self.obj["node_fixed_cost"][(t)] = fixed_node_cost
         return fixed_node_cost
@@ -843,7 +848,7 @@ class Pricing(object):
             needed quantities for the subproblems
 
         """
-        #TODO：这里面的column_helpers是什么意思似乎没有搞全 只加了beta
+        # TODO：这里面的column_helpers是什么意思似乎没有搞全 只加了beta
         col_helper = {}
         # lk: 这块应该是original_obj吗
         try:
@@ -888,7 +893,7 @@ class Pricing(object):
 
         return new_col
 
-    def add_in_upper(self,node,t):
+    def add_in_upper(self, node, t):
         in_inventory_sum = 0
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
@@ -901,6 +906,6 @@ class Pricing(object):
         )
         self.index_for_dual_var += 1
 
-    def add_distance(self,t):
+    def add_distance(self, t):
         # TODO: add_distance 的部分加上去
         return
