@@ -395,7 +395,6 @@ class NetworkColumnGenerationSlim(object):
                     self._logger.info("extra verbosity lp")
                     self.rmp_model.write(f"rmp@{self.iter}.lp")
                 with utils.TimerContext(self.iter, f"get_duals"):
-                    print(self.rmp_oracle.model.status)
                     ######################################
                     dual_packs = (
                         self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
