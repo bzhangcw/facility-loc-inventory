@@ -17,13 +17,14 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.conf_label = 8
+    arg.conf_label = 10
     utils.configuration(arg.conf_label, arg)
     datapath = "data/data_0401_0inv_V2.xlsx"
+    # datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
-    arg.pick_instance = 6
+    arg.pick_instance = 7
     arg.rmp_relaxation = 1
-    arg.pricing_relaxation = 1
+    arg.pricing_relaxation = 0
     (
         sku_list,
         plant_list,
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
     ###############################################################
     print("----------DCG Model------------")
-    max_iter = 100
+    max_iter = 50
     init_primal = None
     init_dual = None
     init_ray = False
@@ -48,24 +49,24 @@ if __name__ == "__main__":
     solver = "COPT"
     # solver = "GUROBI"
 
-    # np_cg = NCS(
-    #     arg,
-    #     network,
-    #     customer_list,
-    #     sku_list,
-    #     max_iter=max_iter,
-    #     # bool_covering= True,
-    #     init_primal=init_primal,
-    #     init_dual=init_dual,
-    #     init_ray=init_ray,
-    #     # num_workers=num_workers,
-    #     # num_cpus=num_cpus,
-    #     solver=solver,
-    # )
-    # np_cg.run()
+    np_cg = NCS(
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        # bool_covering= True,
+        init_primal=init_primal,
+        init_dual=init_dual,
+        init_ray=init_ray,
+        # num_workers=num_workers,
+        # num_cpus=num_cpus,
+        solver=solver,
+    )
+    np_cg.run()
     # np_cg.get_solution("New_sol/")
     #####################DNP#######################################
-    
+
     solver = "COPT"
     arg.cardinality_limit = 3
     model = DNP(arg, network)
@@ -74,11 +75,7 @@ if __name__ == "__main__":
     model.model.setParam("Threads", 8)
     model.model.setParam("TimeLimit", 3600)
     variables = model.model.getVars()
-    binary_vars_index = []
-    for v in variables:
-        if v.getType() == COPT.BINARY:
-            binary_vars_index.append(v.getIdx())
-            v.setType(COPT.CONTINUOUS)
+    model.model.write("allinone.mps")
     # model.model.solve()
     # if model.model.status == COPT.INFEASIBLE:
     #         model.model.computeIIS()

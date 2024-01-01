@@ -7,7 +7,8 @@ from config.network import construct_network
 from ncg.np_cg import *
 from config.param import Param
 import warnings
-warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
+
+warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 if __name__ == "__main__":
     param = Param()

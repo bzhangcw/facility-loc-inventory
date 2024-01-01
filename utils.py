@@ -14,6 +14,8 @@ from config.network import construct_network
 from config.read_data import read_data
 
 import numpy as np
+
+
 class CONF:
     DEFAULT_DATA_PATH = "./data"
     DEFAULT_TMP_PATH = "./tmp"
@@ -44,7 +46,8 @@ logger.info(f":solution      to {CONF.DEFAULT_SOL_PATH}")
 logger.info(f":data          to {CONF.DEFAULT_DATA_PATH}")
 logger.info(f":logs and tmps to {CONF.DEFAULT_TMP_PATH}")
 
-def configuration(conf_label,arg):
+
+def configuration(conf_label, arg):
     if conf_label == 1:
         # Basic version: only consider the capacity constraint
         arg.backorder = 0
@@ -149,10 +152,22 @@ def configuration(conf_label,arg):
         arg.cardinality = 1
         arg.add_in_upper = 1
         arg.T = 432
-        
+    elif conf_label == 10:
+        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        arg.backorder = 0
+        arg.customer_backorder = 1
+        arg.fixed_cost = 1
+        arg.capacity = 1
+        arg.edgelb = 1
+        arg.nodelb = 0
+        arg.distance = 1
+        arg.cardinality = 1
+        arg.add_in_upper = 1
+        arg.T = 7
 
 
-def scale(pick_instance,datapath,arg):
+def scale(pick_instance, datapath, arg):
+    logger.info(f"time scale {arg.T}")
     if pick_instance == 1:
         # 只有一个customer的成功的案例
         cfg = dict(
@@ -215,14 +230,17 @@ def scale(pick_instance,datapath,arg):
             plant_num=23,
             warehouse_num=28,
             customer_num=519,
+            # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
     package = get_data_from_cfg(cfg)
+
     return package
 
-def add_attr(edge_list, node_list, arg,const):
+
+def add_attr(edge_list, node_list, arg, const):
     for e in edge_list:
         e.variable_lb = 0
     if arg.capacity == 1:
@@ -258,6 +276,8 @@ def add_attr(edge_list, node_list, arg,const):
                 n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)
             if n.type == const.PLANT:
                 n.production_lb = lb_df["lb"].get(n.idx, np.inf)
+
+
 def dump_cfg_tofname(cfg):
     """
     create a signiture to dump data
@@ -269,6 +289,7 @@ def dump_cfg_tofname(cfg):
     logger.info("generating the signature of this problem")
     logger.info(infostr)
     keys = sorted(cfg.keys())
+
     return (
         cfg["data_dir"].split("/")[-1].split(".")[0]
         + "-"

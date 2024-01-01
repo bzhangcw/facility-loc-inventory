@@ -13,12 +13,12 @@ df1 = pd.read_excel(data_basic, sheet_name="wc")
 df2 = pd.read_excel(data_basic, sheet_name="pw")
 df3 = pd.read_excel(data_basic, sheet_name="ww")
 print(df1)
-print("o",list(product(df1['w'], df1['c'], df1['sku'])))
-wc = pd.DataFrame(list(product(df1['w'], df1['c'], df1['sku'])))
-wc.columns = ['w', 'c', 'sku']
+print("o", list(product(df1["w"], df1["c"], df1["sku"])))
+wc = pd.DataFrame(list(product(df1["w"], df1["c"], df1["sku"])))
+wc.columns = ["w", "c", "sku"]
 print(wc)
 # wc.dropna(inplace=True)
-wc.to_csv('data/wc.csv', index=False)
+wc.to_csv("data/wc.csv", index=False)
 
 # pw = pd.DataFrame(list(product(df2['p'], df2['w'], df2['sku'])))
 # pw.columns = ['p', 'w', 'sku']
