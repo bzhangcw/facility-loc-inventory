@@ -315,7 +315,7 @@ class Edge:
         self.variable_lb = variable_lb
         self.cp_variable_lb = cp_variable_lb
         # self.distance = distance if distance is not None else self.cal_distance()
-        self.distance =None
+        self.distance = None
         self.transportation_fixed_cost = transportation_fixed_cost
         self.transportation_sku_fixed_cost = transportation_sku_fixed_cost
         self.transportation_sku_unit_cost = transportation_sku_unit_cost

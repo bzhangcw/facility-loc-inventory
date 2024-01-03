@@ -6,13 +6,14 @@ from dnp_model import DNP
 from network import construct_network
 from param import Param
 from entity import Warehouse, Edge
+
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
     arg.T = 7
     arg.capacity = 1
     arg.bool_distance = 1
-    arg.node_cost, arg.edge_cost = 1,1
+    arg.node_cost, arg.edge_cost = 1, 1
     arg.nodelb = 0
     # arg.cus_num = 100
     # arg.lowerbound, arg.cp_lowerbound, arg.add_in_upper, arg.node_cost, arg.edge_cost, arg.nodelb, arg.add_cardinality = 1, 1, 1, 1, 1, 0, 1
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
-                e.variable_lb = lb_inter["lb"].get(e.idx, 0)/10
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
                 print(f"setting {e.idx} to {e.variable_lb}")
 
     if arg.nodelb == 1:
@@ -109,20 +110,20 @@ if __name__ == "__main__":
     # NU: 每日仓库入库上限
     # Fn: node cost Fe: edge cost NL: node lowerbound
     # Ca: 每期履约消费者的仓库个数上限 FR: fulfill rate
-    if arg.lowerbound ==0 and arg.add_in_upper == 0:
+    if arg.lowerbound == 0 and arg.add_in_upper == 0:
         type1 = 0
-    elif arg.lowerbound ==1 and arg.add_in_upper == 1:
+    elif arg.lowerbound == 1 and arg.add_in_upper == 1:
         type1 = 3
-    elif arg.lowerbound ==1:
+    elif arg.lowerbound == 1:
         type1 = 1
     elif arg.add_in_upper == 1:
         type1 = 2
 
     if arg.add_cardinality == 0 and arg.bool_distance == 0:
         type2 = 0
-    elif arg.lowerbound==1 and arg.bool_distance == 1:
+    elif arg.lowerbound == 1 and arg.bool_distance == 1:
         type2 = 3
-    elif arg.lowerbound==1:
+    elif arg.lowerbound == 1:
         type1 = 1
     elif arg.bool_distance == 1:
         type1 = 2

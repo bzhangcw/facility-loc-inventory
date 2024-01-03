@@ -282,7 +282,7 @@ class DNP:
         for t in range(self.T):
             for e in self.network.edges:
                 edge = self.network.edges[e]["object"]
-                #lk：没必要加这个限制
+                # lk：没必要加这个限制
                 # if edge.capacity == np.inf:
                 #     continue
                 # can we do better?
@@ -529,20 +529,21 @@ class DNP:
                             # print(node.demand)
                             idx["sku_demand_slack"].append((t, node, k))
                             self.var_types["sku_demand_slack"]["ub"].append(
-                                node.demand[(t, k)]*100
+                                node.demand[(t, k)] * 100
                             )
                     elif node.type == const.CUSTOMER:
                         # demand of sku k not fulfilled on node i at t
                         if node.has_demand(t, k):
                             if self.arg.customer_backorder:
                                 idx["sku_demand_slack"].append((t, node, k))
-                                self.var_types["sku_demand_slack"]["ub"].append(
-                                    10e6
-                                )
+                                self.var_types["sku_demand_slack"]["ub"].append(10e6)
                             else:
                                 idx["sku_demand_slack"].append((t, node, k))
                                 if type(node.demand.loc[(t, k)]) is not np.float64:
-                                    if type(node.demand.loc[(t, k)].loc[(t,k)]) is not np.float64:
+                                    if (
+                                        type(node.demand.loc[(t, k)].loc[(t, k)])
+                                        is not np.float64
+                                    ):
                                         demand = 200
                                     else:
                                         demand = node.demand.loc[(t, k)][t, k]
@@ -553,9 +554,7 @@ class DNP:
                                     # print(node.demand[(t, k)])
                                     # print(node.demand[(t, k)][t,k])
 
-                                self.var_types["sku_demand_slack"]["ub"].append(
-                                    demand
-                                )
+                                self.var_types["sku_demand_slack"]["ub"].append(demand)
         # for initializaiton in CG
         self.var_idx = {}
         for var in idx.keys():
@@ -577,7 +576,6 @@ class DNP:
         # # for debug
 
     def add_constraints(self):
-
         self.constr_types = {
             "flow_conservation": {"index": "(t, node, k)"},
             "open_relationship": {
@@ -692,10 +690,13 @@ class DNP:
                 for e in self.network.edges:
                     edge = self.network.edges[e]["object"]
                     if edge.end == node:
-                        used_distance += self.variables["select_edge"][t, edge]*edge.distance
+                        used_distance += (
+                            self.variables["select_edge"][t, edge] * edge.distance
+                        )
                 constr = self.model.addConstr(used_distance <= self.arg.distance_limit)
                 self.constrs["distance"][(t, node)] = constr
                 self.index_for_dual_var += 1
+
     def add_constr_flow_conservation(self, t: int):
         for node in self.network.nodes:
             sku_list = node.get_node_sku_list(t, self.full_sku_list)
@@ -716,13 +717,15 @@ class DNP:
                     fulfilled_demand = 0
                     if node.has_demand(t, k):
                         if type(node.demand.loc[(t, k)]) is not np.float64:
-                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                            if (
+                                type(node.demand.loc[(t, k)].loc[(t, k)])
+                                is not np.float64
+                            ):
                                 demand = 200
                             else:
                                 demand = node.demand.loc[(t, k)][t, k]
                         fulfilled_demand = (
-                            demand
-                            - self.variables["sku_demand_slack"][t, node, k]
+                            demand - self.variables["sku_demand_slack"][t, node, k]
                         )
 
                     last_period_inventory = 0.0
@@ -760,22 +763,26 @@ class DNP:
                     if self.arg.customer_backorder:
                         constr = self.model.addConstr(
                             self.variables["sku_flow"].sum(t, in_edges, k)
-                            + self.variables["sku_demand_slack"][t,node, k]
-                            == self.variables["sku_demand_slack"].get((t - 1,node, k), 0)
+                            + self.variables["sku_demand_slack"][t, node, k]
+                            == self.variables["sku_demand_slack"].get(
+                                (t - 1, node, k), 0
+                            )
                             + node.demand.get((t, k), 0),
                             name=constr_name,
                         )
                     else:
                         if type(node.demand.loc[(t, k)]) is not np.float64:
-                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                            if (
+                                type(node.demand.loc[(t, k)].loc[(t, k)])
+                                is not np.float64
+                            ):
                                 demand = 200
                             else:
                                 demand = node.demand.loc[(t, k)][t, k]
                         else:
                             demand = node.demand.loc[(t, k)]
                         fulfilled_demand = (
-                            demand
-                            - self.variables["sku_demand_slack"][t, node, k]
+                            demand - self.variables["sku_demand_slack"][t, node, k]
                         )
                         constr = self.model.addConstr(
                             self.variables["sku_flow"].sum(t, in_edges, k)
@@ -789,7 +796,6 @@ class DNP:
         return
 
     def add_constr_open_relationship(self, t: int):
-
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
 
@@ -822,7 +828,7 @@ class DNP:
 
                 constr = self.model.addConstr(
                     self.variables["sku_flow"][t, edge, k]
-                    <= 10e6*self.variables["sku_select_edge"][t, edge, k]
+                    <= 10e6 * self.variables["sku_select_edge"][t, edge, k]
                 )
                 self.constrs["open_relationship"]["sku_flow_select"][
                     (t, edge, k)
@@ -889,6 +895,7 @@ class DNP:
                 self.index_for_dual_var += 1
 
         return
+
     def add_constr_transportation_lb(self, t: int, verbose=False):
         # for debug
         if verbose:
@@ -910,6 +917,7 @@ class DNP:
                 self.index_for_dual_var += 1
 
         return
+
     def add_constr_node_lb(self, t: int):
         for node in self.network.nodes:
             if node.type == const.PLANT:
@@ -918,7 +926,8 @@ class DNP:
                     self.constrs["production_variable_lb"][
                         (t, node)
                     ] = self.model.addConstr(
-                        node_sum >= node.production_lb * self.variables["open"][t, node],
+                        node_sum
+                        >= node.production_lb * self.variables["open"][t, node],
                         name=f"node_lb{t, node}",
                     )
                     self.index_for_dual_var += 1
@@ -935,7 +944,7 @@ class DNP:
 
                     self.index_for_dual_var += 1
         return
-            
+
     def add_constr_production_capacity(self, t: int):
         for node in self.network.nodes:
             if node.type != const.PLANT:
@@ -951,7 +960,7 @@ class DNP:
             #         node_sum >= node.production_lb * self.variables["open"][t, node],
             #         name=f"node_lb{t, node}",
             #     )
-                # index += 1
+            # index += 1
 
             # capacity constraint
             if node.production_capacity < np.inf:
@@ -1045,6 +1054,7 @@ class DNP:
                 #     self.index_for_dual_var += 1
 
         return
+
     def add_constr_flow_in_upper(self, t: int):
         for node in self.network.nodes:
             if node.type == const.WAREHOUSE:
@@ -1052,14 +1062,14 @@ class DNP:
                 for e in self.network.edges:
                     edge = self.network.edges[e]["object"]
                     if edge.end == node:
-                        in_inventory_sum += self.variables["sku_flow"].sum(
-                            t, edge, "*"
-                        )
+                        in_inventory_sum += self.variables["sku_flow"].sum(t, edge, "*")
                 self.constrs["in_upper"] = self.model.addConstr(
-                    in_inventory_sum <= node.inventory_capacity * self.arg.in_upper_ratio
+                    in_inventory_sum
+                    <= node.inventory_capacity * self.arg.in_upper_ratio
                 )
                 self.index_for_dual_var += 1
         return
+
     def get_original_objective(self):
         """
         Get the original objective value
@@ -1090,7 +1100,7 @@ class DNP:
         if self.bool_fixed_cost:
             # nf = self.cal_fixed_node_cost()
             # ef = self.cal_fixed_edge_cost()
-            obj = obj +  self.cal_fixed_node_cost()
+            obj = obj + self.cal_fixed_node_cost()
             obj = obj + self.cal_fixed_edge_cost()
 
         return obj
@@ -1432,9 +1442,15 @@ class DNP:
         print("HC:", self.hc.getExpr().getValue())
         print("PC:", self.pc.getExpr().getValue())
         print("TC:", self.tc.getExpr().getValue())
-        print("NF:", self.nf.getExpr().getValue() if type(self.nf) is not float else 0.0)
-        print("EF:", self.ef.getExpr().getValue() if type(self.ef) is not float else 0.0)
-        print("UD:", self.ud.getExpr().getValue() if type(self.ud) is not float else 0.0)
+        print(
+            "NF:", self.nf.getExpr().getValue() if type(self.nf) is not float else 0.0
+        )
+        print(
+            "EF:", self.ef.getExpr().getValue() if type(self.ef) is not float else 0.0
+        )
+        print(
+            "UD:", self.ud.getExpr().getValue() if type(self.ud) is not float else 0.0
+        )
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         # node output
@@ -1536,7 +1552,10 @@ class DNP:
                         slack = self.variables["sku_demand_slack"][(t, node, k)].x
 
                         if type(node.demand.loc[(t, k)]) is not np.float64:
-                            if type(node.demand.loc[(t, k)].loc[(t, k)]) is not np.float64:
+                            if (
+                                type(node.demand.loc[(t, k)].loc[(t, k)])
+                                is not np.float64
+                            ):
                                 demand = 200
                             else:
                                 demand = node.demand.loc[(t, k)][t, k]

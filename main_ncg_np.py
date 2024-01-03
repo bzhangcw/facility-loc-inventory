@@ -98,7 +98,7 @@ if __name__ == "__main__":
         init_sweeping=init_sweeping,
         bool_covering=True,
         bool_edge_lb=True,
-        init_ray=False
+        init_ray=False,
     )
 
     np_cg.run()

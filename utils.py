@@ -16,6 +16,8 @@ from config.read_data import read_data
 import numpy as np
 
 
+
+
 class CONF:
     DEFAULT_DATA_PATH = "./data"
     DEFAULT_TMP_PATH = "./tmp"

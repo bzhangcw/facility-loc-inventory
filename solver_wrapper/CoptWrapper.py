@@ -10,7 +10,7 @@ class CoptWrapper(SolverWrapper):
     ENVR = None
 
     def __init__(self, model_name="model"):
-        print("use COPT to build and solve model")
+        # print("use COPT to build and solve model")
         super().__init__(model_name, "COPT")
         self.model = self.create_solver_model()
 
