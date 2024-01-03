@@ -14,13 +14,15 @@ if __name__ == "__main__":
     arg = param.arg
 
     datapath = "data/data_0401_V4_1219.xlsx"
-    arg.conf_label = 9
-    arg.distance = 0
+    arg.conf_label = 10
+    # arg.distance = 0
+    # arg.pick_instance = 7
+    # arg.customer_backorder = 0
+    # arg.nodelb = 0
+    # arg.T = 7
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4.xlsx"
-    arg.pick_instance = 7
-    arg.customer_backorder = 0
-    arg.T = 432
+
     # arg.rmp_relaxation = 1
     # arg.pricing_relaxation = 1
     (
@@ -39,7 +41,7 @@ if __name__ == "__main__":
     model.modeling()
     model.model.setParam("Logging", 1)
     model.model.setParam("Threads", 8)
-    # model.model.setParam("TimeLimit", 3600)
+    model.model.setParam("TimeLimit", 36000)
     # model.model.setParam("RelGap", 1.3)
     model.model.setParam("LpMethod", 2)  # interior point method
 
@@ -51,7 +53,7 @@ if __name__ == "__main__":
         if v.getType() == COPT.BINARY:
             binary_vars_index.append(v.getIdx())
             v.setType(COPT.CONTINUOUS)
-    # model.write("model.mps")
+    model.write("model7_no_nodelb.mps")
     model.solve()
 
     # lpval = model.get_model_objval()

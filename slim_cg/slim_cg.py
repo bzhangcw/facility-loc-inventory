@@ -361,9 +361,9 @@ class NetworkColumnGenerationSlim(object):
         # cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
-            self.rmp_model.write('init_rmp0.lp')
+            # self.rmp_model.write('init_rmp0.lp')
             self.init_rmp_by_cols()
-            self.rmp_model.write('init_rmp1.lp')
+            # self.rmp_model.write('init_rmp1.lp')
         self.rmp_model.setParam(self.solver_constant.Param.Logging, 1)
 
         self._logger.info("initialization of restricted master finished")
@@ -375,7 +375,7 @@ class NetworkColumnGenerationSlim(object):
                     self.solve_rmp()
                 if self.rmp_model.status != self.solver_constant.OPTIMAL:
                     print(self.rmp_model.status, iter)
-                    self.rmp_model.write("rmp{}.lp".format(self.iter))
+                    # self.rmp_model.write("rmp{}.lp".format(self.iter))
                 # if self.rmp_model.status == self.solver_constant.NUMERICAL:
                 #     # print("NUMERICAL",self.rmp_model.status, iter)
                 #     self.rmp_model.write("rmp{}.lp".format(self.iter))

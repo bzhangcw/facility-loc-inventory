@@ -260,7 +260,7 @@ class DNPSlim(DNP):
             },
             "sku_inventory": {
                 # "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
-                "lb": -self.solver_constant.INFINITY,
+                "lb": 0,
                 "ub": self.solver_constant.INFINITY,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",

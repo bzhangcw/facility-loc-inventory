@@ -76,7 +76,7 @@ class Param:
         parser.add_argument(
             "--unfulfill_sku_unit_cost",
             type=float,
-            default=0.5,
+            default=30,
             help="""
             default unfulfill_sku_unit_cost if not given
             """,
@@ -94,7 +94,7 @@ class Param:
         parser.add_argument(
             "--backorder_sku_unit_cost",
             type=float,
-            default=20,
+            default=300,
             help="""
             default backorder_sku_unit_cost if not given
             """,
