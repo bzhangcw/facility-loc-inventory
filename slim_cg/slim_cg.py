@@ -81,8 +81,8 @@ class NetworkColumnGenerationSlim(object):
         #   the oracle extension saves extra constraints for primal feasibility
         #   every time it is used, remove this
         # self.bool_covering = bool_covering
-        self.bool_edge_lb = self.arg.edgelb
-        self.bool_node_lb = self.arg.nodelb
+        self.bool_edge_lb = self.arg.edge_lb
+        self.bool_node_lb = self.arg.node_lb
         self.bool_fixed_cost = self.arg.fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
@@ -402,6 +402,14 @@ class NetworkColumnGenerationSlim(object):
                 ######################################
                 # TODO:额外写个early stopping的功能
                 added = False
+                # pre-sort dual variables,
+                #   this should reduce to 1/|C| update time
+                if self.iter >= 1:
+                    dual, dual_ws = dual_packs
+                    dual_series = pd.Series(
+                        {(ee.end, t, ee, k): v for (ee, k, t), v in dual.items()}
+                    )
+
                 with utils.TimerContext(self.iter, f"solve_columns"):
                     # modify for parallel
                     if self.init_ray:
@@ -418,7 +426,20 @@ class NetworkColumnGenerationSlim(object):
                             oracle: Pricing = self.oracles[customer]
                             oracle.model.reset()
                             # 把对偶变量加上后update oracle 然后solve 这是第一次求解
-                            oracle.update_objective(customer, dual_packs=dual_packs)
+                            # if CG_PRICING_LOGGING :
+                            #     self._logger.info(f"start update {customer.idx}")
+                            with utils.TimerContext(self.iter, f"update pricing"):
+                                oracle.update_objective(
+                                    customer,
+                                    dual_packs=(
+                                        dual_series[customer, :],
+                                        dual_ws[customer],
+                                    )
+                                    if self.iter >= 1
+                                    else None,
+                                )
+                            # if CG_PRICING_LOGGING:
+                            #     self._logger.info(f"end update {customer.idx}")
                             if self.arg.pricing_relaxation:
                                 variables = oracle.model.getVars()
                                 binary_vars_index = []

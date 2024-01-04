@@ -79,6 +79,8 @@ class DNPSlim(DNP):
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
+        self.bool_edge_lb = False
+        self.bool_node_lb = False
         # self.add_distance = self.arg.add_distance
         # self.add_cardinality = self.arg.add_cardinality
         self.used_edge_capacity = {
@@ -95,22 +97,20 @@ class DNPSlim(DNP):
         }
         # whether to add edge lower bound constraints
         if self.bool_covering:
-            self.bool_edge_lb = self.arg.edgelb
+            self.bool_edge_lb = self.arg.edge_lb
         else:
-            if self.bool_edge_lb:
+            if self.arg.edge_lb:
                 logger.warning(
                     "bool_edge_lb is set to False because bool_covering is False."
                 )
-            self.bool_edge_lb = False
         # whether to add node lower bound constraints
         if self.bool_covering:
-            self.bool_node_lb = self.arg.nodelb
+            self.bool_node_lb = self.arg.node_lb
         else:
-            if bool_node_lb:
+            if self.arg.node_lb:
                 logger.warning(
                     "bool_node_lb is set to False because bool_covering is False."
                 )
-            self.bool_node_lb = False
         self.original_obj = 0.0
         self.hc = 0.0
         self.pc = 0.0
@@ -239,7 +239,8 @@ class DNPSlim(DNP):
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
+                # "ub": self.solver_constant.INFINITY,
+                "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
@@ -625,20 +626,7 @@ class DNPSlim(DNP):
     def add_constr_transportation_capacity(self, t: int, verbose=False):
 
         for e, edge in self._iterate_no_c_edges():
-            if self.arg.partial_fixed:
-                if edge.start.type == const.PLANT and edge.end.idx == "T0015":
-                    # if edge.start.type == const.PLANT and edge.end.type == const.WAREHOUSE:
-                    if (
-                            len(dnp.utils.get_in_edges(self.network, edge.end))
-                            + len(dnp.utils.get_out_edges(self.network, edge.end))
-                            <= 23
-                    ):
-                        # self.variables["select_edge"][t, edge] = 1
-                        # self.model.addConstr(
-                        self.solver.addConstr(
-                            self.variables["select_edge"][t, edge] == 1
-                        )
-                        print("Fixed select_edge", t, edge)
+
 
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
 
@@ -864,25 +852,21 @@ class DNPSlim(DNP):
         get the original objective value
         """
 
-        nf = 0.0
-        ef = 0.0
-        #TODO：但是目前的obj是没考虑未履约的需求的 所以init_RMP的objective要改一下
-        # 仓库是固定的持货成本
-        hc = sum(self.cal_sku_holding_cost(t) for t in range(self.T))
-        pc = sum(self.cal_sku_producing_cost(t) for t in range(self.T))
-        tc = sum(self.cal_sku_transportation_cost(t) for t in range(self.T))
-        ud = sum(self.cal_sku_unfulfill_demand_cost(t) for t in range(self.T))
+        obj = 0.0
+        for t in range(self.T):
+            # obj = obj + self.cal_sku_producing_cost(t)
+            obj = obj + self.cal_sku_holding_cost(t)
+            obj = obj + self.cal_sku_transportation_cost(t)
+            obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
+
 
         # @note: cannot be computed in the master model (RMP)
         # ud = ud + self.cal_sku_unfulfill_demand_cost(t)
 
         if self.bool_fixed_cost:
-            nf = self.cal_fixed_node_cost()
-            ef = self.cal_fixed_edge_cost()
+            obj += self.cal_fixed_node_cost()
 
-
-        obj = hc + pc + tc + nf + ef
-        return obj, hc, pc, tc, nf, ef
+        return obj
 
     def extra_objective(self, customer, dualvar=None, dual_index=None):
         obj = 0.0
@@ -921,29 +905,20 @@ class DNPSlim(DNP):
 
     def set_objective(self):
         self.obj_types = {
-            "sku_producing_cost": {"index": "(t, plant, k)"},
-            "sku_holding_cost": {"index": "(t, warehouse, k)"},
+            "producing_cost": {"index": "(t, plant)"},
+            "holding_cost": {"index": "(t, warehouse)"},
             "sku_backorder_cost": {"index": "(t, warehouse, k)"},
-            "sku_transportation_cost": {"index": "(t, edge)"},
-            "unfulfill_demand_cost": {
-                "index": "(t, warehouse with demand / customer, k)"
+            "transportation_cost": {"index": "(t, edge)"},
+            "unfulfilled_demand_cost": {
+                "index": "(t, customer)"
             },
             "fixed_node_cost": {"index": "(t, plant / warehouse, k)"},
-            "fixed_edge_cost": {"index": "(t, edge, k)"},
-            "end_inventory_cost": {"index": "(node, k)"},
         }
 
         for obj in self.obj_types.keys():
             self.obj[obj] = dict()
-        # 去除了ud
-        (
-            self.original_obj,
-            self.hc,
-            self.pc,
-            self.tc,
-            self.nf,
-            self.ef,
-        ) = self.get_original_objective()
+
+        self.original_obj = self.get_original_objective()
 
         # self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
         self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
@@ -952,78 +927,51 @@ class DNPSlim(DNP):
 
     def cal_sku_producing_cost(self, t: int):
         producing_cost = 0.0
-
         for node in self._iterate_no_c_nodes():
             if node.type == const.PLANT:
+                node_producing_cost = 0
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
-
                 for k in sku_list:
-                    node_sku_producing_cost = 0.0
+                    if node.production_sku_unit_cost is not None and k in node.production_sku_unit_cost.index.to_list():
+                        node_producing_cost += node.production_sku_unit_cost[k] * \
+                                               self.variables["sku_production"][t, node, k]
+                    else:
+                        node_producing_cost += self.arg.production_sku_unit_cost * \
+                                               self.variables["sku_production"][t, node, k]
 
-                    if (
-                            node.production_sku_fixed_cost is not None
-                            and self.bool_covering
-                    ):
-                        node_sku_producing_cost = (
-                                node_sku_producing_cost
-                                + node.production_sku_fixed_cost[k]
-                                * self.variables["sku_open"][t, node, k]
-                        )
-                    if node.production_sku_unit_cost is not None:
-                        node_sku_producing_cost = (
-                                node_sku_producing_cost
-                                + node.production_sku_unit_cost[k]
-                                * self.variables["sku_production"][t, node, k]
-                        )
-
-                    producing_cost = producing_cost + node_sku_producing_cost
-
-                    self.obj["sku_producing_cost"][
-                        (t, node, k)
-                    ] = node_sku_producing_cost
+                producing_cost = producing_cost + node_producing_cost
+        self.obj["producing_cost"][t] = producing_cost
 
         return producing_cost
 
     def cal_sku_holding_cost(self, t: int):
+
         holding_cost = 0.0
 
         for node in self._iterate_no_c_nodes():
             if node.type == const.WAREHOUSE:
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
-
+                node_holding_cost = 0.0
                 for k in sku_list:
-                    node_sku_holding_cost = 0.0
 
                     if node.holding_sku_unit_cost is not None:
                         holding_sku_unit_cost = node.holding_sku_unit_cost[k]
                     else:
                         holding_sku_unit_cost = self.arg.holding_sku_unit_cost
 
-                    # I_hat = max(I, 0)
-                    # I_hat = self.solver.addVar(name=f"I_hat_({t},_{node},_{k})")
-                    # # lk：不是很懂啊 这个约束加上去干嘛 也不好计算dual
-                    # self.solver.addConstr(
-                    #     I_hat >= self.variables["sku_inventory"][t, node, k]
-                    # )
-                    # lk：把Ihat改成了sku_inventory
-                    # node_sku_holding_cost = (
-                    #         node_sku_holding_cost + holding_sku_unit_cost * self.variables["sku_inventory"][t, node, k]
-                    # )
-                    node_sku_holding_cost = (
-                            node_sku_holding_cost + holding_sku_unit_cost *  self.variables["sku_inventory"][t, node, k]
-                    )
+                    node_holding_cost += holding_sku_unit_cost * self.variables["sku_inventory"][t, node, k]
 
-                    holding_cost = holding_cost + node_sku_holding_cost
+                holding_cost = holding_cost + node_holding_cost
 
-                    self.obj["sku_holding_cost"][(t, node, k)] = node_sku_holding_cost
+        self.obj["holding_cost"][t] =  holding_cost
 
         return holding_cost
 
     def cal_sku_transportation_cost(self, t: int):
+
         transportation_cost = 0.0
 
         for e, edge in self._iterate_no_c_edges():
-            # edge = self.network.edges[e]["object"]
 
             edge_transportation_cost = 0.0
 
@@ -1031,18 +979,6 @@ class DNPSlim(DNP):
                 sku_list_with_fixed_transportation_cost,
                 sku_list_with_unit_transportation_cost,
             ) = edge.get_edge_sku_list_with_transportation_cost(t, self.full_sku_list)
-
-            if self.bool_covering:
-                for k in sku_list_with_fixed_transportation_cost:
-                    if (
-                            edge.transportation_sku_fixed_cost is not None
-                            and k in edge.transportation_sku_fixed_cost
-                    ):
-                        edge_transportation_cost = (
-                                edge_transportation_cost
-                                + edge.transportation_sku_fixed_cost[k]
-                                * self.variables["sku_select_edge"][t, edge, k]
-                        )
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
@@ -1061,55 +997,56 @@ class DNPSlim(DNP):
 
             transportation_cost = transportation_cost + edge_transportation_cost
 
-            self.obj["sku_transportation_cost"][(t, edge)] = edge_transportation_cost
+        self.obj["transportation_cost"][t] = transportation_cost
 
         return transportation_cost
 
-        # 咱就是说这部分应该也没有 因为unfulfill cost 也是customer的
+    def cal_sku_unfulfilled_demand_cost(self, t: int):
+        unfulfilled_demand_cost = 0.0
+        for node in self._iterate_no_c_nodes():
+            if node.type == const.CUSTOMER:
+                unfulfilled_node_cost = 0.0
+                if node.has_demand(t):
+                    for k in node.demand_sku[t]:
+                        if node.unfulfill_sku_unit_cost is not None:
+                            unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
+                                (t, k)
+                            ]
+                        else:
+                            # TODO:diversity
+                            unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+                        unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables["sku_demand_slack"][(t, node, k)]
+                    unfulfilled_demand_cost += unfulfilled_node_cost
+                    self.obj["unfulfilled_demand_cost"][(t, node)] = unfulfilled_node_cost
+        return unfulfilled_demand_cost
 
     def cal_fixed_node_cost(self):
-        # 计算fixed_cost的部分要重新写一下（lk）
         fixed_node_cost = 0.0
+
         if not self.bool_covering:
             return fixed_node_cost
 
         for node in self._iterate_no_c_nodes():
-            node_fixed_node_cost = 0.0
-            if self.arg.node_cost:
-                if node.type == const.PLANT:
-                    # this_node_fixed_cost = node.production_fixed_cost
-                    this_node_fixed_cost = 100
-                elif node.type == const.WAREHOUSE:
-                    # this_node_fixed_cost = node.holding_fixed_cost
-                    this_node_fixed_cost = 500
-                else:
-                    continue
-            else:
-                if node.type == const.PLANT:
+            if node.type == const.PLANT:
+                if node.production_fixed_cost is not None:
                     this_node_fixed_cost = node.production_fixed_cost
-                elif node.type == const.WAREHOUSE:
+                else:
+                    this_node_fixed_cost = self.arg.plant_fixed_cost
+            elif node.type == const.WAREHOUSE:
+                if node.holding_fixed_cost is not None:
                     this_node_fixed_cost = node.holding_fixed_cost
                 else:
-                    continue
-            # 更改：这块改成每期都计算fixed cost了
-            # y = self.solver.addVar(vtype=COPT.BINARY, name=f"y_{node}")
+                    this_node_fixed_cost = self.arg.warehouse_fixed_cost
+            else:
+                continue
+            node_fixed_node_cost = 0.0
             for t in range(self.T):
-                # self.solver.addConstr(self.variables["open"][(t, node)] <= y)
+                node_fixed_node_cost += this_node_fixed_cost * self.variables["open"][(t, node)]
 
-                node_fixed_node_cost = this_node_fixed_cost * self.variables["open"][(t, node)]
-
-            fixed_node_cost = fixed_node_cost + node_fixed_node_cost
-
-            self.obj["fixed_node_cost"][node] = node_fixed_node_cost
+            fixed_node_cost += node_fixed_node_cost
+        self.obj["fixed_node_cost"] = fixed_node_cost
 
         return fixed_node_cost
-    # def cal_fixed_node_cost(self):
-    #     # 加完了
-    #     return 0.0
-
-    # def cal_fixed_edge_cost(self):
-    #     # 加完了
-    #     return 0.0
 
     def cal_fixed_edge_cost(self):
         fixed_edge_cost = 0.0
@@ -1118,13 +1055,6 @@ class DNPSlim(DNP):
 
         for e, edge in self._iterate_no_c_edges():
             edge_fixed_edge_cost = 0.0
-           # 更改lk： 同样的改成每一期的了
-           #  p = self.solver.addVar(vtype=COPT.BINARY, name=f"p_{edge}")
-           #
-           #  for t in range(self.T):
-           #      self.solver.addConstr(self.variables["select_edge"][(t, edge)] <= p)
-
-            # edge_fixed_edge_cost = edge.transportation_fixed_cost * p
             if self.arg.edge_cost:
                 edge.transportation_fixed_cost = 10
             for t in range(self.T):
@@ -1132,7 +1062,7 @@ class DNPSlim(DNP):
 
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost
 
-            self.obj["fixed_edge_cost"][edge] = edge_fixed_edge_cost
+        self.obj["fixed_edge_cost"][edge] = edge_fixed_edge_cost
 
         return fixed_edge_cost
     def create_cg_bindings(self):
@@ -1158,35 +1088,8 @@ class DNPSlim(DNP):
                 self.variables["cg_temporary"][c.idx] == 0.0, name=f"cg_binding_ws{c}"
             )
 
-    def cal_sku_unfulfill_demand_cost(self, t: int):
-        unfulfill_demand_cost = 0.0
 
-        for node in self._iterate_no_c_nodes():
-            if node.type == const.WAREHOUSE:
-                if node.has_demand(t):
-                    for k in node.get_node_sku_list(t, self.full_sku_list):
 
-                        if node.unfulfill_sku_unit_cost is not None:
-                            unfulfill_sku_unit_cost = node.unfulfill_sku_unit_cost[
-                                (t, k)
-                            ]
-                        else:
-                            unfulfill_sku_unit_cost = 50000
-
-                        unfulfill_node_sku_cost = (
-                            unfulfill_sku_unit_cost
-                            * self.variables["sku_backorder"][(t, node, k)]
-                        )
-
-                        unfulfill_demand_cost = (
-                            unfulfill_demand_cost + unfulfill_node_sku_cost
-                        )
-
-                        self.obj["unfulfill_demand_cost"][
-                            (t, node, k)
-                        ] = unfulfill_node_sku_cost
-
-        return unfulfill_demand_cost
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         super().get_solution(data_dir, preserve_zeros)

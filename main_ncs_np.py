@@ -18,7 +18,7 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     # 1-8
-    arg.conf_label = 8
+    arg.conf_label = 1
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     arg.pricing_relaxation = 0
     arg.T = 7
     # 7: full scale
-    arg.pick_instance = 2
+    arg.pick_instance = 1
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
     print(f"save mps name {dnp_mps_name}")
     (
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     solver = "COPT"
     # solver = "GUROBI"
-    print("----------DNP Model------------")
+    # print("----------DNP Model------------")
     model = DNP(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)
@@ -59,27 +59,43 @@ if __name__ == "__main__":
     # model.model.computeIIS()
     # model.model.write("DNP_SOL/infeasible.iis")
     model.get_solution(data_dir="DNP_SOL/")
+    for i,k in model.obj.items():
+        print(i)
+        cost = 0
+        if k is not None:
+            for j,l in k.items():
+                if type(l) is not float:
+                    cost += l.getExpr().getValue()
+        print(cost)
     # ###############################################################
-    # print("----------DCS Model------------")
-    # max_iter = 200
-    # init_primal = None
-    # init_dual = None
-    # init_ray = False
-    # # init_ray = True
-    # # num_workers = 4
-    # # num_cpus = 8
-    # np_cg = NCS(
-    #     arg,
-    #     network,
-    #     customer_list,
-    #     sku_list,
-    #     max_iter=max_iter,
-    #     # bool_covering= True,
-    #     init_primal=init_primal,
-    #     init_dual=init_dual,
-    #     init_ray=init_ray,
-    #     # num_workers=num_workers,
-    #     # num_cpus=num_cpus,
-    #     solver=solver,
-    # )
-    # np_cg.run()
+    print("----------DCS Model------------")
+    max_iter = 200
+    init_primal = None
+    init_dual = None
+    init_ray = False
+    # init_ray = True
+    # num_workers = 4
+    # num_cpus = 8
+    np_cg = NCS(
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        # bool_covering= True,
+        init_primal=init_primal,
+        init_dual=init_dual,
+        init_ray=init_ray,
+        # num_workers=num_workers,
+        # num_cpus=num_cpus,
+        solver=solver,
+    )
+    np_cg.run()
+    print(np_cg.rmp_model.getObjective())
+    # for i,k in np_cg.rmp_model.obj.items():
+    #     print(i)
+    #     cost = 0
+    #     if k is not None:
+    #         for j,l in k.items():
+    #             cost += l.getExpr().getValue()
+    #     print(cost)

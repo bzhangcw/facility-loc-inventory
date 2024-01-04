@@ -345,7 +345,8 @@ class DNP:
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": COPT.INFINITY,
+                # "ub": COPT.INFINITY,
+                "ub":0,
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
@@ -672,18 +673,24 @@ class DNP:
                 left_capacity = edge.capacity - self.used_edge_capacity.get(t).get(
                     edge, 0
                 )
-                bound = (
-                    self.variables["select_edge"][t, edge]
-                    if self.bool_covering
-                    else 1.0
-                )
-
-                self.constrs["transportation_capacity"][
-                    (t, edge)
-                ] = self.model.addConstr(
-                    flow_sum <= left_capacity * bound,
-                    name=f"edge_capacity{t, edge}",
-                )
+                # bound = (
+                #     self.variables["select_edge"][t, edge]
+                #     if self.bool_covering
+                #     else 1.0
+                # )
+                if self.bool_covering:
+                    bound = self.variables["select_edge"][t, edge]
+                else:
+                    bound = 1
+                if type(flow_sum) is not float:
+                    self.constrs["transportation_capacity"][
+                        (t, edge)
+                    ] = self.model.addConstr(
+                        flow_sum <= left_capacity * bound,
+                        name=f"edge_capacity{t, edge}",
+                    )
+                # else:
+                #     print(edge,flow_sum)
                 self.dual_index_for_RMP["transportation_capacity"][
                     edge
                 ] = self.index_for_dual_var
@@ -825,7 +832,7 @@ class DNP:
     def get_original_objective(self):
         obj = 0.0
         for t in range(self.T):
-            obj = obj + self.cal_sku_producing_cost(t)
+            # obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
             obj = obj + self.cal_sku_transportation_cost(t)
             obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
@@ -897,25 +904,14 @@ class DNP:
                 node_producing_cost = 0
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 for k in sku_list:
-                    # TODO
-                    # if (
-                    #     node.production_sku_fixed_cost is not None
-                    #     and self.bool_covering
-                    # ):
-                    #     node_sku_producing_cost = (
-                    #         node_sku_producing_cost
-                    #         + node.production_sku_fixed_cost[k]
-                    #         * self.variables["sku_open"][t, node, k]
-                    #     )\
                     if node.production_sku_unit_cost is not None and k in node.production_sku_unit_cost.index.to_list():
-                    # if k in node.production_sku_unit_cost.index.to_list():
                         node_producing_cost += node.production_sku_unit_cost[k] * self.variables["sku_production"][t, node, k]
                     else:
                         node_producing_cost += self.arg.production_sku_unit_cost * self.variables["sku_production"][t, node, k]
 
                 producing_cost = producing_cost + node_producing_cost
 
-                self.obj["producing_cost"][(t, node)] = node_producing_cost
+        self.obj["producing_cost"][t] = producing_cost
         return producing_cost
 
     def cal_sku_holding_cost(self, t: int):
@@ -936,7 +932,7 @@ class DNP:
 
                 holding_cost = holding_cost + node_holding_cost
 
-                self.obj["holding_cost"][(t, node)] = node_holding_cost
+        self.obj["holding_cost"][t] = holding_cost
 
         return holding_cost
 
@@ -981,7 +977,7 @@ class DNP:
 
             transportation_cost = transportation_cost + edge_transportation_cost
 
-            self.obj["transportation_cost"][(t, edge)] = edge_transportation_cost
+        self.obj["transportation_cost"][t] = transportation_cost
 
         return transportation_cost
 
@@ -1001,7 +997,7 @@ class DNP:
                             unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
                         unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables["sku_demand_slack"][(t, node, k)]
                     unfulfilled_demand_cost += unfulfilled_node_cost
-                    self.obj["unfulfilled_demand_cost"][(t, node)] = unfulfilled_node_cost
+        self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
         return unfulfilled_demand_cost
 
     def cal_fixed_node_cost(self):
@@ -1028,7 +1024,7 @@ class DNP:
                 node_fixed_node_cost += this_node_fixed_cost * self.variables["open"][(t, node)]
 
             fixed_node_cost += node_fixed_node_cost
-            self.obj["fixed_node_cost"][node] = node_fixed_node_cost
+        self.obj["fixed_node_cost"]= fixed_node_cost
 
         return fixed_node_cost
 
@@ -1189,7 +1185,7 @@ class DNP:
                             "sku": k.idx,
                             "t": t,
                             "qty": self.variables["sku_flow"][(t, edge, k)].x,
-                            "y": self.variables["select_edge"][(t, edge)].x,
+                            "y": self.variables["select_edge"][(t, edge)].x if self.bool_covering else 1,
                             "vlb": edge.variable_lb,
                             "cap": edge.capacity,
                             "obj_start": edge.start,
