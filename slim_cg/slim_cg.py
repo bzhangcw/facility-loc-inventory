@@ -408,7 +408,7 @@ class NetworkColumnGenerationSlim(object):
                 if self.iter >= 1:
                     dual, dual_ws = dual_packs
                     dual_series = pd.Series(
-                        {(ee.end, t, ee, k): v for (ee, k, t), v in dual.items()}
+                        {(ee.end, ee, k, t): v for (ee, k, t), v in dual.items()}
                     )
                     dual_exists_customers = dual_series.index.get_level_values(0)
 
@@ -431,12 +431,13 @@ class NetworkColumnGenerationSlim(object):
                             # if CG_PRICING_LOGGING :
                             #     self._logger.info(f"start update {customer.idx}")
                             if self.iter >= 1 and customer in dual_exists_customers:
-                                # dual_pack_this = (
-                                #     dual_series[customer, :],
-                                #     dual_ws[customer],
-                                # )
-                                dual, dual_ws = dual_packs
-                                dual_pack_this = (dual, dual_ws[customer])
+                                dual_pack_this = (
+                                    dual_series[customer, :].to_dict(),
+                                    dual_ws[customer],
+                                )
+                                print(dual_pack_this[0])
+                                # dual, dual_ws = dual_packs
+                                # dual_pack_this = (dual, dual_ws[customer])
                             else:
                                 dual_pack_this = None
                             with utils.TimerContext(self.iter, f"update pricing"):
