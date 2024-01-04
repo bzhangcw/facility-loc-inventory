@@ -435,7 +435,7 @@ class NetworkColumnGenerationSlim(object):
                                     dual_series[customer, :].to_dict(),
                                     dual_ws[customer],
                                 )
-                                print(dual_pack_this[0])
+                                # print(dual_pack_this[0])
                                 # dual, dual_ws = dual_packs
                                 # dual_pack_this = (dual, dual_ws[customer])
                             else:
