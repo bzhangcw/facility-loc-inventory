@@ -16,8 +16,6 @@ from config.read_data import read_data
 import numpy as np
 
 
-
-
 class CONF:
     DEFAULT_DATA_PATH = "./data"
     DEFAULT_TMP_PATH = "./tmp"
@@ -52,122 +50,119 @@ logger.info(f":logs and tmps to {CONF.DEFAULT_TMP_PATH}")
 def configuration(conf_label, arg):
     if conf_label == 1:
         # Basic version: only consider the capacity constraint
-        arg.backorder = 0
-        arg.customer_backorder = 0
-        arg.node_cost = 0
-        arg.edge_cost = 0
+        # 1. Basic constraints
+        arg.covering = 0
         arg.capacity = 1
-        arg.lowerbound = 0
-        arg.cp_lowerbound = 0
-        arg.nodelb = 0
+        # 2. Operational constraints
+        arg.edge_lb = 0
+        arg.add_in_upper = 0
+        # 3. Customization constraints
+        arg.distance = 0
+        arg.backorder = 0
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 0
     elif conf_label == 2:
         # Consider the capacity constraint and the edge lower bound constraint
-        arg.backorder = 0
-        arg.customer_backorder = 0
-        arg.node_cost = 0
-        arg.edge_cost = 0
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.nodelb = 0
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 0
+        # 3. Customization constraints
+        arg.distance = 0
+        arg.backorder = 0
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 0
     elif conf_label == 3:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint
-        arg.backorder = 1
-        arg.customer_backorder = 1
-        arg.node_cost = 0
-        arg.edge_cost = 0
+        # Consider the capacity constraint, the edge lower bound constraint, add_in_upper constraint
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.distance = 1
-        arg.cardinality = 1
-        arg.nodelb = 0
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 0
+        arg.backorder = 0
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 0
     elif conf_label == 4:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges
-        arg.backorder = 1
-        arg.customer_backorder = 1
-        arg.node_cost = 1
-        arg.edge_cost = 1
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.nodelb = 0
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 0
+        arg.backorder = 1
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 0
     elif conf_label == 5:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
-        arg.backorder = 1
-        arg.customer_backorder = 1
-        arg.node_cost = 1
-        arg.edge_cost = 1
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.nodelb = 0
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
         arg.distance = 1
+        arg.backorder = 1
         arg.cardinality = 1
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 0
     elif conf_label == 6:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
+        # 1. Basic constraints
+        arg.covering = 1
+        arg.capacity = 1
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 1
         arg.backorder = 1
-        arg.customer_backorder = 1
-        arg.node_cost = 1
-        arg.edge_cost = 1
-        arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.nodelb = 0
-        arg.distance = 1
         arg.cardinality = 1
-        arg.T = 7
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 1
     elif conf_label == 7:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
-        arg.backorder = 0
-        arg.customer_backorder = 0
-        arg.node_cost = 1
-        arg.edge_cost = 1
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.lowerbound = 1
-        arg.cp_lowerbound = 1
-        arg.nodelb = 0
-        arg.distance = 1
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 0
+        arg.backorder = 1
         arg.cardinality = 1
-        arg.T = 7
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.fixed_cost = 1
     elif conf_label == 8:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
-        arg.backorder = 0
-        arg.customer_backorder = 1
-        arg.fixed_cost = 1
+        # 1. Basic constraints
+        arg.covering = 1
         arg.capacity = 1
-        arg.edgelb = 1
-        arg.nodelb = 0
-        arg.distance = 0
-        arg.cardinality = 1
+        # 2. Operational constraints
+        arg.edge_lb = 1
         arg.add_in_upper = 1
-        arg.T = 7
-    elif conf_label == 9:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
-        arg.backorder = 0
-        arg.customer_backorder = 1
-        arg.fixed_cost = 1
-        arg.capacity = 1
-        arg.edgelb = 1
-        arg.nodelb = 1
+        # 3. Customization constraints
         arg.distance = 1
+        arg.backorder = 1
         arg.cardinality = 1
-        arg.add_in_upper = 1
-        arg.T = 432
-    elif conf_label == 10:
-        # Consider the capacity constraint, the edge lower bound constraint and backorder constraint. Consider the fixed cost of nodes and edges. Consider the customization constraints such as distance and cardinality constraints.
-        arg.backorder = 0
-        arg.customer_backorder = 1
+        # 4. Node and cost
+        arg.node_lb = 1
         arg.fixed_cost = 1
-        arg.capacity = 1
-        arg.edgelb = 1
-        arg.nodelb = 0
-        arg.distance = 0
-        arg.cardinality = 1
-        arg.add_in_upper = 1
-        arg.T = 14
-    
-
 
 def scale(pick_instance, datapath, arg):
     logger.info(f"time scale {arg.T}")
@@ -291,18 +286,7 @@ def add_attr(edge_list, node_list, arg, const):
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
             e.capacity = cap["qty"].get(e.idx, 1e4)
-    # if arg.lowerbound == 1:
-    #     lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
-    #     for e in edge_list:
-    #         if e.idx in lb_end["lb"]:
-    #             e.variable_lb = lb_end["lb"].get(e.idx, 0)
-    # if arg.cp_lowerbound == 1:
-    #     lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
-    #     for e in edge_list:
-    #         if e.idx in lb_inter["lb"]:
-    #             e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
-    #             print(f"setting {e.idx} to {e.variable_lb}")
-    if arg.edgelb == 1:
+    if arg.edge_lb == 1:
         lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
@@ -312,7 +296,7 @@ def add_attr(edge_list, node_list, arg, const):
             if e.idx in lb_inter["lb"]:
                 e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
                 # print(f"setting {e.idx} to {e.variable_lb}")
-    if arg.nodelb == 1:
+    if arg.node_lb == 1:
         lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
         for n in node_list:
             if n.type == const.WAREHOUSE:

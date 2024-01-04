@@ -114,10 +114,10 @@ class Plant(Node):
         :param full_sku_list: full possible SKU list
         """
 
-        sku_list = self.producible_sku
+        # sku_list = self.producible_sku
 
-        return sku_list
-
+        # return sku_list
+        return full_sku_list
     def construct_output(self, output):
         """
         quantity of each SKU produced at each period
@@ -187,9 +187,11 @@ class Warehouse(Node):
         :param full_sku_list: full possible SKU list
         """
 
-        sku_list = full_sku_list
+        # sku_list = full_sku_list
 
-        return sku_list
+        # return sku_list
+
+        return full_sku_list
 
     def has_demand(self, t: int, sku: SKU = None) -> bool:
         """
@@ -335,34 +337,47 @@ class Edge:
         :param t: period t
         :param full_sku_list: full possible SKU list
         """
-
-        if self.start.type == const.PLANT and self.end.type == const.CUSTOMER:
-            sku_list_start = self.start.producible_sku
+        if self.end.type == const.CUSTOMER:
+            sku_list_end = list()
             if self.end.has_demand(t):
                 sku_list_end = self.end.demand_sku[t]
-            else:
-                sku_list_end = list()
-        elif self.start.type == const.PLANT and self.end.type == const.WAREHOUSE:
-            sku_list_start = self.start.producible_sku
-            sku_list_end = None
-        elif self.start.type == const.WAREHOUSE and self.end.type == const.CUSTOMER:
-            sku_list_start = None
-            if self.end.has_demand(t):
-                sku_list_end = self.end.demand_sku[t]
-            else:
-                sku_list_end = list()
-        elif self.start.type == const.WAREHOUSE and self.end.type == const.WAREHOUSE:
-            sku_list_start = None
-            sku_list_end = None
-
-        if sku_list_start is None and sku_list_end is None:
-            sku_list = full_sku_list
-        elif sku_list_start is not None and sku_list_end is None:
-            sku_list = sku_list_start
-        elif sku_list_start is None and sku_list_end is not None:
-            sku_list = sku_list_end
+            sku_list = list(set(full_sku_list).intersection(set(sku_list_end)))
         else:
-            sku_list = self.intersect_list(sku_list_start, sku_list_end)
+            sku_list = full_sku_list
+        # if self.end.type == const.CUSTOMER:
+        #     sku_list_end = list()
+        #     if self.end.has_demand(t):
+        #         sku_list_end = self.end.demand_sku[t]
+        #     sku_list = self.intersect_list(full_sku_list, sku_list_end)
+        # else:
+        #     sku_list = full_sku_list
+        # if self.start.type == const.PLANT and self.end.type == const.CUSTOMER:
+        #     sku_list_start = self.start.producible_sku
+        #     if self.end.has_demand(t):
+        #         sku_list_end = self.end.demand_sku[t]
+        #     else:
+        #         sku_list_end = list()
+        # elif self.start.type == const.PLANT and self.end.type == const.WAREHOUSE:
+        #     sku_list_start = self.start.producible_sku
+        #     sku_list_end = None
+        # elif self.start.type == const.WAREHOUSE and self.end.type == const.CUSTOMER:
+        #     sku_list_start = None
+        #     if self.end.has_demand(t):
+        #         sku_list_end = self.end.demand_sku[t]
+        #     else:
+        #         sku_list_end = list()
+        # elif self.start.type == const.WAREHOUSE and self.end.type == const.WAREHOUSE:
+        #     sku_list_start = None
+        #     sku_list_end = None
+
+        # if sku_list_start is None and sku_list_end is None:
+        #     sku_list = full_sku_list
+        # elif sku_list_start is not None and sku_list_end is None:
+        #     sku_list = sku_list_start
+        # elif sku_list_start is None and sku_list_end is not None:
+        #     sku_list = sku_list_end
+        # else:
+        #     sku_list = self.intersect_list(sku_list_start, sku_list_end)
 
         return sku_list
 
