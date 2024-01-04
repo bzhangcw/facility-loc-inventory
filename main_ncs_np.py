@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 from coptpy import COPT
 from dnp_model import DNP
-import const 
-import utils 
+import const
+import utils
 from slim_cg.slim_rmp_model import DNPSlim
 from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
 from config.network import construct_network
@@ -58,12 +58,12 @@ if __name__ == "__main__":
     model.model.solve()
     # model.model.computeIIS()
     # model.model.write("DNP_SOL/infeasible.iis")
-    model.get_solution(data_dir="DNP_SOL/")
-    for i,k in model.obj.items():
+    # model.get_solution(data_dir="DNP_SOL/")
+    for i, k in model.obj.items():
         print(i)
         cost = 0
         if k is not None:
-            for j,l in k.items():
+            for j, l in k.items():
                 if type(l) is not float:
                     cost += l.getExpr().getValue()
         print(cost)
