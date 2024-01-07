@@ -118,6 +118,7 @@ class Plant(Node):
 
         # return sku_list
         return full_sku_list
+
     def construct_output(self, output):
         """
         quantity of each SKU produced at each period

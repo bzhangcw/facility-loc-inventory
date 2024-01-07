@@ -104,7 +104,7 @@ def read_data(
     #     ["id", "total_capacity"]
     # ]
     plant_df = node_df.query("id.str.startswith('P')", engine="python")[
-        ["x","y","id", "total_capacity"]
+        ["x", "y", "id", "total_capacity"]
     ]
     plant_sku_df_dict = dict(
         list(node_sku_df.query("id.str.startswith('P')", engine="python").groupby("id"))
@@ -217,7 +217,9 @@ def read_data(
         warehouse_list.append(this_warehouse)
         nodes_dict[ws_id] = this_warehouse
     # ==================== construct customer ============================
-    customer_df = node_df.query("id.str.startswith('C')", engine="python")[["x", "y", "id"]]
+    customer_df = node_df.query("id.str.startswith('C')", engine="python")[
+        ["x", "y", "id"]
+    ]
     customer_sku_time_df_list = dict(
         list(
             node_sku_time_df.query("id.str.startswith('C')", engine="python").groupby(
@@ -240,7 +242,7 @@ def read_data(
                 .set_index(["time", "sku"])["demand"]
                 .dropna()
             )
-            demand.sort_index(level='time')
+            demand.sort_index(level="time")
 
             demand_sku = {}
             for t in list(cst_df.groupby("time")):

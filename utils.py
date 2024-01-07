@@ -164,6 +164,7 @@ def configuration(conf_label, arg):
         arg.node_lb = 1
         arg.fixed_cost = 1
 
+
 def scale(pick_instance, datapath, arg):
     logger.info(f"time scale {arg.T}")
     if pick_instance == 1:

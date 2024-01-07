@@ -39,13 +39,7 @@ class PricingWorker:
     """
 
     def __init__(
-        self,
-        cus_list,
-        arg,
-        bool_covering,
-        bool_edge_lb,
-        bool_node_lb,
-        solver="COPT",
+        self, cus_list, arg, bool_covering, bool_edge_lb, bool_node_lb, solver="COPT",
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -314,8 +308,8 @@ class Pricing(object):
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
-                    # "ub": self.solver_constant.INFINITY,
-                    "ub": 0,
+                    "ub": self.solver_constant.INFINITY,
+                    # "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
                     "index": "(t, edge, k)",
@@ -628,6 +622,7 @@ class Pricing(object):
             obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
         if self.bool_fixed_cost:
             obj = obj + self.cal_fixed_node_cost()
+        self.obj["fixed_node_cost"] = 0
 
         return obj
 
@@ -685,10 +680,12 @@ class Pricing(object):
                     edge.transportation_sku_fixed_cost is not None
                     and k in edge.transportation_sku_fixed_cost
                 ):
-                    edge_transportation_cost = (
-                        edge_transportation_cost
-                        + edge.transportation_sku_fixed_cost[k]
-                        * self.variables["sku_select_edge"].get((t, edge, k), 0)
+                    edge_transportation_cost = edge_transportation_cost + edge.transportation_sku_fixed_cost[
+                        k
+                    ] * self.variables[
+                        "sku_select_edge"
+                    ].get(
+                        (t, edge, k), 0
                     )
 
             for k in sku_list_with_unit_transportation_cost:
@@ -700,10 +697,10 @@ class Pricing(object):
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
-                edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"].get((t, edge, k), 0)
+                edge_transportation_cost = edge_transportation_cost + transportation_sku_unit_cost * self.variables[
+                    "sku_flow"
+                ].get(
+                    (t, edge, k), 0
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -716,13 +713,13 @@ class Pricing(object):
         unfulfilled_node_cost = 0.0
         if self.customer.has_demand(t):
             for k in self.customer.demand_sku[t]:
-                if self.customer.unfulfill_sku_unit_cost is not None:
-                    unfulfilled_sku_unit_cost = self.customer.unfulfill_sku_unit_cost[
-                        (t, k)
-                    ]
-                else:
-                    # TODO:diversity
-                    unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+                # if self.customer.unfulfill_sku_unit_cost is not None:
+                #     unfulfilled_sku_unit_cost = self.customer.unfulfill_sku_unit_cost[
+                #         (t, k)
+                #     ]
+                # else:
+                # TODO:diversity
+                unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
                 unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables[
                     "sku_backorder"
                 ].get((t, k), 0)
@@ -790,25 +787,21 @@ class Pricing(object):
         # TOCHeck：column的时候只有sku_flow和beta
         _vals = {}
         _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
-        # print("DEUG", self.model.status)
-        # for k, v in self.variables["sku_flow"].items():
-        #     print(k,v)
-        #     print(type(v))
-        #     print(v.x)
-        # for t in range(T):
-        #     for attr in ATTR_IN_RMP:
-        #         if col_helper[attr][t] != {}:
-        #             for k, v in col_helper[attr][t].items():
-        #                 if type(v) is not float:
-        #                     if v.getValue() > 0:
-        #                         _vals[attr][t][k] = v.getValue()
-        # _vals[attr][t][k] = v.getValue()
-        # _vals = {
-        #     t: {attr: {k: v.getValue() for k, v in col_helper[attr][t].items()}
-        #     for attr in ATTR_IN_RMP} for t in range(7)}
         _vals["beta"] = self._query_a_expr_or_float_or_variable(
             self.columns_helpers["beta"]
         )
+        # if type( self.columns_helpers["transportation_cost"]) != float:
+        #     _vals["transportation_cost"] = self._query_a_expr_or_float_or_variable(
+        #         self.columns_helpers["transportation_cost"]
+        #     )
+
+        # _vals["unfulfilled_demand_cost"] = self._query_a_expr_or_float_or_variable(
+        #     self.columns_helpers["unfulfilled_demand_cost"]
+        # )
+
+        # _vals["unfulfilled_demand_cost"] = self._query_a_expr_or_float_or_variable(
+
+        # lk
         return _vals
 
     def init_col_helpers(self):
@@ -817,9 +810,7 @@ class Pricing(object):
             needed quantities for the subproblems
 
         """
-        # TODO：这里面的column_helpers是什么意思似乎没有搞全 只加了beta
         col_helper = {}
-        # lk: 这块应该是original_obj吗
         try:
             col_helper["beta"] = self.original_obj.getExpr()
         except:

@@ -128,7 +128,6 @@ class Param:
 
         ##### 4. Basic configuration #####
 
-
         parser.add_argument(
             "--covering",
             type=int,

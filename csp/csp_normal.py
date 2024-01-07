@@ -4,21 +4,21 @@
 from coptpy import *
 
 # Cutting-stock data
-rollwidth  = 110
+rollwidth = 110
 
-rollsize   = [25, 40, 50, 55, 70]
+rollsize = [25, 40, 50, 55, 70]
 rolldemand = [50, 36, 24, 8, 30]
 # rollsize   = [25, 40]
 # rolldemand = [50, 36]
-nkind      = len(rollsize)
-ninitpat   = 10000
+nkind = len(rollsize)
+ninitpat = 10000
 
 rollsize_dict = {j: rollsize[j] for j in range(len(rollsize))}
 
 # Maximal number of CG iterations
 MAX_CGTIME = 100
 # Create COPT environment
-def heuristic(rollsize_dict,nkind, ninitpat, rollwidth, rolldemand):
+def heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand):
     env = Envr()
     # Create RMP and SUB model
     pricing = env.createModel("pricing")
@@ -26,37 +26,37 @@ def heuristic(rollsize_dict,nkind, ninitpat, rollwidth, rolldemand):
     pricing.setParam(COPT.Param.Logging, 0)
     # Build the RMP model
 
-    nbr = pricing.addVars(nkind, ninitpat, vtype=COPT.INTEGER, nameprefix='vuse')
+    nbr = pricing.addVars(nkind, ninitpat, vtype=COPT.INTEGER, nameprefix="vuse")
 
     constrs = {}
     # add constraints
     constr_types = {
-                "capacity": {"index": "(i)"},
-                # "slack": {"index": "(j)"},
-                "demand": {"index": "(j)"},
-            }
+        "capacity": {"index": "(i)"},
+        # "slack": {"index": "(j)"},
+        "demand": {"index": "(j)"},
+    }
 
     for constr in constr_types.keys():
         constrs[constr] = dict()
 
     for j in range(ninitpat):
-      con = 0
-      for i in range(nkind):
-        con += nbr[i, j] * rollsize_dict[i]
-      constr = pricing.addConstr((con <= rollwidth), name='capacity{}'.format(j))
-      constrs["capacity"][j] = constr
+        con = 0
+        for i in range(nkind):
+            con += nbr[i, j] * rollsize_dict[i]
+        constr = pricing.addConstr((con <= rollwidth), name="capacity{}".format(j))
+        constrs["capacity"][j] = constr
 
     for i in range(nkind):
         con = 0
         for j in range(ninitpat):
             con += nbr[i, j]
-        constr = pricing.addConstr((con >= rolldemand[i]), name='demand{}'.format(i))
+        constr = pricing.addConstr((con >= rolldemand[i]), name="demand{}".format(i))
         constrs["demand"][i] = constr
     for j in range(ninitpat):
         obj = 0
         for i in range(nkind):
             con += nbr[i, j] * rollsize_dict[i]
-        obj += rollwidth- con
+        obj += rollwidth - con
     pricing.setObjective(0, COPT.MINIMIZE)
     pricing.solve()
     if pricing.status == COPT.OPTIMAL:
@@ -66,6 +66,7 @@ def heuristic(rollsize_dict,nkind, ninitpat, rollwidth, rolldemand):
         #     if var.x > 1e-6:
         #         print("  {0} = {1:.6f}".format(var.name, var.x))
 
+
 nbr = heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand)
 # for iter in range(100):
 #     print(iter)
@@ -74,21 +75,22 @@ nbr = heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand)
 
 # Report solution of the RMP model
 def reportRMP(rmpmodel):
-  if rmpmodel.status == COPT.OPTIMAL:
-    print("Using {0} rolls".format(rmpmodel.objval))
+    if rmpmodel.status == COPT.OPTIMAL:
+        print("Using {0} rolls".format(rmpmodel.objval))
 
-    rmpvars = rmpmodel.getVars()
-    for var in rmpvars:
-      if var.x > 1e-6:
-        print("  {0} = {1:.6f}".format(var.name, var.x))
-  else:
-    print(rmpmodel.LpStatus == COPT.INFEASIBLE)
-    print(rmpmodel.LpStatus == COPT.UNBOUNDED)
-    # rmpmodel.computeIIS()
-    # rmpmodel.writeIIS("exa.iis")
-    # rmpvars = rmpmodel.getVars()
-    # for var in rmpvars:
-    #     print("  {0} = {1:.6f}".format(var.name, var.x))
+        rmpvars = rmpmodel.getVars()
+        for var in rmpvars:
+            if var.x > 1e-6:
+                print("  {0} = {1:.6f}".format(var.name, var.x))
+    else:
+        print(rmpmodel.LpStatus == COPT.INFEASIBLE)
+        print(rmpmodel.LpStatus == COPT.UNBOUNDED)
+        # rmpmodel.computeIIS()
+        # rmpmodel.writeIIS("exa.iis")
+        # rmpvars = rmpmodel.getVars()
+        # for var in rmpvars:
+        #     print("  {0} = {1:.6f}".format(var.name, var.x))
+
 
 # Create COPT environment
 env = Envr()
@@ -99,7 +101,7 @@ mCutOpt = env.createModel("mCutOpt")
 mCutOpt.setParam(COPT.Param.Logging, 0)
 
 # Build the RMP model
-vcut = mCutOpt.addVars(ninitpat,lb=0, nameprefix="vcut")
+vcut = mCutOpt.addVars(ninitpat, lb=0, nameprefix="vcut")
 # vcut = mCutOpt.addVars(ninitpat,lb=0,vtype=COPT.INTEGER, nameprefix="vcut")
 # vuse = mCutOpt.addVars(nkind, vtype=COPT.INTEGER, nameprefix='vuse')
 # nbr = mCutOpt.addVars(nkind, ninitpat, vtype=COPT.INTEGER, nameprefix='vuse')
@@ -114,24 +116,26 @@ slack_demand = mCutOpt.addVars(ninitpat, nameprefix="slack_demand")
 constrs = {}
 # add constraints
 constr_types = {
-            "cfill": {"index": "(i)"},
-            # "capacity": {"index": "(i)"},
-            "demand": {"index": "(i)"},
-        }
+    "cfill": {"index": "(i)"},
+    # "capacity": {"index": "(i)"},
+    "demand": {"index": "(i)"},
+}
 
 for constr in constr_types.keys():
     constrs[constr] = dict()
 
 for i in range(nkind):
-  con = 0
-  for j in range(ninitpat):
-    con += nbr[i*ninitpat+j].x * vcut[j]
-  constr = mCutOpt.addConstr(con + slack_demand[i] == rolldemand[i], name = 'cfill{}'.format(i))
-  constrs["cfill"][i] = constr
-  # constr = mCutOpt.addConstr(quicksum(nbr[i,j] * vcut[j] for j in range(ninitpat)) + slack_demand[i] == rolldemand[i],
-  #                         name='cfill{}'.format(i),
-  #                     )
-  # constrs["cfill"][i] = constr
+    con = 0
+    for j in range(ninitpat):
+        con += nbr[i * ninitpat + j].x * vcut[j]
+    constr = mCutOpt.addConstr(
+        con + slack_demand[i] == rolldemand[i], name="cfill{}".format(i)
+    )
+    constrs["cfill"][i] = constr
+    # constr = mCutOpt.addConstr(quicksum(nbr[i,j] * vcut[j] for j in range(ninitpat)) + slack_demand[i] == rolldemand[i],
+    #                         name='cfill{}'.format(i),
+    #                     )
+    # constrs["cfill"][i] = constr
 
 # for j in range(ninitpat):
 #   con = 0
@@ -141,11 +145,11 @@ for i in range(nkind):
 #   constrs["capacity"][j] = constr
 
 for i in range(nkind):
-  constr = mCutOpt.addConstr(slack_demand[i] <= 0 ,name = 'demand{}'.format(i))
-  constrs["demand"][i] = constr
+    constr = mCutOpt.addConstr(slack_demand[i] <= 0, name="demand{}".format(i))
+    constrs["demand"][i] = constr
 
 # # # Minimize total rolls cut
-obj = vcut.sum('*')-slack_demand.sum('*')
+obj = vcut.sum("*") - slack_demand.sum("*")
 mCutOpt.setObjective(obj, COPT.MINIMIZE)
 mCutOpt.solve()
 #

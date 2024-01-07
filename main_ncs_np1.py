@@ -18,13 +18,14 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     # 1-8
-    arg.conf_label = 8
+    arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
-    arg.rmp_relaxation = 0
+    arg.rmp_relaxation = 1
     arg.pricing_relaxation = 0
+    arg.backorder = 1
     arg.T = 7
     # 7: full scale
     arg.pick_instance = 4
@@ -55,19 +56,8 @@ if __name__ == "__main__":
     model.model.setParam("TimeLimit", 3600)
     model.model.setParam("LpMethod", 2)
     model.model.setParam("Crossover", 0)
-    # model.model.write(dnp_mps_name)
-    model.model.solve()
-    # model.model.computeIIS()
-    # model.model.write("DNP_SOL/infeasible.iis")
-    # model.get_solution(data_dir="DNP_SOL/")
-    for i, k in model.obj.items():
-        print(i)
-        cost = 0
-        if k is not None:
-            for j, l in k.items():
-                if type(l) is not float:
-                    cost += l.getExpr().getValue()
-        print(cost)
+    model.model.write(dnp_mps_name)
+
     # ###############################################################
     print("----------DCS Model------------")
     max_iter = 200
