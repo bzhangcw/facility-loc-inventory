@@ -30,7 +30,6 @@ class DNPSlim(DNP):
         env=None,
         solver="COPT",
     ) -> None:
-
         if solver == "COPT":
             self.solver = CoptWrapper.CoptWrapper(model_name)
             self.solver_constant = CoptConstant
@@ -332,7 +331,7 @@ class DNPSlim(DNP):
                         if node.has_demand(t, k):
                             idx["sku_demand_slack"].append((t, node, k))
                             if self.arg.backorder:
-                                self.var_types["sku_demand_slack"]["ub"].append(1e4)
+                                self.var_types["sku_demand_slack"]["ub"].append(1e8)
                             else:
                                 self.var_types["sku_demand_slack"]["ub"].append(
                                     node.demand[t, k]
@@ -494,7 +493,6 @@ class DNPSlim(DNP):
             ] = constr
 
             for k in sku_list:
-
                 constr = self.solver.addConstr(
                     self.variables["sku_select_edge"][t, edge, k]
                     <= self.variables["select_edge"][t, edge]
@@ -561,7 +559,6 @@ class DNPSlim(DNP):
             return
 
     def add_constr_transportation_capacity(self, t: int, verbose=False):
-
         for e, edge in self._iterate_no_c_edges():
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
             if edge.capacity < np.inf:
@@ -614,11 +611,9 @@ class DNPSlim(DNP):
     def add_constr_holding_capacity(self, t: int):
         for node in self._iterate_no_c_nodes():
             if node.type == const.WAREHOUSE:
-
                 node_sum = self.variables["sku_inventory"].sum(t, node, "*")
 
                 if node.inventory_capacity < np.inf:
-
                     left_capacity = (
                         node.inventory_capacity
                         - self.used_warehouse_capacity.get(t).get(node, 0)
@@ -678,7 +673,6 @@ class DNPSlim(DNP):
         return
 
     def add_constr_flow_in_upper(self, t: int):
-
         for node in self._iterate_no_c_nodes():
             if node.type == const.WAREHOUSE:
                 in_inventory_sum = 0
@@ -792,7 +786,6 @@ class DNPSlim(DNP):
         return producing_cost
 
     def cal_sku_holding_cost(self, t: int):
-
         holding_cost = 0.0
 
         for node in self._iterate_no_c_nodes():
@@ -800,7 +793,6 @@ class DNPSlim(DNP):
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 node_holding_cost = 0.0
                 for k in sku_list:
-
                     if node.holding_sku_unit_cost is not None:
                         holding_sku_unit_cost = node.holding_sku_unit_cost[k]
                     else:
@@ -818,11 +810,9 @@ class DNPSlim(DNP):
         return holding_cost
 
     def cal_sku_transportation_cost(self, t: int):
-
         transportation_cost = 0.0
 
         for e, edge in self._iterate_no_c_edges():
-
             edge_transportation_cost = 0.0
 
             (
@@ -925,7 +915,6 @@ class DNPSlim(DNP):
         return fixed_edge_cost
 
     def create_cg_bindings(self):
-
         self.cg_binding_constrs = {}
         self.cg_binding_constrs_ws = {}
         self.cg_downstream = {}

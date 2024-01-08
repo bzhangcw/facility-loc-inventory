@@ -18,7 +18,7 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     # 1-8
-    arg.conf_label = 8
+    arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
