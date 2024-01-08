@@ -24,11 +24,11 @@ if __name__ == "__main__":
     datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
     arg.rmp_relaxation = 1
-    arg.pricing_relaxation = 0
+    arg.pricing_relaxation = 1
     arg.backorder = 1
     arg.T = 7
     # 7: full scale
-    arg.pick_instance = 4
+    arg.pick_instance = 7
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
     print(f"save mps name {dnp_mps_name}")
     (

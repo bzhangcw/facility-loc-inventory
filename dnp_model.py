@@ -455,7 +455,7 @@ class DNP:
                         if node.has_demand(t, k):
                             idx["sku_demand_slack"].append((t, node, k))
                             if self.arg.backorder:
-                                self.var_types["sku_demand_slack"]["ub"].append(1e4)
+                                self.var_types["sku_demand_slack"]["ub"].append(1e8)
                             else:
                                 self.var_types["sku_demand_slack"]["ub"].append(
                                     node.demand[t, k]
@@ -769,7 +769,8 @@ class DNP:
                 bound = self.variables["open"][t, node] if self.bool_covering else 1.0
 
                 self.constrs["production_capacity"][(t, node)] = self.model.addConstr(
-                    node_sum <= bound * left_capacity, name=f"node_capacity{t, node}",
+                    node_sum <= bound * left_capacity,
+                    name=f"node_capacity{t, node}",
                 )
                 self.dual_index_for_RMP["node_capacity"][node] = self.index_for_dual_var
                 self.index_for_dual_var += 1
@@ -782,10 +783,9 @@ class DNP:
                 node_sum = self.variables["sku_inventory"].sum(t, node, "*")
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
-                    left_capacity = node.inventory_capacity - self.used_warehouse_capacity.get(
-                        t
-                    ).get(
-                        node, 0
+                    left_capacity = (
+                        node.inventory_capacity
+                        - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
                     bound = (
                         self.variables["open"][(t, node)] if self.bool_covering else 1.0
@@ -886,7 +886,6 @@ class DNP:
         self.model.setObjective(obj, sense=COPT.MINIMIZE)
 
     def set_objective(self):
-
         self.obj_types = {
             "producing_cost": {"index": "(t, plant)"},
             "holding_cost": {"index": "(t, warehouse)"},
@@ -941,7 +940,6 @@ class DNP:
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 node_holding_cost = 0.0
                 for k in sku_list:
-
                     if node.holding_sku_unit_cost is not None:
                         holding_sku_unit_cost = node.holding_sku_unit_cost[k]
                     else:
