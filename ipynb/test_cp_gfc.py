@@ -59,18 +59,24 @@ if __name__ == "__main__":
         e.variable_lb = 0
 
     if arg.capacity == 1:
-        cap = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/random_capacity_updated.csv").set_index("id")
+        cap = pd.read_csv(
+            "/Users/xue/github/facility-loc-inventory/data/random_capacity_updated.csv"
+        ).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
             # 修改点6 因为论文中uhat是inf
             e.capacity = cap["qty"].get(e.idx, 0.4e5)
     if arg.lowerbound == 1:
-        lb_end = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/lb_end.csv").set_index("id")
+        lb_end = pd.read_csv(
+            "/Users/xue/github/facility-loc-inventory/data/lb_end.csv"
+        ).set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
     if arg.lowerbound == 1:
-        lb_inter = pd.read_csv("/Users/xue/github/facility-loc-inventory/data/lb_inter.csv").set_index("id")
+        lb_inter = pd.read_csv(
+            "/Users/xue/github/facility-loc-inventory/data/lb_inter.csv"
+        ).set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
                 e.variable_lb = lb_inter["lb"].get(e.idx, 0)
@@ -102,7 +108,6 @@ if __name__ == "__main__":
     # np_cg.get_solution(f"sol_mip_{pick_instance}_DCG_NL/")
 
     ###############################################################
-
 
     model = DNP(arg, network)
     model.modeling()

@@ -47,7 +47,7 @@ if __name__ == "__main__":
             customer_num=100,
             one_period=True,
         )
-        
+
     else:
         cfg = dict(data_dir=datapath, one_period=True)
     (

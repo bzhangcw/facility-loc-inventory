@@ -19,22 +19,22 @@ if __name__ == "__main__":
     arg = param.arg
     # 1-8
     # arg.conf_label = 2
-    # 7，7 DNP infeasible
-    arg.conf_label = 7
+    arg.conf_label = 3
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
+    # arg.rmp_relaxation = 1
     arg.rmp_relaxation = 0
-    # arg.rmp_binary = 0
+    # arg.pricing_relaxation = 1
     arg.pricing_relaxation = 0
     arg.backorder = 1
     arg.T = 7
-    arg.rmp_mip_iter = 1
+    arg.rmp_mip_iter = 2
     arg.check_rmp_mip = 1
     # 7: full scale
     # arg.pick_instance = 7
-    arg.pick_instance = 4
+    arg.pick_instance = 2
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
     print(f"save mps name {dnp_mps_name}")
     (

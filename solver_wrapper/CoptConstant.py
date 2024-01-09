@@ -44,102 +44,102 @@ class CoptConstant(SolverConstant):
 
     class Param(SolverConstant.Param):
         # limit and gap
-        TimeLimit = 'TimeLimit'
-        NodeLimit = 'NodeLimit'
-        BarIterLimit = 'BarIterLimit'
-        MatrixTol = 'MatrixTol'
-        FeasTol = 'FeasTol'
-        DualTol = 'DualTol'
-        IntTol = 'IntTol'
-        RelGap = 'RelGap'
+        TimeLimit = "TimeLimit"
+        NodeLimit = "NodeLimit"
+        BarIterLimit = "BarIterLimit"
+        MatrixTol = "MatrixTol"
+        FeasTol = "FeasTol"
+        DualTol = "DualTol"
+        IntTol = "IntTol"
+        RelGap = "RelGap"
 
         # presolve
-        Presolve = 'Presolve'
-        Scaling = 'Scaling'
-        Dualize = 'Dualize'
+        Presolve = "Presolve"
+        Scaling = "Scaling"
+        Dualize = "Dualize"
 
         # LP
-        LpMethod = 'LpMethod'
-        DualPrice = 'DualPrice'
-        DualPerturb = 'DualPerturb'
-        BarHomogeneous = 'BarHomogeneous'
-        BarOrder = 'BarOrder'
-        Crossover = 'Crossover'
-        ReqFarkasRay = 'ReqFarkasRay'
+        LpMethod = "LpMethod"
+        DualPrice = "DualPrice"
+        DualPerturb = "DualPerturb"
+        BarHomogeneous = "BarHomogeneous"
+        BarOrder = "BarOrder"
+        Crossover = "Crossover"
+        ReqFarkasRay = "ReqFarkasRay"
 
         # semidefinite
-        SDPMethod = 'SDPMethod'
+        SDPMethod = "SDPMethod"
 
         # integer
-        CutLevel = 'CutLevel'
-        RootCutLevel = 'RootCutLevel'
-        TreeCutLevel = 'TreeCutLevel'
-        RootCutRounds = 'RootCutRounds'
-        NodeCutRounds = 'NodeCutRounds'
-        HeurLevel = 'HeurLevel'
-        RoundingHeurLevel = 'RoundingHeurLevel'
-        DivingHeurLevel = 'DivingHeurLevel'
-        SubMipHeurLevel = 'SubMipHeurLevel'
-        StrongBranching = 'StrongBranching'
-        ConflictAnalysis = 'ConflictAnalysis'
-        MipStartMode = 'MipStartMode'
-        MipStartNodeLimit = 'MipStartNodeLimit'
+        CutLevel = "CutLevel"
+        RootCutLevel = "RootCutLevel"
+        TreeCutLevel = "TreeCutLevel"
+        RootCutRounds = "RootCutRounds"
+        NodeCutRounds = "NodeCutRounds"
+        HeurLevel = "HeurLevel"
+        RoundingHeurLevel = "RoundingHeurLevel"
+        DivingHeurLevel = "DivingHeurLevel"
+        SubMipHeurLevel = "SubMipHeurLevel"
+        StrongBranching = "StrongBranching"
+        ConflictAnalysis = "ConflictAnalysis"
+        MipStartMode = "MipStartMode"
+        MipStartNodeLimit = "MipStartNodeLimit"
 
         # parallel
-        Threads = 'Threads'
-        BarThreads = 'BarThreads'
-        SimplexThreads = 'SimplexThreads'
-        CrossoverThreads = 'CrossoverThreads'
-        MipTasks = 'MipTasks'
+        Threads = "Threads"
+        BarThreads = "BarThreads"
+        SimplexThreads = "SimplexThreads"
+        CrossoverThreads = "CrossoverThreads"
+        MipTasks = "MipTasks"
 
         # IIS
-        IISMethod = 'IISMethod'
+        IISMethod = "IISMethod"
 
         # relax feasibility
-        FeasRelaxMode = 'FeasRelaxMode'
+        FeasRelaxMode = "FeasRelaxMode"
 
         # Logging
-        Logging = 'Logging'
-        LogToConsole = 'LogToConsole'
+        Logging = "Logging"
+        LogToConsole = "LogToConsole"
 
         # not listed in copt doc
-        MipPreMethod = 'MipPreMethod'
+        MipPreMethod = "MipPreMethod"
         MipLogLevel = "MipLogLevel"
         IntegralityFocus = "NumericFocus"
         MipPreAnalyticCenter = "MipPreAnalyticCenter"
-        SubMipNodeLimit = 'SubMipNodeLimit'
+        SubMipNodeLimit = "SubMipNodeLimit"
 
         # copt heuristics switch
-        HeurLocks = 'HeurLocks'
-        HeurSAP = 'HeurSAP'
-        HeurClique = 'HeurClique'
-        HeurVBound = 'HeurVBound'
-        HeurFP = 'HeurFP'
-        HeurRAP = 'HeurRAP'
-        HeurLineSearch = 'HeurLineSearch'
-        HeurConfDive = 'HeurConfDive'
-        HeurCoefDive = 'HeurCoefDive'
-        HeurFarkas = 'HeurFarkas'
-        HeurFracDive = 'HeurFracDive'
-        HeurVecLen = 'HeurVecLen'
-        HeurActiveConstr = 'HeurActiveConstr'
-        HeurPsCost = 'HeurPsCost'
-        HeurGuidedDive = 'HeurGuidedDive'
-        HeurRENS = 'HeurRENS'
-        HeurRINS = 'HeurRINS'
-        HeurDINS = 'HeurDINS'
-        HeurCrossover = 'HeurCrossover'
-        HeurMutation = 'HeurMutation'
-        HeurLpFace = 'HeurLpFace'
-        HeurLB = 'HeurLB'
-        HeurNoObj = 'HeurNoObj'
-        HeurNoObjTasks = 'HeurNoObjTasks'
-        HeurNewObj = 'HeurNewObj'
-        HeurOneOpt = 'HeurOneOpt'
-        HeurLpImprv = 'HeurLpImprv'
-        HeurPacking = 'HeurPacking'
-        HeurRENSNewObj = 'HeurRENSNewObj'
-        SubMipHeur26 = 'SubMipHeur26'
+        HeurLocks = "HeurLocks"
+        HeurSAP = "HeurSAP"
+        HeurClique = "HeurClique"
+        HeurVBound = "HeurVBound"
+        HeurFP = "HeurFP"
+        HeurRAP = "HeurRAP"
+        HeurLineSearch = "HeurLineSearch"
+        HeurConfDive = "HeurConfDive"
+        HeurCoefDive = "HeurCoefDive"
+        HeurFarkas = "HeurFarkas"
+        HeurFracDive = "HeurFracDive"
+        HeurVecLen = "HeurVecLen"
+        HeurActiveConstr = "HeurActiveConstr"
+        HeurPsCost = "HeurPsCost"
+        HeurGuidedDive = "HeurGuidedDive"
+        HeurRENS = "HeurRENS"
+        HeurRINS = "HeurRINS"
+        HeurDINS = "HeurDINS"
+        HeurCrossover = "HeurCrossover"
+        HeurMutation = "HeurMutation"
+        HeurLpFace = "HeurLpFace"
+        HeurLB = "HeurLB"
+        HeurNoObj = "HeurNoObj"
+        HeurNoObjTasks = "HeurNoObjTasks"
+        HeurNewObj = "HeurNewObj"
+        HeurOneOpt = "HeurOneOpt"
+        HeurLpImprv = "HeurLpImprv"
+        HeurPacking = "HeurPacking"
+        HeurRENSNewObj = "HeurRENSNewObj"
+        SubMipHeur26 = "SubMipHeur26"
         ParallelHeurTasks = "ParallelHeurTasks"
         MipObjScale = "MipObjScale"
         MipPreComponents = "MipPreComponents"
@@ -150,75 +150,75 @@ class CoptConstant(SolverConstant):
 
     class Attr(SolverConstant.Attr):
         # model related
-        Cols = 'Cols'
-        PSDCols = 'PsdCols'
-        Rows = 'Rows'
-        Elems = 'Elems'
-        QElems = 'QElems'
-        PSDElems = 'PsdElems'
-        SymMats = 'SymMats'
+        Cols = "Cols"
+        PSDCols = "PsdCols"
+        Rows = "Rows"
+        Elems = "Elems"
+        QElems = "QElems"
+        PSDElems = "PsdElems"
+        SymMats = "SymMats"
 
-        Bins = 'Bins'
-        Ints = 'Ints'
+        Bins = "Bins"
+        Ints = "Ints"
 
-        Soss = 'Soss'
-        Cones = 'Cones'
-        QConstrs = 'QConstrs'
-        PSDConstrs = 'PsdConstrs'
-        Indicators = 'Indicators'
+        Soss = "Soss"
+        Cones = "Cones"
+        QConstrs = "QConstrs"
+        PSDConstrs = "PsdConstrs"
+        Indicators = "Indicators"
 
-        ObjSense = 'ObjSense'
-        ObjConst = 'ObjConst'
-        HasQObj = 'HasQObj'
-        HasPSDObj = 'HasPsdObj'
-        IsMIP = 'IsMIP'
+        ObjSense = "ObjSense"
+        ObjConst = "ObjConst"
+        HasQObj = "HasQObj"
+        HasPSDObj = "HasPsdObj"
+        IsMIP = "IsMIP"
 
         # solution related''
-        LpStatus = 'LpStatus'
-        MipStatus = 'MipStatus'
-        SimplexIter = 'SimplexIter'
-        BarrierIter = 'BarrierIter'
-        NodeCnt = 'NodeCnt'
-        PoolSols = 'PoolSols'
+        LpStatus = "LpStatus"
+        MipStatus = "MipStatus"
+        SimplexIter = "SimplexIter"
+        BarrierIter = "BarrierIter"
+        NodeCnt = "NodeCnt"
+        PoolSols = "PoolSols"
 
-        HasLpSol = 'HasLpSol'
-        HasBasis = 'HasBasis'
-        HasDualFarkas = 'HasDualFarkas'
-        HasPrimalRay = 'HasPrimalRay'
-        HasMipSol = 'HasMipSol'
+        HasLpSol = "HasLpSol"
+        HasBasis = "HasBasis"
+        HasDualFarkas = "HasDualFarkas"
+        HasPrimalRay = "HasPrimalRay"
+        HasMipSol = "HasMipSol"
 
-        IISCols = 'IISCols'
-        IISRows = 'IISRows'
-        IISSOSs = 'IISSOSs'
-        IISIndicators = 'IISIndicators'
-        HasIIS = 'HasIIS'
-        HasFeasRelaxSol = 'HasFeasRelaxSol'
-        IsMinIIS = 'IsMinIIS'
+        IISCols = "IISCols"
+        IISRows = "IISRows"
+        IISSOSs = "IISSOSs"
+        IISIndicators = "IISIndicators"
+        HasIIS = "HasIIS"
+        HasFeasRelaxSol = "HasFeasRelaxSol"
+        IsMinIIS = "IsMinIIS"
 
-        LpObjVal = 'LpObjVal'
-        BestObj = 'BestObj'
-        BestBnd = 'BestBnd'
-        BestGap = 'BestGap'
-        FeasRelaxObj = 'FeasRelaxObj'
+        LpObjVal = "LpObjVal"
+        BestObj = "BestObj"
+        BestBnd = "BestBnd"
+        BestGap = "BestGap"
+        FeasRelaxObj = "FeasRelaxObj"
 
-        SolvingTime = 'SolvingTime'
+        SolvingTime = "SolvingTime"
 
     class Info(SolverConstant.Info):
         # model related
-        Obj = 'Obj'
-        UB = 'UB'
-        LB = 'LB'
+        Obj = "Obj"
+        UB = "UB"
+        LB = "LB"
 
         # solution related
-        Value = 'Value'
-        Slack = 'Slack'
-        Dual = 'Dual'
-        RedCost = 'RedCost'
+        Value = "Value"
+        Slack = "Slack"
+        Dual = "Dual"
+        RedCost = "RedCost"
 
         # dual farkas and primal ray
-        DualFarkas = 'DualFarkas'
-        PrimalRay = 'PrimalRay'
+        DualFarkas = "DualFarkas"
+        PrimalRay = "PrimalRay"
 
         # relax feasibility
-        RelaxLB = 'RelaxLB'
-        RelaxUB = 'RelaxUB'
+        RelaxLB = "RelaxLB"
+        RelaxUB = "RelaxUB"

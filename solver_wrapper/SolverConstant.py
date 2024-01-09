@@ -3,6 +3,7 @@
 # @email: xiangjunhao@shanshu.ai
 # @date: 2022/07/22
 
+
 class SolverConstant:
     # optimization direction
     MINIMIZE = None  # used to define the sense of model objective to be minimize;

@@ -15,11 +15,7 @@ if __name__ == "__main__":
     pick_instance = 2
     if pick_instance == 1:
         cfg = dict(
-            data_dir=datapath,
-            sku_num=2,
-            plant_num=2,
-            warehouse_num=13,
-            customer_num=5,
+            data_dir=datapath, sku_num=2, plant_num=2, warehouse_num=13, customer_num=5,
         )
     elif pick_instance == 2:
         # smallest instance causing bug
