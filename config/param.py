@@ -44,6 +44,24 @@ class Param:
         )
 
         parser.add_argument(
+            "--rmp_binary",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--rmp_mip_iter",
+            type=int,
+            default=2,
+        )
+
+        parser.add_argument(
+            "--check_rmp_mip",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
             "--T",
             type=int,
             default=1,

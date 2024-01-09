@@ -216,12 +216,7 @@ class Pricing(object):
                 )
 
         self.original_obj = 0.0
-        self.hc = 0.0
-        self.pc = 0.0
-        self.tc = 0.0
-        self.ud = 0.0
-        self.nf = 0.0
-        self.ef = 0.0
+
         self.var_idx = None
         self.dual_index_for_RMP = {
             "transportation_capacity": dict(),

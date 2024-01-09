@@ -255,34 +255,64 @@ class DNPSlim(DNP):
         }
 
         if self.bool_covering:
-            self.var_types["select_edge"] = {
-                "lb": 0,
-                "ub": 1,
-                "vtype": self.solver_constant.BINARY,
-                "nameprefix": "p",
-                "index": "(t, edge)",
-            }
-            self.var_types["sku_select_edge"] = {
-                "lb": 0,
-                "ub": 1,
-                "vtype": self.solver_constant.BINARY,
-                "nameprefix": "pk",
-                "index": "(t, edge, k)",
-            }
-            self.var_types["open"] = {
-                "lb": 0,
-                "ub": 1,
-                "vtype": self.solver_constant.BINARY,
-                "nameprefix": "y",
-                "index": "(t, node)",
-            }
-            self.var_types["sku_open"] = {
-                "lb": 0,
-                "ub": 1,
-                "vtype": self.solver_constant.BINARY,
-                "nameprefix": "yk",
-                "index": "(t, plant, k)",
-            }
+            if self.arg.rmp_relaxation:
+                self.var_types["select_edge"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.CONTINUOUS,
+                    "nameprefix": "p",
+                    "index": "(t, edge)",
+                }
+                self.var_types["sku_select_edge"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.CONTINUOUS,
+                    "nameprefix": "pk",
+                    "index": "(t, edge, k)",
+                }
+                self.var_types["open"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.CONTINUOUS,
+                    "nameprefix": "y",
+                    "index": "(t, node)",
+                }
+                self.var_types["sku_open"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.CONTINUOUS,
+                    "nameprefix": "yk",
+                    "index": "(t, plant, k)",
+                }
+            else:
+                self.var_types["select_edge"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.BINARY,
+                    "nameprefix": "p",
+                    "index": "(t, edge)",
+                }
+                self.var_types["sku_select_edge"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.BINARY,
+                    "nameprefix": "pk",
+                    "index": "(t, edge, k)",
+                }
+                self.var_types["open"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.BINARY,
+                    "nameprefix": "y",
+                    "index": "(t, node)",
+                }
+                self.var_types["sku_open"] = {
+                    "lb": 0,
+                    "ub": 1,
+                    "vtype": self.solver_constant.BINARY,
+                    "nameprefix": "yk",
+                    "index": "(t, plant, k)",
+                }
 
         # generate index tuple
         idx = dict()
@@ -539,24 +569,24 @@ class DNPSlim(DNP):
         return
 
     def add_constr_transportation_lb(self, t: int, verbose=False):
-        if self.arg.rmp_relaxation:
-            return
-        else:
-            for e, edge in self._iterate_no_c_edges():
-                edge = self.network.edges[e]["object"]
-                flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
-                # variable lower bound
-                if edge.variable_lb < np.inf:
-                    self.constrs["transportation_variable_lb"][
-                        (t, edge)
-                    ] = self.solver.addConstr(
-                        flow_sum
-                        >= edge.variable_lb * self.variables["select_edge"][t, edge]
-                    )
+        # if self.arg.rmp_relaxation:
+        #     return
+        # else:
+        for e, edge in self._iterate_no_c_edges():
+            edge = self.network.edges[e]["object"]
+            flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
+            # variable lower bound
+            if edge.variable_lb < np.inf:
+                self.constrs["transportation_variable_lb"][
+                    (t, edge)
+                ] = self.solver.addConstr(
+                    flow_sum
+                    >= edge.variable_lb * self.variables["select_edge"][t, edge]
+                )
 
-                    self.index_for_dual_var += 1
+                self.index_for_dual_var += 1
 
-            return
+        return
 
     def add_constr_transportation_capacity(self, t: int, verbose=False):
         for e, edge in self._iterate_no_c_edges():

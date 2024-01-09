@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from coptpy import COPT
 from dnp_model import DNP
+import gurobipy as gp
+from gurobipy import GRB
 import const
 import utils
 from slim_cg.slim_rmp_model import DNPSlim
@@ -19,7 +21,7 @@ if __name__ == "__main__":
     arg = param.arg
     # 1-8
     # arg.conf_label = 2
-    arg.conf_label = 4
+    arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
@@ -31,9 +33,7 @@ if __name__ == "__main__":
     arg.T = 7
     arg.rmp_mip_iter = 2
     arg.check_rmp_mip = 1
-    # 7: full scale
-    # arg.pick_instance = 7
-    arg.pick_instance = 7
+    arg.pick_instance = 5
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
     print(f"save mps name {dnp_mps_name}")
     (
@@ -52,8 +52,6 @@ if __name__ == "__main__":
     ##################### DNP #######################################
 
     solver = "COPT"
-    # solver = "GUROBI"
-    # print("----------DNP Model------------")
     model = DNP(arg, network)
     model.modeling()
     model.model.setParam("Logging", 1)
@@ -62,14 +60,14 @@ if __name__ == "__main__":
     model.model.setParam("LpMethod", 2)
     model.model.setParam("Crossover", 0)
     model.model.write(dnp_mps_name)
-    dnp_mps_lp_name = f"allinone_lp_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
-    variables = model.model.getVars()
-    for v in variables:
-        if v.getType() == COPT.BINARY:
-            v.setType(COPT.CONTINUOUS)
-    model.model.write(dnp_mps_lp_name)
-
-    # model,model.solve()
+    # dnp_mps_lp_name = f"allinone_lp_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
+    # model.model.write(dnp_mps_lp_name)
+    m = gp.read(dnp_mps_name)
+    print("----------DNP Model(MIP)------------")
+    m.optimize()
+    r = m.relax()
+    print("----------DNP Model(LP)------------")
+    r.optimize()
 
     # ###############################################################
     print("----------DCS Model------------")
@@ -95,11 +93,3 @@ if __name__ == "__main__":
         solver=solver,
     )
     np_cg.run()
-    # print(np_cg.rmp_model.getObjective())
-    # for i,k in np_cg.rmp_model.obj.items():
-    #     print(i)
-    #     cost = 0
-    #     if k is not None:
-    #         for j,l in k.items():
-    #             cost += l.getExpr().getValue()
-    #     print(cost)
