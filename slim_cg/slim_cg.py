@@ -188,15 +188,9 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        self.rmp_model.setParam("LpMethod", 2)
+        # self.rmp_model.setParam("LpMethod", 2)
         self.rmp_model.setParam("Crossover", 0)
-        # if self.arg.rmp_relaxation:
-        #     variables = self.rmp_model.getVars()
-        #     binary_vars_index = []
-        #     for v in variables:
-        #         if v.getType() == COPT.BINARY:
-        #             binary_vars_index.append(v.getIdx())
-        #             v.setType(COPT.CONTINUOUS)
+
         self.solver.solve()
         self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
 
@@ -475,16 +469,7 @@ class NetworkColumnGenerationSlim(object):
                     self.red_cost = self.red_cost[: self.iter, :]
                     if self.arg.check_rmp_mip:
                         model = self.rmp_model
-                        variables = model.getVars()
-                        updated_vars_index = []
-                        for v in variables:
-                            binary_list = ["p", "pk", "y", "yk"]
-                            for i in binary_list:
-                                if v.getName().startswith(i):
-                                    updated_vars_index.append(v.getIdx())
-                                    v.setType(self.solver_constant.BINARY)
-                        model.setParam("LpMethod", 2)
-                        model.setParam("Crossover", 0)
+                        self.rmp_oracle.switch_to_milp()
                         print("-----Solve MIP_RMP-----")
                         # print("updated_vars_index", updated_vars_index)
                         model.solve()
@@ -496,9 +481,7 @@ class NetworkColumnGenerationSlim(object):
                             model.getObjective().getValue() - last_obj,
                         )
                         ### Reset
-                        for v in variables:
-                            if v.getType() == self.solver_constant.BINARY:
-                                v.setType(self.solver_constant.CONTINUOUS)
+                        self.rmp_oracle.switch_to_lp()
                         print("Reset Over")
                     break
 

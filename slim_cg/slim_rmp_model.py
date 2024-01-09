@@ -23,7 +23,7 @@ class DNPSlim(DNP):
         used_plant_capacity: dict = None,
         logging: int = 0,
         gap: float = 1e-4,
-        threads: int = None,
+        threads: int = 8,
         limit: int = 7200,
         cg: bool = True,
         customer_list: List[Customer] = None,
@@ -255,64 +255,34 @@ class DNPSlim(DNP):
         }
 
         if self.bool_covering:
-            if self.arg.rmp_relaxation:
-                self.var_types["select_edge"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "p",
-                    "index": "(t, edge)",
-                }
-                self.var_types["sku_select_edge"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "pk",
-                    "index": "(t, edge, k)",
-                }
-                self.var_types["open"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "y",
-                    "index": "(t, node)",
-                }
-                self.var_types["sku_open"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "yk",
-                    "index": "(t, plant, k)",
-                }
-            else:
-                self.var_types["select_edge"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.BINARY,
-                    "nameprefix": "p",
-                    "index": "(t, edge)",
-                }
-                self.var_types["sku_select_edge"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.BINARY,
-                    "nameprefix": "pk",
-                    "index": "(t, edge, k)",
-                }
-                self.var_types["open"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.BINARY,
-                    "nameprefix": "y",
-                    "index": "(t, node)",
-                }
-                self.var_types["sku_open"] = {
-                    "lb": 0,
-                    "ub": 1,
-                    "vtype": self.solver_constant.BINARY,
-                    "nameprefix": "yk",
-                    "index": "(t, plant, k)",
-                }
+            self.var_types["select_edge"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.BINARY,
+                "nameprefix": "p",
+                "index": "(t, edge)",
+            }
+            self.var_types["sku_select_edge"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.BINARY,
+                "nameprefix": "pk",
+                "index": "(t, edge, k)",
+            }
+            self.var_types["open"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.BINARY,
+                "nameprefix": "y",
+                "index": "(t, node)",
+            }
+            self.var_types["sku_open"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.BINARY,
+                "nameprefix": "yk",
+                "index": "(t, plant, k)",
+            }
 
         # generate index tuple
         idx = dict()
@@ -387,6 +357,23 @@ class DNPSlim(DNP):
             [c.idx for c in self.customer_list], nameprefix="lbdtempo"
         )
         self.variables["column_weights"] = {}
+
+        # record binary variables
+        variables = self.rmp_model.getVars()
+
+        self.binaries = [v for v in variables if v.getType() == COPT.BINARY]
+        # preset this to continuous
+        # if only the lagrangian bound is concerned, i.e., rmp is a relaxation
+        # it is never set back
+        self.switch_to_lp()
+
+    def switch_to_milp(self):
+        for v in self.binaries:
+            v.setType(COPT.BINARY)
+
+    def switch_to_lp(self):
+        for v in self.binaries:
+            v.setType(COPT.CONTINUOUS)
 
     def add_constraints(self):
         if self.bool_capacity:
