@@ -434,55 +434,31 @@ class NetworkColumnGenerationSlim(object):
                 self._logger.info(
                     f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
                 )
-                last_obj = self.rmp_model.objval
+                lp_objective = self.rmp_model.objval
 
                 # if self.arg.check_rmp_mip:
                 #     if int(self.iter) % self.arg.rmp_mip_iter == 0:
-                #         model = self.rmp_model
-                #         variables = model.getVars()
-                #         updated_vars_index = []
-                #         for v in variables:
-                #             binary_list = ["p", "pk", "y", "yk"]
-                #             for i in binary_list:
-                #                 if v.getName().startswith(i):
-                #                     updated_vars_index.append(v.getIdx())
-                #                     v.setType(self.solver_constant.BINARY)
-                #         model.setParam("LpMethod", 2)
-                #         model.setParam("Crossover", 0)
-                #         print("-----Solve MIP_RMP-----")
-                #         # print("updated_vars_index", updated_vars_index)
-                #         model.solve()
-                #         print(
-                #             self.iter,
-                #             "MIP_RMP",
-                #             model.getObjective().getValue(),
-                #             "GAP",
-                #             model.getObjective().getValue() - last_obj,
-                #         )
-                #         ### Reset
-                #         for v in variables:
-                #             if v.getType() == self.solver_constant.BINARY:
-                #                 v.setType(self.solver_constant.CONTINUOUS)
-                #         print("Reset Over")
-
-                if not added or self.iter >= self.max_iter:
-                    self.red_cost = self.red_cost[: self.iter, :]
-                    if self.arg.check_rmp_mip:
+                if self.arg.check_rmp_mip:
+                    if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
+                        self.iter >= self.max_iter
+                    ):
                         model = self.rmp_model
                         self.rmp_oracle.switch_to_milp()
                         print("-----Solve MIP_RMP-----")
-                        # print("updated_vars_index", updated_vars_index)
                         model.solve()
                         print(
                             self.iter,
                             "MIP_RMP",
                             model.getObjective().getValue(),
                             "GAP",
-                            model.getObjective().getValue() - last_obj,
+                            model.getObjective().getValue() - lp_objective,
                         )
                         ### Reset
                         self.rmp_oracle.switch_to_lp()
                         print("Reset Over")
+
+                if not added or self.iter >= self.max_iter:
+                    self.red_cost = self.red_cost[: self.iter, :]
                     break
 
                 if bool_early_stop:

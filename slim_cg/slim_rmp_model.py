@@ -359,7 +359,7 @@ class DNPSlim(DNP):
         self.variables["column_weights"] = {}
 
         # record binary variables
-        variables = self.rmp_model.getVars()
+        variables = self.model.getVars()
 
         self.binaries = [v for v in variables if v.getType() == COPT.BINARY]
         # preset this to continuous
