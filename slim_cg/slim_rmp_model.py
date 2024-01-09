@@ -109,6 +109,9 @@ class DNPSlim(DNP):
 
         # for remote
         self.columns_helpers = None
+      
+        self.bool_is_lp = False
+        self.binaries = []
 
     #####################
 
@@ -365,6 +368,8 @@ class DNPSlim(DNP):
         # preset this to continuous
         # if only the lagrangian bound is concerned, i.e., rmp is a relaxation
         # it is never set back
+        if self.binaries.__len__() == 0:
+            self.bool_is_lp = True
         self.switch_to_lp()
 
     def switch_to_milp(self):

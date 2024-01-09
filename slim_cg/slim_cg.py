@@ -247,11 +247,22 @@ class NetworkColumnGenerationSlim(object):
 
         return added
 
-    def init_column(self, customer):
+    # def init_column(self, customer):
+    #     _vals = {}
+    #     _vals["sku_flow"] = {
+    #         k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
+    #     }
+    #     unfulfilled_cost = 0.0
+    #     for t in range(self.arg.T):
+    #         unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
+    #     _vals["beta"] = unfulfilled_cost
+    #     _vals["transportation_cost"] = 0
+    #     _vals["unfulfilled_demand_cost"] = unfulfilled_cost
+    #     return _vals
+
+    def init_column(self, customer, sku_flow_keys):
         _vals = {}
-        _vals["sku_flow"] = {
-            k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
-        }
+        _vals["sku_flow"] = {k: 0.0 for k in sku_flow_keys}
         unfulfilled_cost = 0.0
         for t in range(self.arg.T):
             unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
@@ -295,9 +306,28 @@ class NetworkColumnGenerationSlim(object):
                         for worker in self.worker_list
                     ]
                 )
-            for customer in tqdm(self.customer_list):
-                self.oracles[customer] = self.construct_oracle(customer)
-                init_col = self.init_column(customer)
+                all_var_keys = ray.get(
+                    [
+                        worker.get_all_var_keys.remote("sku_flow")
+                        for worker in self.worker_list
+                    ]
+                )
+
+                var_keys = []
+                for var_key in all_var_keys:
+                    var_keys.extend(var_key)
+            else:
+                var_keys = []
+                for customer in tqdm(self.customer_list):
+                    self.oracles[customer] = self.construct_oracle(customer)
+                    var_keys.extend(self.oracles[customer].get_var_keys("sku_flow"))
+
+                    # init_col = self.init_column(customer)
+                    # self.columns[customer] = []
+                    # self.columns[customer].append(init_col)
+
+            for customer, i in zip(self.customer_list, range(self.cus_num)):
+                init_col = self.init_column(customer, var_keys[i])
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
 
@@ -338,6 +368,17 @@ class NetworkColumnGenerationSlim(object):
                         {(ee.end, ee, k, t): v for (ee, k, t), v in dual.items()}
                     )
                     dual_exists_customers = dual_series.index.get_level_values(0)
+                else:
+                    dual_series = None
+                    dual_ws = None
+                    dual_exists_customers = None
+                # if self.iter >= 1 and customer in dual_exists_customers:
+                #     dual_pack_this = (
+                #         dual_series[customer, :].to_dict(),
+                #         dual_ws[customer],
+                #     )
+                # else:
+                #     dual_pack_this = None
 
                 with utils.TimerContext(self.iter, f"solve_columns"):
                     # modify for parallel
@@ -345,14 +386,21 @@ class NetworkColumnGenerationSlim(object):
                         for worker in tqdm(self.worker_list, ncols=80, leave=False):
                             worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
-                            worker.update_objective_all.remote(dual_packs)
+                            with utils.TimerContext(self.iter, f"update pricing"):
+                                # worker.update_objective_all.remote(dual_pack_this)
+                                worker.update_objective_all_new.remote(customer, self.iter, dual_series, dual_ws, dual_exists_customers)
+
+                            if self.arg.pricing_relaxation:
+                                worker.set_all_relaxation.remote()
                             worker.solve_all.remote()
+
                     else:
                         for col_ind, customer in tqdm(
                             enumerate(self.customer_list), ncols=80, leave=False
                         ):
                             oracle: Pricing = self.oracles[customer]
                             oracle.model.reset()
+
                             if self.iter >= 1 and customer in dual_exists_customers:
                                 dual_pack_this = (
                                     dual_series[customer, :].to_dict(),
@@ -360,6 +408,7 @@ class NetworkColumnGenerationSlim(object):
                                 )
                             else:
                                 dual_pack_this = None
+
                             with utils.TimerContext(self.iter, f"update pricing"):
                                 oracle.update_objective(
                                     customer, dual_packs=dual_pack_this
@@ -427,6 +476,8 @@ class NetworkColumnGenerationSlim(object):
                             bool_early_stop = True
                             self._logger.info("early terminated")
                             break
+                        if model_status == self.solver_constant.INFEASIBLE:
+                            self._logger.info("oracle is infeasible")
                     # modify for parallel
 
                 self.iter += 1
@@ -438,7 +489,7 @@ class NetworkColumnGenerationSlim(object):
 
                 # if self.arg.check_rmp_mip:
                 #     if int(self.iter) % self.arg.rmp_mip_iter == 0:
-                if self.arg.check_rmp_mip:
+                if self.arg.check_rmp_mip and not self.rmp_oracle.bool_is_lp:
                     if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
                     ):

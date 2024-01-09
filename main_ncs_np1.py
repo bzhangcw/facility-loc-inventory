@@ -28,7 +28,7 @@ if __name__ == "__main__":
     arg.pricing_relaxation = 0
     arg.backorder = 1
     arg.T = 7
-    arg.rmp_mip_iter = 5
+    arg.rmp_mip_iter = 20
     arg.check_rmp_mip = 1
     # 7: full scale
     arg.pick_instance = 4
@@ -75,8 +75,8 @@ if __name__ == "__main__":
     max_iter = 20
     init_primal = None
     init_dual = None
-    init_ray = False
-    # init_ray = True
+    # init_ray = False
+    init_ray = True
     # num_workers = 4
     # num_cpus = 8
     np_cg = NCS(

@@ -70,9 +70,6 @@ class PricingWorker:
                 self.arg,
                 subgraph,
                 model_name,
-                bool_covering=self.bool_covering,
-                bool_edge_lb=self.bool_edge_lb,
-                bool_node_lb=self.bool_node_lb,
                 customer=customer,
                 solver=self.solver,
             )
@@ -123,6 +120,26 @@ class PricingWorker:
                 continue
             self.DNP_dict[customer].update_objective(customer, dual_packs)
 
+
+    def update_objective_all_new(self, customer, iter, dual_series, dual_ws, dual_exists_customers):
+
+        for customer in self.cus_list:
+            if customer in self.skipped:
+                continue
+            
+            if iter >= 1 and customer in dual_exists_customers:
+                dual_pack_this = (
+                    dual_series[customer, :].to_dict(),
+                    dual_ws[customer],
+                )
+            else:
+                dual_pack_this = None
+        
+            self.DNP_dict[customer].update_objective(customer, dual_pack_this)
+
+
+
+
     def solve(self, customer):
         self.DNP_dict[customer].solve()
 
@@ -152,6 +169,16 @@ class PricingWorker:
 
     def set_scope(self, skipped):
         self.skipped = skipped
+
+    def get_all_var_keys(self, var_type):
+        var_keys = []
+        for customer in self.cus_list:
+            var_keys.append(self.DNP_dict[customer].get_var_keys(var_type))
+        return var_keys
+
+    def set_all_relaxation(self):
+        for customer in self.cus_list:
+            self.DNP_dict[customer].relaxation()
 
 
 class Pricing(object):
@@ -413,6 +440,15 @@ class Pricing(object):
                 vtype=param["vtype"],
                 nameprefix=f"{param['nameprefix']}_",
             )
+
+    def get_var_keys(self, var_type):
+        return self.var_idx[var_type].keys()
+
+    def relaxation(self):
+        variables = self.model.getVars()
+        for v in variables:
+            if v.getType() == COPT.BINARY:
+                v.setType(COPT.CONTINUOUS)
 
     def add_constraints(self, customer):
         # lk: 和bool_open联系起来

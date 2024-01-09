@@ -402,6 +402,6 @@ def visualize_timers():
     logger.info(
         f"""
 === describing time statistics ===
-{df.groupby("name")['time'].describe().reset_index()}
+{df.groupby("name")['time'].describe().fillna("-").reset_index()}
     """
     )
