@@ -287,6 +287,180 @@ class Param:
             default=0,
         )
 
+<<<<<<< Updated upstream
+=======
+        parser.add_argument(
+            "--rmp_binary",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--rmp_mip_iter",
+            type=int,
+            default=2,
+        )
+
+        parser.add_argument(
+            "--check_rmp_mip",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--T",
+            type=int,
+            default=1,
+        )
+
+        parser.add_argument(
+            "--M",
+            type=float,
+            # default=1e10,
+            default=1e6,
+        )
+        ##### 2. Fixed costs #####
+        parser.add_argument(
+            "--production_sku_unit_cost",
+            type=float,
+            # default=1e10,
+            # default=1.5,
+            default=15,
+        )
+
+        parser.add_argument(
+            "--holding_sku_unit_cost",
+            type=float,
+            # default=1,
+            default=1,
+        )
+
+        parser.add_argument(
+            "--transportation_sku_unit_cost",
+            type=float,
+            # default=0.01,
+            default=20,
+        )
+
+        parser.add_argument(
+            "--plant_fixed_cost",
+            type=float,
+            # default=200,
+            default=2000,
+        )
+
+        parser.add_argument(
+            "--warehouse_fixed_cost",
+            type=float,
+            # default=500,
+            default=50000,
+        )
+
+        parser.add_argument(
+            "--unfulfill_sku_unit_cost",
+            type=float,
+            default=500,
+        )
+
+        # todo
+        parser.add_argument(
+            "--backorder_sku_unit_cost",
+            type=float,
+            default=20,
+        )
+
+        ##### 3. Limitation associated with partial constraints #####
+        parser.add_argument(
+            "--cardinality_limit",
+            type=int,
+            default=2,
+        )
+        parser.add_argument(
+            "--distance_limit",
+            type=int,
+            default=1000,
+        )
+        parser.add_argument(
+            "--in_upper_ratio",
+            type=int,
+            default=0.54,
+        )
+
+        parser.add_argument(
+            "--backorder",
+            type=bool,
+            default=True,
+            help="""
+            whether to allow backorder, inventory can be true if backorder allowed
+            """,
+        )
+
+        ##### 4. Basic configuration #####
+
+        parser.add_argument(
+            "--covering",
+            type=int,
+            default=1,
+            help="""
+            covering
+            """,
+        )
+
+        parser.add_argument(
+            "--capacity",
+            type=int,
+            default=1,
+        )
+        parser.add_argument(
+            "--add_in_upper",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--add_distance",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--add_cardinality",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--edge_lb",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--node_lb",
+            type=int,
+            default=0,
+        )
+
+        parser.add_argument(
+            "--fixed_cost",
+            type=int,
+            default=0,
+        )
+
+        ##### 5. Others #####
+        parser.add_argument(
+            "--total_cus_num",
+            type=int,
+            default=472,
+        )
+
+        parser.add_argument(
+            "--cus_num",
+            type=int,
+            default=4,
+        )
+
+>>>>>>> Stashed changes
         return parser
 
 
