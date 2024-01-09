@@ -1,3 +1,5 @@
+import utils
+
 from dnp_model import *
 from entity import *
 from solver_wrapper import GurobiWrapper, CoptWrapper
@@ -56,6 +58,8 @@ class DNPSlim(DNP):
         self.model.setParam(self.solver_constant.Param.Logging, logging)
         self.model.setParam(self.solver_constant.Param.RelGap, gap)
         self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
+        self.model.setLogFile(f"{utils.CONF.DEFAULT_TMP_PATH}/rmp.log")
+        self.model.setParam(self.solver_constant.Param.LpMethod, 4)
         if threads is not None:
             self.model.setParam(self.solver_constant.Param.Threads, threads)
 
@@ -109,7 +113,7 @@ class DNPSlim(DNP):
 
         # for remote
         self.columns_helpers = None
-      
+
         self.bool_is_lp = False
         self.binaries = []
 
@@ -985,47 +989,3 @@ class DNPSlim(DNP):
             for k, v in self.cg_binding_constrs_ws.items()
         }
         return edge_dual, ws_dual
-
-
-if __name__ == "__main__":
-    import datetime
-
-    import pandas as pd
-
-    import utils as utils
-    from config.network import construct_network
-    from config.param import Param
-
-    starttime = datetime.datetime.now()
-    param = Param()
-    arg = param.arg
-    arg.T = 1
-    arg.backorder = False
-
-    datapath = "data/data_0401_V3.xlsx"
-
-    sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-        data_dir=datapath, one_period=True
-    )
-    # best solution: 1206630185
-    node_list = plant_list + warehouse_list + customer_list
-    cap = pd.read_csv("./data/random_capacity_updated.csv").set_index("id")
-    for e in edge_list:
-        e.capacity = cap["qty"].get(e.idx, np.inf)
-        e.variable_lb = cap["lb"].get(e.idx, np.inf)
-
-    lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
-    for n in node_list:
-        if n.type == const.PLANT:
-            n.production_lb = lb_df["lb"].get(n.idx, np.inf)
-        if n.type == const.WAREHOUSE:
-            n.warehouse_lb = lb_df["lb"].get(n.idx, np.inf)
-    network = construct_network(node_list, edge_list, sku_list)
-    model = DNP(arg, network, bool_covering=True, logging=1)
-    model.modeling()
-    model.solve()
-
-    solpath = utils.CONF.DEFAULT_SOL_PATH
-    model.get_solution(data_dir=solpath)
-    endtime = datetime.datetime.now()
-    print(endtime - starttime)

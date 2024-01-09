@@ -111,6 +111,7 @@ class NetworkColumnGenerationSlim(object):
         if self.init_ray:
             if ray.is_initialized():
                 ray.shutdown()
+            self._logger.info("initializing ray")
             ray.init(num_cpus=num_cpus)
         self.skip_customers = set()
 
@@ -188,11 +189,10 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        # self.rmp_model.setParam("LpMethod", 2)
         self.rmp_model.setParam("Crossover", 0)
-
+        self.rmp_model.setParam("Logging", 1)
+        self.rmp_model.reset()
         self.solver.solve()
-        self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         if self.init_ray:
@@ -342,6 +342,7 @@ class NetworkColumnGenerationSlim(object):
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_rmp()
+                self._logger.info("rmp solving finished")
                 if self.rmp_model.status != self.solver_constant.OPTIMAL:
                     print(self.rmp_model.status, iter)
                     self.rmp_model.write("rmp{}.lp".format(self.iter))
@@ -357,6 +358,7 @@ class NetworkColumnGenerationSlim(object):
                     dual_packs = (
                         self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
                     )
+                self._logger.info("rmp dual fetch finished")
 
                 # TODO: early stopping
                 added = False
@@ -388,7 +390,13 @@ class NetworkColumnGenerationSlim(object):
                             worker.model_reset_all.remote()
                             with utils.TimerContext(self.iter, f"update pricing"):
                                 # worker.update_objective_all.remote(dual_pack_this)
-                                worker.update_objective_all_new.remote(customer, self.iter, dual_series, dual_ws, dual_exists_customers)
+                                worker.update_objective_all_new.remote(
+                                    customer,
+                                    self.iter,
+                                    dual_series,
+                                    dual_ws,
+                                    dual_exists_customers,
+                                )
 
                             if self.arg.pricing_relaxation:
                                 worker.set_all_relaxation.remote()
@@ -426,7 +434,7 @@ class NetworkColumnGenerationSlim(object):
                                 oracle.model.computeIIS()
                                 oracle.model.write("1109/oracle{}.iis".format(customer))
                                 print("iis written")
-
+                    self._logger.info("column solving finished")
                     if self.init_ray:
                         all_new_cols = ray.get(
                             [
@@ -464,7 +472,7 @@ class NetworkColumnGenerationSlim(object):
                         model_status_list = [
                             oracle.model.status for oracle in self.oracles.values()
                         ]
-
+                    self._logger.info("column generating finished")
                     for col_ind, customer in enumerate(self.customer_list):
                         self.red_cost[self.iter, col_ind] = v[col_ind]
                         added = (v[col_ind] < -1e-9 or dual_packs is None) or added
@@ -515,8 +523,10 @@ class NetworkColumnGenerationSlim(object):
                 if bool_early_stop:
                     self._logger.info("early terminated")
                     break
+                self._logger.info("rmp updating started")
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     self.update_rmp_by_cols()
+                self._logger.info("rmp updating finished")
 
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")
