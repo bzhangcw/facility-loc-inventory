@@ -39,7 +39,13 @@ class PricingWorker:
     """
 
     def __init__(
-        self, cus_list, arg, bool_covering, bool_edge_lb, bool_node_lb, solver="COPT",
+        self,
+        cus_list,
+        arg,
+        bool_covering,
+        bool_edge_lb,
+        bool_node_lb,
+        solver="COPT",
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -675,12 +681,10 @@ class Pricing(object):
                     edge.transportation_sku_fixed_cost is not None
                     and k in edge.transportation_sku_fixed_cost
                 ):
-                    edge_transportation_cost = edge_transportation_cost + edge.transportation_sku_fixed_cost[
-                        k
-                    ] * self.variables[
-                        "sku_select_edge"
-                    ].get(
-                        (t, edge, k), 0
+                    edge_transportation_cost = (
+                        edge_transportation_cost
+                        + edge.transportation_sku_fixed_cost[k]
+                        * self.variables["sku_select_edge"].get((t, edge, k), 0)
                     )
 
             for k in sku_list_with_unit_transportation_cost:
@@ -692,10 +696,10 @@ class Pricing(object):
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
-                edge_transportation_cost = edge_transportation_cost + transportation_sku_unit_cost * self.variables[
-                    "sku_flow"
-                ].get(
-                    (t, edge, k), 0
+                edge_transportation_cost = (
+                    edge_transportation_cost
+                    + transportation_sku_unit_cost
+                    * self.variables["sku_flow"].get((t, edge, k), 0)
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost

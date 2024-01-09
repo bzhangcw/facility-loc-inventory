@@ -158,7 +158,8 @@ class NetworkColumnGenerationSlim(object):
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-        self, customer: Customer,
+        self,
+        customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -512,7 +513,7 @@ class NetworkColumnGenerationSlim(object):
                 break
         utils.visualize_timers()
         self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
-        #todo
+        # todo
         # self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
     def init_rmp_by_cols(self):
