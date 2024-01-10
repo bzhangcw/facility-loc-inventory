@@ -18,6 +18,11 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
+        parser.add_argument(
+            "--rmp_mip",
+            type=int,
+            default=0,
+        )
         ##### 1. Basic parameters #####
         parser.add_argument(
             "--conf_label",

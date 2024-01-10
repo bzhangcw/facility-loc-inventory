@@ -292,7 +292,8 @@ class Pricing(object):
     def _iterate_edges(self):
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
-            yield edge
+            if edge.end.type == const.CUSTOMER:
+                yield edge
 
     # 更改点1 iterate node约束
     def _iterate_nodes(self):
@@ -309,19 +310,11 @@ class Pricing(object):
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
-                    "ub": self.solver_constant.INFINITY,
-                    # "ub": 0,
+                    # "ub": self.solver_constant.INFINITY,
+                    "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
                     "index": "(t, edge, k)",
-                },
-                "sku_backorder": {
-                    "lb": 0,
-                    # "ub": [],  # TBD
-                    "ub": self.solver_constant.INFINITY,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "s",
-                    "index": "(t, k)",
                 },
                 "select_edge": {
                     "lb": 0,
@@ -337,7 +330,6 @@ class Pricing(object):
                     "nameprefix": "p",
                     "index": "(t, edge,k)",
                 },
-                # lk：更改点1 变成select_node
                 "open": {
                     "lb": 0,
                     "ub": 1,
@@ -350,30 +342,31 @@ class Pricing(object):
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
-                    "ub": self.solver_constant.INFINITY,
+                    # "ub": self.solver_constant.INFINITY,
+                    "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
                     "index": "(t, edge, k)",
                 },
-                "sku_backorder": {
-                    "lb": 0,
-                    # "ub": [],  # TBD
-                    "ub": self.solver_constant.INFINITY,
-                    "vtype": self.solver_constant.CONTINUOUS,
-                    "nameprefix": "s",
-                    "index": "(t, k)",
-                },
             }
-        # if self.arg.customer_backorder:
-        #     self.var_types["sku_backorder"] = {
-        #             "lb": 0,
-        #             # "ub": [],  # TBD
-        #             "ub": self.solver_constant.INFINITY,
-        #             "vtype": self.solver_constant.CONTINUOUS,
-        #             "nameprefix": "s",
-        #             "index": "(t, k)",
-        #         }
-        # generate index tuple
+        if self.arg.backorder:
+            self.var_types["sku_backorder"] = {
+                "lb": 0,
+                "ub": 1e8,  # TBD
+                # "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "s",
+                "index": "(t, k)",
+            }
+        else:
+            self.var_types["sku_slack"] = {
+                "lb": 0,
+                "ub": [],  # TBD
+                # "ub": self.solver_constant.INFINITY,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "s",
+                "index": "(t, k)",
+            }
         idx = dict()
         for vt in self.var_types.keys():
             idx[vt] = list()
@@ -386,12 +379,20 @@ class Pricing(object):
                 for t in range(self.T):
                     # select edge (i,j) at t
                     idx["select_edge"].append((t, edge))
+                    # print(self.customer,self.sku_list)
+                    # print(self.customer,self.customer.get_node_sku_list(t, self.arg.full_sku_list))
                     for k in self.sku_list:
                         idx["sku_select_edge"].append((t, edge, k))
         # if self.arg.customer_backorder:
         for t in range(self.T):
             for k in self.sku_list:
-                idx["sku_backorder"].append((t, k))
+                if self.arg.backorder:
+                    idx["sku_backorder"].append((t, k))
+                else:
+                    idx["sku_slack"].append((t, k))
+                    self.var_types["sku_slack"]["ub"].append(
+                        self.customer.demand.get((t, k), 0)
+                    )
 
         for edge in self._iterate_edges():
             for t in range(self.T):
@@ -415,13 +416,13 @@ class Pricing(object):
             )
 
     def add_constraints(self, customer):
-        # lk: 和bool_open联系起来
         if self.bool_covering:
             self.constr_types = {
                 "flow_conservation": {"index": "(t, node, k)"},
                 "open_relationship": {
                     "select_edge": {"index": "(t, edge, node)"},
                     "sku_select_edge": {"index": "(t, edge, k)"},
+                    "sku_flow_select": {"index": "(t, edge, k)"},
                     "open": {"index": "(t, warehouse with demand / customer)"},
                     "sku_open": {"index": "(t, node, k)"},
                 },
@@ -431,8 +432,6 @@ class Pricing(object):
             self.constr_types = {"flow_conservation": {"index": "(t, node, k)"}}
         if self.bool_capacity:
             self.constr_types["transportation_capacity"] = {"index": "(t, edge)"}
-        # TODO：后续可以加仓库的出库限制及其他的customization约束
-
         if self.bool_edge_lb:
             self.constr_types["transportation_variable_lb"] = {"index": "(t, edge)"}
 
@@ -446,7 +445,6 @@ class Pricing(object):
         for t in range(self.T):
             # initial status and flow conservation
             self.add_constr_flow_conservation(t)
-
             if self.bool_covering:
                 # node status and open relationship
                 self.add_constr_open_relationship(t)
@@ -480,7 +478,7 @@ class Pricing(object):
             else:
                 constr = self.solver.addConstr(
                     self.variables["sku_flow"].sum(t, edges, k)
-                    + self.variables["sku_backorder"].get((t, k), 0)
+                    + self.variables["sku_slack"].get((t, k), 0)
                     == self.customer.demand.get((t, k), 0),
                     name=constr_name,
                 )
@@ -488,7 +486,6 @@ class Pricing(object):
         return
 
     def add_constr_open_relationship(self, t: int):
-        # lk：更改点2 加了这个函数
         for edge in self._iterate_edges():
             # sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
@@ -523,6 +520,14 @@ class Pricing(object):
                     <= self.variables["select_edge"][t, edge]
                 )
                 self.constrs["open_relationship"]["sku_select_edge"][
+                    (t, edge, k)
+                ] = constr
+
+                constr = self.model.addConstr(
+                    self.variables["sku_flow"][t, edge, k]
+                    <= 1e10 * self.variables["sku_select_edge"][t, edge, k]
+                )
+                self.constrs["open_relationship"]["sku_flow_select"][
                     (t, edge, k)
                 ] = constr
         # todo
@@ -620,10 +625,14 @@ class Pricing(object):
         obj = 0.0
         for t in range(self.T):
             obj = obj + self.cal_sku_transportation_cost(t)
-            obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
+            if self.arg.backorder:
+                obj = obj + self.cal_sku_backlogged_demand_cost(t)
+            else:
+                obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
         if self.bool_fixed_cost:
             obj = obj + self.cal_fixed_node_cost()
-        self.obj["fixed_node_cost"] = 0
+        else:
+            self.obj["fixed_node_cost"] = 0
 
         return obj
 
@@ -654,6 +663,7 @@ class Pricing(object):
         self.obj_types = {
             "transportation_cost": {"index": "(t, edge)"},
             "unfulfilled_demand_cost": {"index": "(t, c, k)"},
+            "backlogged_demand_cost": {"index": "(t, c, k)"},
             "fixed_node_cost": {"index": "(t)"},
         }
         for obj in self.obj_types.keys():
@@ -708,21 +718,26 @@ class Pricing(object):
 
         return transportation_cost
 
+    def cal_sku_backlogged_demand_cost(self, t: int):
+        backlogged_demand_cost = 0.0
+        for k in self.sku_list:
+            backlogged_demand_cost += (
+                    self.arg.unfulfill_sku_unit_cost
+                    * self.variables["sku_backorder"].get((t, k), 0)
+            )
+        self.obj["backlogged_demand_cost"][t] = backlogged_demand_cost
+        return backlogged_demand_cost
+
     def cal_sku_unfulfilled_demand_cost(self, t: int):
         unfulfilled_node_cost = 0.0
-        if self.customer.has_demand(t):
-            for k in self.customer.demand_sku[t]:
-                # if self.customer.unfulfill_sku_unit_cost is not None:
-                #     unfulfilled_sku_unit_cost = self.customer.unfulfill_sku_unit_cost[
-                #         (t, k)
-                #     ]
-                # else:
-                # TODO:diversity
-                unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
-                unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables[
-                    "sku_backorder"
-                ].get((t, k), 0)
-            self.obj["unfulfilled_demand_cost"][(t, k)] = unfulfilled_node_cost
+        # if self.customer.has_demand(t):
+        for k in self.sku_list:
+            unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+            unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables[
+                "sku_slack"
+            ].get((t, k), 0)
+        self.obj["unfulfilled_demand_cost"][t] = unfulfilled_node_cost
+
         return unfulfilled_node_cost
 
     def cal_fixed_node_cost(self):

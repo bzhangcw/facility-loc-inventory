@@ -292,10 +292,10 @@ def add_attr(edge_list, node_list, arg, const):
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-        lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
-        for e in edge_list:
-            if e.idx in lb_inter["lb"]:
-                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+        # lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
+        # for e in edge_list:
+        #     if e.idx in lb_inter["lb"]:
+        #         e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
                 # print(f"setting {e.idx} to {e.variable_lb}")
     if arg.node_lb == 1:
         lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")

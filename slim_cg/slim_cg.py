@@ -74,6 +74,7 @@ class NetworkColumnGenerationSlim(object):
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
+        self.partial_obj = {t: 0 for t in range(self.arg.T)}
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, Optional[ray.actor.ActorHandle, Pricing]] = {}
         # @note: new,
@@ -166,6 +167,7 @@ class NetworkColumnGenerationSlim(object):
         """
         subgraph = self.subgraph[customer]
         arg = self.arg
+        arg.full_sku_list = self.full_sku_list
         model_name = customer.idx + "_oracle"
 
         if self.init_ray:
@@ -190,7 +192,6 @@ class NetworkColumnGenerationSlim(object):
         """
         # self.rmp_model.setParam("LpMethod", 2)
         self.rmp_model.setParam("Crossover", 0)
-
         self.solver.solve()
         self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
 
@@ -254,7 +255,12 @@ class NetworkColumnGenerationSlim(object):
         }
         unfulfilled_cost = 0.0
         for t in range(self.arg.T):
-            unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
+            if self.arg.backorder:
+                # self.partial_obj[t] += self.init_sku_backlogged_demand_cost(t, customer)
+                unfulfilled_cost += self.init_sku_backlogged_demand_cost(t, customer)
+                # print(t,customer,unfulfilled_cost)
+            else:
+                unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
         _vals["beta"] = unfulfilled_cost
         _vals["transportation_cost"] = 0
         _vals["unfulfilled_demand_cost"] = unfulfilled_cost
@@ -264,10 +270,10 @@ class NetworkColumnGenerationSlim(object):
         unfulfill_demand_cost = 0.0
         if customer.has_demand(t):
             for k in customer.demand_sku[t]:
-                if customer.unfulfill_sku_unit_cost is not None:
-                    unfulfill_sku_unit_cost = customer.unfulfill_sku_unit_cost[(t, k)]
-                else:
-                    unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+                # if customer.unfulfill_sku_unit_cost is not None:
+                #     unfulfill_sku_unit_cost = customer.unfulfill_sku_unit_cost[(t, k)]
+                # else:
+                unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
 
                 unfulfill_node_sku_cost = unfulfill_sku_unit_cost * customer.demand.get(
                     (t, k), 0
@@ -275,6 +281,15 @@ class NetworkColumnGenerationSlim(object):
                 unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_node_sku_cost
 
         return unfulfill_demand_cost
+
+    def init_sku_backlogged_demand_cost(self, t: int, customer: Customer):
+        backlogged_demand_cost = 0.0
+        for v in range(t+1):
+            for k in self.full_sku_list:
+                backlogged_demand_cost += self.arg.unfulfill_sku_unit_cost * customer.demand.get(
+                    (v, k), 0
+                )
+        return backlogged_demand_cost
 
     def run(self):
         """
@@ -300,6 +315,14 @@ class NetworkColumnGenerationSlim(object):
                 init_col = self.init_column(customer)
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
+            # for t in range(self.arg.T):
+            #     print(t, self.partial_obj[t])
+            #     demand = 0
+            #     for customer in self.customer_list:
+            #         for k in self.full_sku_list:
+            #             demand += customer.demand.get((t, k), 0)
+            #     print(t, demand)
+
 
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
@@ -436,12 +459,10 @@ class NetworkColumnGenerationSlim(object):
                 )
                 lp_objective = self.rmp_model.objval
 
-                # if self.arg.check_rmp_mip:
-                #     if int(self.iter) % self.arg.rmp_mip_iter == 0:
                 if self.arg.check_rmp_mip:
                     if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
-                    ):
+                    ) or (not added):
                         model = self.rmp_model
                         self.rmp_oracle.switch_to_milp()
                         print("-----Solve MIP_RMP-----")

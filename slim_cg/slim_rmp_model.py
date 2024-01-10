@@ -216,22 +216,24 @@ class DNPSlim(DNP):
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                # "ub": 0,
+                # "ub": self.solver_constant.INFINITY,
+                "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
+                # "ub": self.solver_constant.INFINITY,
+                "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_delivery": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
+                # "ub": self.solver_constant.INFINITY,
+                "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "z",
                 "index": "(t, warehouse, k)",
@@ -239,7 +241,8 @@ class DNPSlim(DNP):
             "sku_inventory": {
                 # "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
+                # "ub": self.solver_constant.INFINITY,
+                "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
@@ -291,7 +294,6 @@ class DNPSlim(DNP):
 
         # periods
         for t in range(self.T):
-            # edges
             for e, edge in self._iterate_no_c_edges():
                 # select edge (i,j) at t
                 if self.bool_covering:
@@ -326,16 +328,6 @@ class DNPSlim(DNP):
                         # amount of sku k stored on node i at t
                         idx["sku_inventory"].append((t, node, k))
                         idx["sku_delivery"].append((t, node, k))
-                    elif node.type == const.CUSTOMER:
-                        # demand of sku k not fulfilled on node i at t
-                        if node.has_demand(t, k):
-                            idx["sku_demand_slack"].append((t, node, k))
-                            if self.arg.backorder:
-                                self.var_types["sku_demand_slack"]["ub"].append(1e8)
-                            else:
-                                self.var_types["sku_demand_slack"]["ub"].append(
-                                    node.demand[t, k]
-                                )
 
         # for initializaiton in CG
         self.var_idx = {}
@@ -370,10 +362,18 @@ class DNPSlim(DNP):
     def switch_to_milp(self):
         for v in self.binaries:
             v.setType(COPT.BINARY)
+        variables = self.model.getVars()
+        for v in variables:
+            if v.getName().startswith("lambda"):
+                v.setType(COPT.BINARY)
 
     def switch_to_lp(self):
         for v in self.binaries:
             v.setType(COPT.CONTINUOUS)
+        variables = self.model.getVars()
+        for v in variables:
+            if v.getName().startswith("lambda"):
+                v.setType(COPT.CONTINUOUS)
 
     def add_constraints(self):
         if self.bool_capacity:
@@ -520,7 +520,7 @@ class DNPSlim(DNP):
 
                 constr = self.model.addConstr(
                     self.variables["sku_flow"][t, edge, k]
-                    <= 1e6 * self.variables["sku_select_edge"][t, edge, k]
+                    <= 1e10 * self.variables["sku_select_edge"][t, edge, k]
                 )
                 self.constrs["open_relationship"]["sku_flow_select"][
                     (t, edge, k)
@@ -714,7 +714,7 @@ class DNPSlim(DNP):
             # obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
             obj = obj + self.cal_sku_transportation_cost(t)
-            obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
+            # obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
 
         if self.bool_fixed_cost:
             obj += self.cal_fixed_node_cost()
@@ -858,27 +858,48 @@ class DNPSlim(DNP):
 
         return transportation_cost
 
-    def cal_sku_unfulfilled_demand_cost(self, t: int):
-        unfulfilled_demand_cost = 0.0
-        for node in self._iterate_no_c_nodes():
-            if node.type == const.CUSTOMER:
-                unfulfilled_node_cost = 0.0
-                if node.has_demand(t):
-                    for k in node.demand_sku[t]:
-                        # if node.unfulfill_sku_unit_cost is not None:
-                        #     unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
-                        #         (t, k)
-                        #     ]
-                        # else:
-                        # TODO:diversity
-                        unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
-                        unfulfilled_node_cost += (
-                            unfulfilled_sku_unit_cost
-                            * self.variables["sku_demand_slack"][(t, node, k)]
-                        )
-                    unfulfilled_demand_cost += unfulfilled_node_cost
-        self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
-        return unfulfilled_demand_cost
+    # def cal_sku_unfulfilled_demand_cost(self, t: int):
+    #     unfulfilled_demand_cost = 0.0
+    #     for node in self._iterate_no_c_nodes():
+    #         if node.type == const.CUSTOMER:
+    #             unfulfilled_node_cost = 0.0
+    #             if node.has_demand(t):
+    #                 for k in node.demand_sku[t]:
+    #                     # if node.unfulfill_sku_unit_cost is not None:
+    #                     #     unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
+    #                     #         (t, k)
+    #                     #     ]
+    #                     # else:
+    #                     # TODO:diversity
+    #                     unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+    #                     unfulfilled_node_cost += (
+    #                         unfulfilled_sku_unit_cost
+    #                         * self.variables["sku_demand_slack"][(t, node, k)]
+    #                     )
+    #                 unfulfilled_demand_cost += unfulfilled_node_cost
+    #     self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
+    #     return unfulfilled_demand_cost
+    # def cal_sku_unfulfilled_demand_cost(self, t: int):
+    #     unfulfilled_demand_cost = 0.0
+    #     for node in self._iterate_no_c_nodes():
+    #         if node.type == const.CUSTOMER:
+    #             unfulfilled_node_cost = 0.0
+    #             if node.has_demand(t):
+    #                 for k in node.demand_sku[t]:
+    #                     # if node.unfulfill_sku_unit_cost is not None:
+    #                     #     unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
+    #                     #         (t, k)
+    #                     #     ]
+    #                     # else:
+    #                     # TODO:diversity
+    #                     unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+    #                     unfulfilled_node_cost += (
+    #                         unfulfilled_sku_unit_cost
+    #                         * self.variables["sku_demand_slack"][(t, node, k)]
+    #                     )
+    #                 unfulfilled_demand_cost += unfulfilled_node_cost
+    #     self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
+    #     return unfulfilled_demand_cost
 
     def cal_fixed_node_cost(self):
         fixed_node_cost = 0.0
