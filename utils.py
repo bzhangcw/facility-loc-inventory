@@ -58,7 +58,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 0
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -73,7 +73,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 0
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -88,7 +88,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -102,7 +102,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -116,7 +116,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -130,7 +130,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -144,7 +144,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -158,7 +158,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 1

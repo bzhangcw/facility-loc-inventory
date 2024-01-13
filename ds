@@ -1,0 +1,6 @@
+python rounding.py --conf_label 8 --T 7 --pick_instance 2 --backorder 0&> 0inv_8_7_2_0.log
+python rounding.py --conf_label 8 --T 7 --pick_instance 2 --backorder 1&> 0inv_8_7_2_1.log
+python rounding.py --conf_label 8 --T 7 --pick_instance 3 --backorder 0&> 0inv_8_7_3_0.log
+python rounding.py --conf_label 8 --T 7 --pick_instance 3 --backorder 1&> 0inv_8_7_3_1.log
+python rounding.py --conf_label 8 --T 7 --pick_instance 4 --backorder 0&> 0inv_8_7_4_0.log
+python rounding.py --conf_label 8 --T 7 --pick_instance 4 --backorder 1&> 0inv_8_7_4_1.log

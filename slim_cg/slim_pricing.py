@@ -50,7 +50,7 @@ class PricingWorker:
         self.arg = arg
         self.cus_list = cus_list
         self.DNP_dict = {}
-        self.bool_covering = bool_covering
+        self.bool_covering = self.arg.covering
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
         self.solver = solver
@@ -310,8 +310,8 @@ class Pricing(object):
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
-                    # "ub": self.solver_constant.INFINITY,
-                    "ub": 0,
+                    "ub": self.solver_constant.INFINITY,
+                    # "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
                     "index": "(t, edge, k)",
@@ -342,8 +342,8 @@ class Pricing(object):
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
-                    # "ub": self.solver_constant.INFINITY,
-                    "ub": 0,
+                    "ub": self.solver_constant.INFINITY,
+                    # "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
                     "index": "(t, edge, k)",
@@ -468,17 +468,24 @@ class Pricing(object):
         for k in self.sku_list:
             constr_name = f"flow_conservation_{t}_{k.idx}"
             if self.arg.backorder:
-                constr = self.solver.addConstr(
-                    self.variables["sku_flow"].sum(t, edges, k)
-                    + self.variables["sku_backorder"][t, k]
-                    == self.variables["sku_backorder"].get((t - 1, k), 0)
-                    + self.customer.demand.get((t, k), 0),
-                    name=constr_name,
-                )
+                if t == 0:
+                    constr = self.solver.addConstr(
+                        self.variables["sku_flow"].sum(t, edges, k)
+                        + self.variables["sku_backorder"][(t, k)]
+                        == self.customer.demand.get((t, k), 0),
+                        name=constr_name,
+                    )
+                else:
+                    constr = self.solver.addConstr(
+                        self.variables["sku_flow"].sum(t, edges, k)
+                        + self.variables["sku_backorder"][(t, k)]
+                        == self.customer.demand.get((t, k), 0)+ self.variables["sku_backorder"][(t-1, k)],
+                        name=constr_name,
+                    )
             else:
                 constr = self.solver.addConstr(
                     self.variables["sku_flow"].sum(t, edges, k)
-                    + self.variables["sku_slack"].get((t, k), 0)
+                    + self.variables["sku_slack"][(t, k)]
                     == self.customer.demand.get((t, k), 0),
                     name=constr_name,
                 )

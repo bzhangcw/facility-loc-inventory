@@ -142,8 +142,8 @@ class Param:
 
         parser.add_argument(
             "--backorder",
-            type=bool,
-            default=True,
+            type=int,
+            default=0,
             help="""
             whether to allow backorder, inventory can be true if backorder allowed
             """,

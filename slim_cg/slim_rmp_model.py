@@ -216,24 +216,24 @@ class DNPSlim(DNP):
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                # "ub": self.solver_constant.INFINITY,
-                "ub": 0,
+                "ub": self.solver_constant.INFINITY,
+                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                # "ub": self.solver_constant.INFINITY,
-                "ub": 0,
+                "ub": self.solver_constant.INFINITY,
+                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_delivery": {
                 "lb": 0,
-                # "ub": self.solver_constant.INFINITY,
-                "ub": 0,
+                "ub": self.solver_constant.INFINITY,
+                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "z",
                 "index": "(t, warehouse, k)",
@@ -241,20 +241,20 @@ class DNPSlim(DNP):
             "sku_inventory": {
                 # "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
                 "lb": 0,
-                # "ub": self.solver_constant.INFINITY,
-                "ub": 0,
+                "ub": self.solver_constant.INFINITY,
+                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
             },
-            "sku_demand_slack": {
-                "lb": 0,
-                "ub": [],  # TBD
-                # "ub": self.solver_constant.INFINITY,
-                "vtype": self.solver_constant.CONTINUOUS,
-                "nameprefix": "s",
-                "index": "(t, customer, k)",
-            },
+            # "sku_demand_slack": {
+            #     "lb": 0,
+            #     "ub": [],  # TBD
+            #     # "ub": self.solver_constant.INFINITY,
+            #     "vtype": self.solver_constant.CONTINUOUS,
+            #     "nameprefix": "s",
+            #     "index": "(t, customer, k)",
+            # },
         }
 
         if self.bool_covering:

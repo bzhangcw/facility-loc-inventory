@@ -349,24 +349,24 @@ class DNP:
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                # "ub": COPT.INFINITY,
-                "ub":0,
+                "ub": COPT.INFINITY,
+                # "ub":0,
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                # "ub": COPT.INFINITY,
-                "ub":0,
+                "ub": COPT.INFINITY,
+                # "ub":0,
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_inventory": {
                 "lb": 0,
-                # "ub": COPT.INFINITY,
-                "ub":0,
+                "ub": COPT.INFINITY,
+                # "ub":0,
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
@@ -561,7 +561,7 @@ class DNP:
 
     def add_constr_flow_conservation(self, t: int):
         for node in self.network.nodes:
-            sku_list = node.get_node_sku_list(t, self.full_sku_list)
+            sku_list = self.full_sku_list
             in_edges = get_in_edges(self.network, node)
             out_edges = get_out_edges(self.network, node)
             for k in sku_list:
@@ -603,7 +603,7 @@ class DNP:
                     )
 
                 elif node.type == const.CUSTOMER:
-                    demand = node.demand.loc[(t, k)]
+                    demand = node.demand.get((t,k),0)
                     if self.arg.backorder:
                         if t == 0:
                             constr = self.model.addConstr(

@@ -36,9 +36,6 @@ class NetworkColumnGenerationSlim(object):
         network: nx.DiGraph,
         customer_list: List[Customer],
         full_sku_list: List[SKU] = None,
-        bool_covering=False,
-        bool_edge_lb=False,
-        bool_node_lb=False,
         max_iter=500,
         init_primal=None,
         init_sweeping=True,
@@ -398,7 +395,7 @@ class NetworkColumnGenerationSlim(object):
                             if oracle.model.status == self.solver_constant.INFEASIBLE:
                                 self._logger.info("oracle is infeasible")
                                 oracle.model.computeIIS()
-                                oracle.model.write("1109/oracle{}.iis".format(customer))
+                                oracle.model.write("oracle{}.iis".format(customer))
                                 print("iis written")
 
                     if self.init_ray:
