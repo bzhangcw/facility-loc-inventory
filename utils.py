@@ -167,8 +167,16 @@ def configuration(conf_label, arg):
 
 def scale(pick_instance, datapath, arg):
     logger.info(f"time scale {arg.T}")
-    if pick_instance == 1:
-        # 只有一个customer的成功的案例
+    if pick_instance == 0:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=20,
+            plant_num=20,
+            warehouse_num=10,
+            customer_num=1,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
             sku_num=1,
@@ -222,7 +230,7 @@ def scale(pick_instance, datapath, arg):
             customer_num=519,
             one_period=(True if arg.T == 1 else False),
         )
-    elif pick_instance == 7:
+    elif pick_instance == 8:
         cfg = dict(
             data_dir=datapath,
             sku_num=141,
@@ -232,7 +240,7 @@ def scale(pick_instance, datapath, arg):
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
-    elif pick_instance == 8:
+    elif pick_instance == 7:
         cfg = dict(
             data_dir=datapath,
             sku_num=141,

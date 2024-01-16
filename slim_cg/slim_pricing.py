@@ -306,11 +306,12 @@ class Pricing(object):
         add variables
         """
         if self.bool_covering:
-            # lk：更改点1-如果不加lowerbound约束 子问题的T-C网络中仍然是需要做open relationship的 当然 open relationship必然对应cost 如果cost都是0那干脆可以不用考虑open关系
             self.var_types = {
                 "sku_flow": {
                     "lb": 0,
                     "ub": self.solver_constant.INFINITY,
+                    # "lb": [],
+                    # "ub": [],
                     # "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
@@ -343,6 +344,8 @@ class Pricing(object):
                 "sku_flow": {
                     "lb": 0,
                     "ub": self.solver_constant.INFINITY,
+                    # "lb": [],
+                    # "ub": [],
                     # "ub": 0,
                     "vtype": self.solver_constant.CONTINUOUS,
                     "nameprefix": "w",
@@ -399,6 +402,28 @@ class Pricing(object):
                 for k in self.sku_list:
                     # flow of sku k on edge (i,j) at t
                     idx["sku_flow"].append((t, edge, k))
+                    # debug determine delivery
+                    # if str(k) == 'SKU_Y000020':
+                    #     if t == 0 or t == 2:
+                    #         if edge.end.type == const.CUSTOMER:
+                    #             if str(edge.start) == 'T0020':
+                    #                 self.var_types["sku_flow"]["lb"].append(14.30672209)
+                    #                 self.var_types["sku_flow"]["ub"].append(14.30672209)
+                    #             elif str(edge.start) == 'T0021':
+                    #                 self.var_types["sku_flow"]["lb"].append(83.8034806)
+                    #                 self.var_types["sku_flow"]["ub"].append(83.8034806)
+                    #             else:
+                    #                 self.var_types["sku_flow"]["lb"].append(0)
+                    #                 self.var_types["sku_flow"]["ub"].append(0)
+                    #         else:
+                    #             self.var_types["sku_flow"]["lb"].append(0)
+                    #             self.var_types["sku_flow"]["ub"].append(0)
+                    #     else:
+                    #         self.var_types["sku_flow"]["lb"].append(0)
+                    #         self.var_types["sku_flow"]["ub"].append(0)
+                    # else:
+                    #     self.var_types["sku_flow"]["lb"].append(0)
+                    #     self.var_types["sku_flow"]["ub"].append(0)
         # for initialization in CG
         self.var_idx = {}
         for var in idx.keys():
@@ -479,7 +504,7 @@ class Pricing(object):
                     constr = self.solver.addConstr(
                         self.variables["sku_flow"].sum(t, edges, k)
                         + self.variables["sku_backorder"][(t, k)]
-                        == self.customer.demand.get((t, k), 0)+ self.variables["sku_backorder"][(t-1, k)],
+                        == self.customer.demand.get((t, k), 0) + self.variables["sku_backorder"][(t-1, k)],
                         name=constr_name,
                     )
             else:
@@ -659,7 +684,6 @@ class Pricing(object):
         """
         Use dual variables to calculate the reduced cost
         """
-        # lk：extra_objective可以重新check一下
 
         obj = self.original_obj + self.extra_objective(customer, dual_packs)
 
@@ -721,7 +745,7 @@ class Pricing(object):
 
             transportation_cost = transportation_cost + edge_transportation_cost
 
-            self.obj["transportation_cost"][(t, edge)] = edge_transportation_cost
+        self.obj["transportation_cost"][t] = transportation_cost
 
         return transportation_cost
 
@@ -730,7 +754,7 @@ class Pricing(object):
         for k in self.sku_list:
             backlogged_demand_cost += (
                     self.arg.unfulfill_sku_unit_cost
-                    * self.variables["sku_backorder"].get((t, k), 0)
+                    * self.variables["sku_backorder"][(t, k)]
             )
         self.obj["backlogged_demand_cost"][t] = backlogged_demand_cost
         return backlogged_demand_cost
@@ -804,6 +828,12 @@ class Pricing(object):
             return v
         return v.getValue()
 
+    def _query_a_expr_or_float_or_constraints(v):
+        if type(v) is not float:
+            return v.getExpr().getValue()
+        else:
+            return v
+
     def eval_helper(self):
         # TOCHeck：column的时候只有sku_flow和beta
         _vals = {}
@@ -811,25 +841,41 @@ class Pricing(object):
         _vals["beta"] = self._query_a_expr_or_float_or_variable(
             self.columns_helpers["beta"]
         )
-        # if type( self.columns_helpers["transportation_cost"]) != float:
-        #     _vals["transportation_cost"] = self._query_a_expr_or_float_or_variable(
-        #         self.columns_helpers["transportation_cost"]
-        #     )
+        if type(self.columns_helpers["transportation_cost"]) != float:
+            transportation_cost = 0
+            for t in self.columns_helpers["transportation_cost"].keys():
+                z = self.columns_helpers["transportation_cost"][t]
+                if type(z) is not float:
+                    period_transportation_cost = z.getExpr().getValue()
+                else:
+                    period_transportation_cost = z
+                transportation_cost = period_transportation_cost + transportation_cost
+            _vals["transportation_cost"] = transportation_cost
+        else:
+            # print("tr",self.columns_helpers["transportation_cost"])
+            _vals["transportation_cost"] = 0
+        _vals["unfulfilled_demand_cost"] = {t : 0 for t in range(self.T)}
+        if type(self.columns_helpers["unfulfilled_demand_cost"]) != float:
+            unfulfilled_demand_cost = 0
+            for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
+                z = self.columns_helpers["unfulfilled_demand_cost"][t]
+                if type(z) is not float:
+                    period_unfulfilled_demand_cost = z.getExpr().getValue()
+                else:
+                    period_unfulfilled_demand_cost = z
+                # print(t,z)
+                unfulfilled_demand_cost = unfulfilled_demand_cost + period_unfulfilled_demand_cost
+                _vals["unfulfilled_demand_cost"][t] = period_unfulfilled_demand_cost
+        else:
+            for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
+                _vals["unfulfilled_demand_cost"][t] = 0
 
-        # _vals["unfulfilled_demand_cost"] = self._query_a_expr_or_float_or_variable(
-        #     self.columns_helpers["unfulfilled_demand_cost"]
-        # )
-
-        # _vals["unfulfilled_demand_cost"] = self._query_a_expr_or_float_or_variable(
-
-        # lk
         return _vals
 
     def init_col_helpers(self):
         """
         Initialize the column helpers to extract frequently
             needed quantities for the subproblems
-
         """
         col_helper = {}
         try:
@@ -837,7 +883,18 @@ class Pricing(object):
         except:
             logger.warning(f"customer {self.customer} has null objective")
             col_helper["beta"] = 0.0
-
+        try:
+            col_helper["transportation_cost"] = self.obj["transportation_cost"]
+        except:
+            col_helper["transportation_cost"] = 0.0
+        if self.arg.backorder:
+            label = "backlogged_demand_cost"
+        else:
+            label = "unfulfilled_demand_cost"
+        try:
+            col_helper["unfulfilled_demand_cost"] = self.obj[label]
+        except:
+            col_helper["unfulfilled_demand_cost"] = 0.0
         self.columns_helpers = col_helper
         self.columns = []
 

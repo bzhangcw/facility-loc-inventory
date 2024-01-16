@@ -371,14 +371,6 @@ class DNP:
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
             },
-            # "sku_demand_slack": {
-            #     "lb": 0,
-            #     # "ub": [],  # TBD
-            #     "ub": 1e8,
-            #     "vtype": COPT.CONTINUOUS,
-            #     "nameprefix": "s",
-            #     "index": "(t, customer, k)",
-            # },
         }
         if self.arg.backorder:
             self.var_types["sku_backorder"] = {
@@ -437,12 +429,11 @@ class DNP:
             # edges
             for e in self.network.edges:
                 edge = self.network.edges[e]["object"]
-
-                # select edge (i,j) at t
                 if self.bool_covering:
                     idx["select_edge"].append((t, edge))
 
-                sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                # sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                sku_list = self.full_sku_list
 
                 for k in sku_list:
                     # sku k select edge (i,j) at t
@@ -566,10 +557,10 @@ class DNP:
             out_edges = get_out_edges(self.network, node)
             for k in sku_list:
                 constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
-
                 if node.type == const.PLANT:
                     constr = self.model.addConstr(
-                        self.variables["sku_production"][t, node, k]
+                        # self.variables["sku_production"][t, node, k]
+                        self.variables["sku_production"].get((t, node, k), 0)
                         - self.variables["sku_flow"].sum(t, out_edges, k)
                         == 0,
                         name=constr_name,
@@ -603,7 +594,7 @@ class DNP:
                     )
 
                 elif node.type == const.CUSTOMER:
-                    demand = node.demand.get((t,k),0)
+                    demand = node.demand.get((t,k), 0)
                     if self.arg.backorder:
                         if t == 0:
                             constr = self.model.addConstr(
@@ -628,6 +619,8 @@ class DNP:
                             == demand - self.variables["sku_slack"][(t, node, k)],
                             name=constr_name,
                         )
+                else:
+                    continue
 
                 self.constrs["flow_conservation"][(t, node, k)] = constr
 
@@ -876,6 +869,7 @@ class DNP:
                 obj = obj + self.cal_sku_backlogged_demand_cost(t)
             else:
                 obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
+            # debug: print demand and unfulfilled demand
             # for t in range(self.arg.T):
             #     demand = 0
             #     for node in self.network.nodes:
@@ -926,6 +920,9 @@ class DNP:
             "producing_cost": {"index": "(t, plant)"},
             "holding_cost": {"index": "(t, warehouse)"},
             "transportation_cost": {"index": "(t, edge)"},
+            # debug
+            "transportation_pricing_cost": {"index": "(t, edge)"},
+            "transportation_master_cost": {"index": "(t, edge)"},
             "unfulfilled_demand_cost": {"index": "(t, customer)"},
             "backlogged_demand_cost": {"index": "(t, customer)"},
             "fixed_node_cost": {"index": "(t, plant / warehouse, k)"},
@@ -994,7 +991,8 @@ class DNP:
 
     def cal_sku_transportation_cost(self, t: int):
         transportation_cost = 0.0
-
+        transportation_pricing_cost = 0.0
+        transportation_master_cost = 0.0
         for e in self.network.edges:
             edge = self.network.edges[e]["object"]
             edge_transportation_cost = 0.0
@@ -1018,10 +1016,17 @@ class DNP:
                         + transportation_sku_unit_cost
                         * self.variables["sku_flow"][t, edge, k]
                 )
+                if edge.end.type == const.CUSTOMER:
+                    transportation_pricing_cost = transportation_pricing_cost + edge_transportation_cost
+                else:
+                    transportation_master_cost = transportation_master_cost + edge_transportation_cost
 
             transportation_cost = transportation_cost + edge_transportation_cost
 
         self.obj["transportation_cost"][t] = transportation_cost
+        # for debug
+        self.obj["transportation_pricing_cost"][t] = transportation_pricing_cost
+        self.obj["transportation_master_cost"][t] = transportation_master_cost
 
         return transportation_cost
 

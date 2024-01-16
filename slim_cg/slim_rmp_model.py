@@ -652,17 +652,6 @@ class DNPSlim(DNP):
                     self.index_for_dual_var += 1
         return
 
-    def add_constr_flow_in_upper(self, t: int):
-        for node in self.network.nodes:
-            if node.type == const.WAREHOUSE:
-                in_edges = get_in_edges(self.network, node)
-                inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
-                self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
-                )
-                self.index_for_dual_var += 1
-        return
-
     def add_constr_node_lb(self, t: int):
         for node in self._iterate_no_c_nodes():
             if node.type == const.PLANT:
@@ -692,14 +681,10 @@ class DNPSlim(DNP):
     def add_constr_flow_in_upper(self, t: int):
         for node in self._iterate_no_c_nodes():
             if node.type == const.WAREHOUSE:
-                in_inventory_sum = 0
-                for e in self.network.edges:
-                    edge = self.network.edges[e]["object"]
-                    if edge.end == node:
-                        in_inventory_sum += self.variables["sku_flow"].sum(t, edge, "*")
-                self.constrs["in_upper"] = self.solver.addConstr(
-                    in_inventory_sum
-                    <= node.inventory_capacity * self.arg.in_upper_ratio
+                in_edges = get_in_edges(self.network, node)
+                inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
+                self.constrs["in_upper"][(t, node)] = self.model.addConstr(
+                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
                 )
                 self.index_for_dual_var += 1
         return
@@ -858,49 +843,6 @@ class DNPSlim(DNP):
 
         return transportation_cost
 
-    # def cal_sku_unfulfilled_demand_cost(self, t: int):
-    #     unfulfilled_demand_cost = 0.0
-    #     for node in self._iterate_no_c_nodes():
-    #         if node.type == const.CUSTOMER:
-    #             unfulfilled_node_cost = 0.0
-    #             if node.has_demand(t):
-    #                 for k in node.demand_sku[t]:
-    #                     # if node.unfulfill_sku_unit_cost is not None:
-    #                     #     unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
-    #                     #         (t, k)
-    #                     #     ]
-    #                     # else:
-    #                     # TODO:diversity
-    #                     unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
-    #                     unfulfilled_node_cost += (
-    #                         unfulfilled_sku_unit_cost
-    #                         * self.variables["sku_demand_slack"][(t, node, k)]
-    #                     )
-    #                 unfulfilled_demand_cost += unfulfilled_node_cost
-    #     self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
-    #     return unfulfilled_demand_cost
-    # def cal_sku_unfulfilled_demand_cost(self, t: int):
-    #     unfulfilled_demand_cost = 0.0
-    #     for node in self._iterate_no_c_nodes():
-    #         if node.type == const.CUSTOMER:
-    #             unfulfilled_node_cost = 0.0
-    #             if node.has_demand(t):
-    #                 for k in node.demand_sku[t]:
-    #                     # if node.unfulfill_sku_unit_cost is not None:
-    #                     #     unfulfilled_sku_unit_cost = node.unfulfill_sku_unit_cost[
-    #                     #         (t, k)
-    #                     #     ]
-    #                     # else:
-    #                     # TODO:diversity
-    #                     unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
-    #                     unfulfilled_node_cost += (
-    #                         unfulfilled_sku_unit_cost
-    #                         * self.variables["sku_demand_slack"][(t, node, k)]
-    #                     )
-    #                 unfulfilled_demand_cost += unfulfilled_node_cost
-    #     self.obj["unfulfilled_demand_cost"][t] = unfulfilled_demand_cost
-    #     return unfulfilled_demand_cost
-
     def cal_fixed_node_cost(self):
         fixed_node_cost = 0.0
 
@@ -984,7 +926,6 @@ class DNPSlim(DNP):
         super().get_solution(data_dir, preserve_zeros)
 
     def fetch_dual_info(self):
-        # TODO：RMP的dual要都重新写一下或者check一下不知道这种分成三类的对不对'
 
         node_dual = {
             k: v.pi if v is not None else 0 for k, v in self.cg_binding_constrs.items()

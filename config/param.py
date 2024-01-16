@@ -29,6 +29,16 @@ class Param:
             type=int,
             default=0,
         )
+        parser.add_argument(
+            "--data_1219",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            "--check_cost_cg",
+            type=int,
+            default=0,
+        )
 
         parser.add_argument(
             "--pick_instance",

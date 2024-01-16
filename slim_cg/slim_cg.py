@@ -71,7 +71,7 @@ class NetworkColumnGenerationSlim(object):
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
-        self.partial_obj = {t: 0 for t in range(self.arg.T)}
+        self.obj = dict()
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, Optional[ray.actor.ActorHandle, Pricing]] = {}
         # @note: new,
@@ -179,7 +179,6 @@ class NetworkColumnGenerationSlim(object):
                 solver=self.solver_name,
             )  # for initial column, set obj = 0
             oracle.modeling(customer)
-            # oracle.write(f"{customer}.pricing.lp")
 
         return oracle
 
@@ -251,16 +250,18 @@ class NetworkColumnGenerationSlim(object):
             k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
         }
         unfulfilled_cost = 0.0
+        _vals["unfulfilled_demand_cost"] = {t: 0.0 for t in range(self.arg.T)}
         for t in range(self.arg.T):
             if self.arg.backorder:
                 # self.partial_obj[t] += self.init_sku_backlogged_demand_cost(t, customer)
                 unfulfilled_cost += self.init_sku_backlogged_demand_cost(t, customer)
-                # print(t,customer,unfulfilled_cost)
+                _vals["unfulfilled_demand_cost"][t] += self.init_sku_backlogged_demand_cost(t, customer)
             else:
                 unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
+                _vals["unfulfilled_demand_cost"][t] +=  self.init_sku_unfulfill_demand_cost(t, customer)
         _vals["beta"] = unfulfilled_cost
         _vals["transportation_cost"] = 0
-        _vals["unfulfilled_demand_cost"] = unfulfilled_cost
+        # _vals["unfulfilled_demand_cost"] = unfulfilled_cost
         return _vals
 
     def init_sku_unfulfill_demand_cost(self, t: int, customer: Customer):
@@ -312,14 +313,6 @@ class NetworkColumnGenerationSlim(object):
                 init_col = self.init_column(customer)
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
-            # for t in range(self.arg.T):
-            #     print(t, self.partial_obj[t])
-            #     demand = 0
-            #     for customer in self.customer_list:
-            #         for k in self.full_sku_list:
-            #             demand += customer.demand.get((t, k), 0)
-            #     print(t, demand)
-
 
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
@@ -334,11 +327,10 @@ class NetworkColumnGenerationSlim(object):
                     self.solve_rmp()
                 if self.rmp_model.status != self.solver_constant.OPTIMAL:
                     print(self.rmp_model.status, iter)
-                    self.rmp_model.write("rmp{}.lp".format(self.iter))
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     self.rmp_model.computeIIS()
-                    self.rmp_model.write("12.14/rmp.iis")
+                    self.rmp_model.write(f"rmp@{self.iter}.iis")
                 if CG_EXTRA_VERBOSITY:
                     self._logger.info("extra verbosity lp")
                     self.rmp_model.write(f"rmp@{self.iter}.lp")
@@ -455,7 +447,6 @@ class NetworkColumnGenerationSlim(object):
                     f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
                 )
                 lp_objective = self.rmp_model.objval
-
                 if self.arg.check_rmp_mip:
                     if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
@@ -474,7 +465,42 @@ class NetworkColumnGenerationSlim(object):
                         ### Reset
                         self.rmp_oracle.switch_to_lp()
                         print("Reset Over")
-
+                if self.arg.check_cost_cg:
+                    holding_cost_rmp = 0.0
+                    transportation_cost_rmp = 0.0
+                    self.rmp_oracle.obj['holding_cost'] = {}
+                    for t in self.rmp_oracle.obj['holding_cost'].keys():
+                        holding_cost_rmp += self.rmp_oracle.obj['holding_cost'][t].getExpr().getValue()
+                    for t in self.rmp_oracle.obj['transportation_cost'].keys():
+                        if type(self.rmp_oracle.obj['transportation_cost'][t]) is not float:
+                            transportation_cost_rmp += self.rmp_oracle.obj['transportation_cost'][t].getExpr().getValue()
+                    print("tr_rmp",transportation_cost_rmp)
+                    transportation_cost_from_customer = 0.0
+                    unfulfilled_cost_from_customer = {t:0 for t in range(self.arg.T)}
+                    variables = self.rmp_model.getVars()
+                    for v in variables:
+                        if v.getName().startswith('lambda'):
+                            # print(self.iter,v.getName())
+                            # print(v.getName().split('_')[1])
+                            for customer in self.columns.keys():
+                                if v.getName().split('_')[1] == str(customer):
+                                    print(v.getName())
+                                    print("lambda optimal value", v.x)
+                                    col_num = int(v.getName().split('_')[2])
+                                    print(self.columns[customer][col_num]['unfulfilled_demand_cost'])
+                                    print(self.columns[customer][col_num]['transportation_cost'])
+                                    # print("transportation_cost", self.columns[customer][0]['transportation_cost'])
+                                    # print("unfulfilled_demand_cost", self.columns[customer][0]['unfulfilled_demand_cost'])
+                                    transportation_cost_from_customer += v.x * self.columns[customer][col_num][
+                                        'transportation_cost']
+                                    for t in range(self.arg.T):
+                                        unfulfilled_cost_from_customer[t] += v.x * self.columns[customer][col_num]['unfulfilled_demand_cost'][t]
+                    print("tr_pricing", transportation_cost_from_customer)
+                    print("transportation_cost", transportation_cost_rmp + transportation_cost_from_customer)
+                    print("holding_cost", holding_cost_rmp)
+                    for t in range(self.arg.T):
+                        print("unfulfilled_demand_cost", t, unfulfilled_cost_from_customer[t])
+                    print("unfulfilled_demand_cost", unfulfilled_cost_from_customer)
                 if not added or self.iter >= self.max_iter:
                     self.red_cost = self.red_cost[: self.iter, :]
                     break
@@ -538,6 +564,7 @@ class NetworkColumnGenerationSlim(object):
                     name=f"lambda_{c.idx}_{len(self.columns[c])}",
                     lb=0.0,
                     ub=1.0,
+                    vtype=self.solver_constant.CONTINUOUS,
                     column=new_col,
                 )
             except Exception as e:
