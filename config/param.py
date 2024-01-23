@@ -18,9 +18,24 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
+        parser.add_argument(
+            "--rmp_mip",
+            type=int,
+            default=0,
+        )
         ##### 1. Basic parameters #####
         parser.add_argument(
             "--conf_label",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            "--data_1219",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            "--check_cost_cg",
             type=int,
             default=0,
         )
@@ -137,8 +152,8 @@ class Param:
 
         parser.add_argument(
             "--backorder",
-            type=bool,
-            default=True,
+            type=int,
+            default=0,
             help="""
             whether to allow backorder, inventory can be true if backorder allowed
             """,

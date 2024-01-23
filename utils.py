@@ -58,7 +58,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 0
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -73,7 +73,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 0
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -88,7 +88,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 0
+        # arg.backorder = 0
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -102,7 +102,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
@@ -116,7 +116,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -130,7 +130,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -144,7 +144,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 0
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
@@ -158,7 +158,7 @@ def configuration(conf_label, arg):
         arg.add_in_upper = 1
         # 3. Customization constraints
         arg.distance = 1
-        arg.backorder = 1
+        # arg.backorder = 1
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 1
@@ -167,8 +167,16 @@ def configuration(conf_label, arg):
 
 def scale(pick_instance, datapath, arg):
     logger.info(f"time scale {arg.T}")
-    if pick_instance == 1:
-        # 只有一个customer的成功的案例
+    if pick_instance == 0:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=20,
+            plant_num=20,
+            warehouse_num=10,
+            customer_num=1,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 1:
         cfg = dict(
             data_dir=datapath,
             sku_num=1,
@@ -222,7 +230,7 @@ def scale(pick_instance, datapath, arg):
             customer_num=519,
             one_period=(True if arg.T == 1 else False),
         )
-    elif pick_instance == 7:
+    elif pick_instance == 8:
         cfg = dict(
             data_dir=datapath,
             sku_num=141,
@@ -232,7 +240,7 @@ def scale(pick_instance, datapath, arg):
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
-    elif pick_instance == 8:
+    elif pick_instance == 7:
         cfg = dict(
             data_dir=datapath,
             sku_num=141,
@@ -292,10 +300,10 @@ def add_attr(edge_list, node_list, arg, const):
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-        lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
-        for e in edge_list:
-            if e.idx in lb_inter["lb"]:
-                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+        # lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
+        # for e in edge_list:
+        #     if e.idx in lb_inter["lb"]:
+        #         e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
                 # print(f"setting {e.idx} to {e.variable_lb}")
     if arg.node_lb == 1:
         lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
