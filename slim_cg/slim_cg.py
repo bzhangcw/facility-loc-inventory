@@ -324,12 +324,13 @@ class NetworkColumnGenerationSlim(object):
 
                 var_keys = []
                 for var_key in all_var_keys:
+                    # todo, why extend, this not working in non-ray mode.
                     var_keys.extend(var_key)
             else:
                 var_keys = []
                 for customer in tqdm(self.customer_list):
                     self.oracles[customer] = self.construct_oracle(customer)
-                    var_keys.extend(self.oracles[customer].get_var_keys("sku_flow"))
+                    var_keys.append(self.oracles[customer].get_var_keys("sku_flow"))
 
                     # init_col = self.init_column(customer)
                     # self.columns[customer] = []
