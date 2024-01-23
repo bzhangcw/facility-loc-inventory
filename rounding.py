@@ -111,25 +111,25 @@ if __name__ == "__main__":
     # # #
     # # # # ###############################################################
     # print("----------DCS Model------------")
-    # max_iter = 500
-    # init_primal = None
-    # init_dual = None
-    # init_ray = False
-    # # init_ray = True
-    # # num_workers = 4
-    # # num_cpus = 8
-    # np_cg = NCS(
-    #     arg,
-    #     network,
-    #     customer_list,
-    #     sku_list,
-    #     max_iter=max_iter,
-    #     # bool_covering= True,
-    #     init_primal=init_primal,
-    #     init_dual=init_dual,
-    #     init_ray=init_ray,
-    #     # num_workers=num_workers,
-    #     # num_cpus=num_cpus,
-    #     solver=solver,
-    # )
-    # np_cg.run()
+    max_iter = 500
+    init_primal = None
+    init_dual = None
+    init_ray = False
+    # init_ray = True
+    # num_workers = 4
+    # num_cpus = 8
+    np_cg = NCS(
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        # bool_covering= True,
+        init_primal=init_primal,
+        init_dual=init_dual,
+        init_ray=init_ray,
+        # num_workers=num_workers,
+        # num_cpus=num_cpus,
+        solver=solver,
+    )
+    np_cg.run()

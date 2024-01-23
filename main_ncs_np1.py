@@ -76,7 +76,7 @@ if __name__ == "__main__":
     init_primal = None
     init_dual = None
     # init_ray = False
-    init_ray = True
+    init_ray = False
     num_workers = 16
     num_cpus = 16
     np_cg = NCS(
