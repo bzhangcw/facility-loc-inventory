@@ -23,8 +23,8 @@ if __name__ == "__main__":
     # arg.conf_label = 1
     # arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
-    datapath = "data/data_0401_V4_1219.xlsx"
-    # datapath = "data/data_0401_0inv.xlsx"
+    # datapath = "data/data_0401_V4_1219.xlsx"
+    datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
     # arg.rmp_relaxation = 0
     # arg.pricing_relaxation = 1
@@ -56,14 +56,14 @@ if __name__ == "__main__":
     ##################### DNP #######################################
 
     solver = "COPT"
-    model = DNP(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.model.setParam("Threads", 8)
-    model.model.setParam("TimeLimit", 3600)
-    # model.model.setParam("LpMethod", 2)
-    model.model.setParam("Crossover", 0)
-    model.model.write(dnp_mps_name)
+    # model = DNP(arg, network)
+    # model.modeling()
+    # model.model.setParam("Logging", 1)
+    # model.model.setParam("Threads", 8)
+    # model.model.setParam("TimeLimit", 3600)
+    # # model.model.setParam("LpMethod", 2)
+    # model.model.setParam("Crossover", 0)
+    # model.model.write(dnp_mps_name)
 
     # model.model.solve()
 

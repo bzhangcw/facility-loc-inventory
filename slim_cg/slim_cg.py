@@ -358,7 +358,9 @@ class NetworkColumnGenerationSlim(object):
                 # if self.rmp_model.status != self.solver_constant.OPTIMAL:
                 #     print(self.rmp_model.status, iter)
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
-                    self._logger.info("initial column of RMP is infeasible")
+                    self._logger.info("RMP is infeasible")
+                    self.rmp_model.setParam("Logging", 1)
+                    self.rmp_model.write(f"rmp@{self.iter}.lp")
                     self.rmp_model.computeIIS()
                     self.rmp_model.write(f"rmp@{self.iter}.iis")
                 if CG_EXTRA_VERBOSITY:
@@ -444,55 +446,34 @@ class NetworkColumnGenerationSlim(object):
                                 print("iis written")
                     self._logger.info("column solving finished")
                     if self.init_ray:
-                        all_new_cols = ray.get(
-                            [
-                                worker.query_all_columns.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
-                        all_v = ray.get(
-                            [
-                                worker.get_all_model_objval.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
-                        all_model_status_list = ray.get(
-                            [
-                                worker.get_all_model_status.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
+                        new_cols = [
+                            cc
+                            for worker in self.worker_list
+                            for cc in ray.get(worker.query_all_columns.remote())
+                        ]
 
-                        new_cols = []
-                        v = []
-                        model_status_list = []
-                        for new_col, _v, _model_status in zip(
-                            all_new_cols, all_v, all_model_status_list
-                        ):
-                            new_cols.extend(new_col)
-                            v.extend(_v)
-                            model_status_list.extend(_model_status)
                     else:
                         new_cols = [
                             oracle.query_columns() for oracle in self.oracles.values()
                         ]
-                        v = [oracle.model.objval for oracle in self.oracles.values()]
-                        model_status_list = [
-                            oracle.model.status for oracle in self.oracles.values()
-                        ]
+                        # v = [oracle.model.objval for oracle in self.oracles.values()]
+                        # model_status_list = [
+                        #     oracle.model.status for oracle in self.oracles.values()
+                        # ]
                     self._logger.info("column generating finished")
                     for col_ind, customer in enumerate(self.customer_list):
-                        self.red_cost[self.iter, col_ind] = v[col_ind]
-                        added = (v[col_ind] < -1e-9 or dual_packs is None) or added
+                        _redcost = new_cols[col_ind]["objval"]
+                        _status = new_cols[col_ind]["status"]
+                        self.red_cost[self.iter, col_ind] = _redcost
+                        added = (_redcost < -1e-9 or dual_packs is None) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
-                        model_status = model_status_list[col_ind]
-                        if model_status == self.solver_constant.INTERRUPTED:
+                        if _status == self.solver_constant.INTERRUPTED:
                             bool_early_stop = True
                             self._logger.info("early terminated")
                             break
-                        if model_status == self.solver_constant.INFEASIBLE:
+                        if _status == self.solver_constant.INFEASIBLE:
                             self._logger.info("oracle is infeasible")
                     # modify for parallel
 

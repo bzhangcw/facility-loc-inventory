@@ -54,6 +54,7 @@ class PricingWorker:
         self.bool_edge_lb = bool_edge_lb
         self.bool_node_lb = bool_node_lb
         self.solver = solver
+        self.columns_dict = {}
 
         if solver == "COPT":
             self.solver_constant = CoptConstant
@@ -75,6 +76,7 @@ class PricingWorker:
             )
             oracle.modeling(customer)
             self.DNP_dict[customer] = oracle
+            self.columns_dict[customer] = oracle.column
 
     # for primal sweeping
     def del_constr_capacity(self, customer):
@@ -95,11 +97,14 @@ class PricingWorker:
     def query_columns(self, customer):
         return self.DNP_dict[customer].query_columns()
 
+    # def query_all_columns(self):
+    #     columns = []
+    #     for customer in self.cus_list:
+    #         columns.append(self.DNP_dict[customer].query_columns())
+    #     return columns
+
     def query_all_columns(self):
-        columns = []
-        for customer in self.cus_list:
-            columns.append(self.DNP_dict[customer].query_columns())
-        return columns
+        return [self.DNP_dict[customer].query_columns() for customer in self.cus_list]
 
     # for subproblem
     def model_reset(self, customer):
@@ -120,13 +125,13 @@ class PricingWorker:
                 continue
             self.DNP_dict[customer].update_objective(customer, dual_packs)
 
-
-    def update_objective_all_new(self, customer, iter, dual_series, dual_ws, dual_exists_customers):
-
+    def update_objective_all_new(
+        self, customer, iter, dual_series, dual_ws, dual_exists_customers
+    ):
         for customer in self.cus_list:
             if customer in self.skipped:
                 continue
-            
+
             if iter >= 1 and customer in dual_exists_customers:
                 dual_pack_this = (
                     dual_series[customer, :].to_dict(),
@@ -134,11 +139,8 @@ class PricingWorker:
                 )
             else:
                 dual_pack_this = None
-        
+
             self.DNP_dict[customer].update_objective(customer, dual_pack_this)
-
-
-
 
     def solve(self, customer):
         self.DNP_dict[customer].solve()
@@ -409,8 +411,6 @@ class Pricing(object):
                 for t in range(self.T):
                     # select edge (i,j) at t
                     idx["select_edge"].append((t, edge))
-                    # print(self.customer,self.sku_list)
-                    # print(self.customer,self.customer.get_node_sku_list(t, self.arg.full_sku_list))
                     for k in self.sku_list:
                         idx["sku_select_edge"].append((t, edge, k))
         # if self.arg.customer_backorder:
@@ -466,6 +466,13 @@ class Pricing(object):
                 vtype=param["vtype"],
                 nameprefix=f"{param['nameprefix']}_",
             )
+
+        # to avoid repeatedly open new mem for column
+        self.column = {}
+        self.column["sku_flow"] = {k: 0.0 for k in self.var_idx["sku_flow"].keys()}
+        self.column["beta"] = 0.0
+        self.column["transportation_cost"] = 0
+        self.column["unfulfilled_demand_cost"] = 0.0
 
     def get_var_keys(self, var_type):
         return self.var_idx[var_type].keys()
@@ -540,7 +547,8 @@ class Pricing(object):
                     constr = self.solver.addConstr(
                         self.variables["sku_flow"].sum(t, edges, k)
                         + self.variables["sku_backorder"][(t, k)]
-                        == self.customer.demand.get((t, k), 0) + self.variables["sku_backorder"][(t-1, k)],
+                        == self.customer.demand.get((t, k), 0)
+                        + self.variables["sku_backorder"][(t - 1, k)],
                         name=constr_name,
                     )
             else:
@@ -789,8 +797,8 @@ class Pricing(object):
         backlogged_demand_cost = 0.0
         for k in self.sku_list:
             backlogged_demand_cost += (
-                    self.arg.unfulfill_sku_unit_cost
-                    * self.variables["sku_backorder"][(t, k)]
+                self.arg.unfulfill_sku_unit_cost
+                * self.variables["sku_backorder"][(t, k)]
             )
         self.obj["backlogged_demand_cost"][t] = backlogged_demand_cost
         return backlogged_demand_cost
@@ -877,34 +885,41 @@ class Pricing(object):
         _vals["beta"] = self._query_a_expr_or_float_or_variable(
             self.columns_helpers["beta"]
         )
-        if type(self.columns_helpers["transportation_cost"]) != float:
-            transportation_cost = 0
-            for t in self.columns_helpers["transportation_cost"].keys():
-                z = self.columns_helpers["transportation_cost"][t]
-                if type(z) is not float:
-                    period_transportation_cost = z.getExpr().getValue()
-                else:
-                    period_transportation_cost = z
-                transportation_cost = period_transportation_cost + transportation_cost
-            _vals["transportation_cost"] = transportation_cost
-        else:
-            # print("tr",self.columns_helpers["transportation_cost"])
-            _vals["transportation_cost"] = 0
-        _vals["unfulfilled_demand_cost"] = {t : 0 for t in range(self.T)}
-        if type(self.columns_helpers["unfulfilled_demand_cost"]) != float:
-            unfulfilled_demand_cost = 0
-            for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
-                z = self.columns_helpers["unfulfilled_demand_cost"][t]
-                if type(z) is not float:
-                    period_unfulfilled_demand_cost = z.getExpr().getValue()
-                else:
-                    period_unfulfilled_demand_cost = z
-                # print(t,z)
-                unfulfilled_demand_cost = unfulfilled_demand_cost + period_unfulfilled_demand_cost
-                _vals["unfulfilled_demand_cost"][t] = period_unfulfilled_demand_cost
-        else:
-            for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
-                _vals["unfulfilled_demand_cost"][t] = 0
+        _vals["objval"] = self.model.objval
+        _vals["status"] = self.model.status
+        if CG_EXTRA_DEBUGGING:
+            if type(self.columns_helpers["transportation_cost"]) != float:
+                transportation_cost = 0
+                for t in self.columns_helpers["transportation_cost"].keys():
+                    z = self.columns_helpers["transportation_cost"][t]
+                    if type(z) is not float:
+                        period_transportation_cost = z.getExpr().getValue()
+                    else:
+                        period_transportation_cost = z
+                    transportation_cost = (
+                        period_transportation_cost + transportation_cost
+                    )
+                _vals["transportation_cost"] = transportation_cost
+            else:
+                # print("tr",self.columns_helpers["transportation_cost"])
+                _vals["transportation_cost"] = 0
+            _vals["unfulfilled_demand_cost"] = {t: 0 for t in range(self.T)}
+            if type(self.columns_helpers["unfulfilled_demand_cost"]) != float:
+                unfulfilled_demand_cost = 0
+                for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
+                    z = self.columns_helpers["unfulfilled_demand_cost"][t]
+                    if type(z) is not float:
+                        period_unfulfilled_demand_cost = z.getExpr().getValue()
+                    else:
+                        period_unfulfilled_demand_cost = z
+                    # print(t,z)
+                    unfulfilled_demand_cost = (
+                        unfulfilled_demand_cost + period_unfulfilled_demand_cost
+                    )
+                    _vals["unfulfilled_demand_cost"][t] = period_unfulfilled_demand_cost
+            else:
+                for t in self.columns_helpers["unfulfilled_demand_cost"].keys():
+                    _vals["unfulfilled_demand_cost"][t] = 0
 
         return _vals
 
@@ -936,6 +951,14 @@ class Pricing(object):
 
     def query_columns(self):
         new_col = self.eval_helper()
+
+        # new to avoid repeatedly open new mem for column
+        # for k, v in self.variables["sku_flow"].items():
+        #     self.column["sku_flow"][k] = v.x
+        # self.column["beta"] = self._query_a_expr_or_float_or_variable(
+        #     self.columns_helpers["beta"]
+        # )
+        self.column = new_col
 
         # visualize this column
         # oracle = cg_object.oracles[customer]
