@@ -114,7 +114,7 @@ if __name__ == "__main__":
     max_iter = 5
     init_primal = None
     init_dual = None
-    init_ray = False
+    init_ray = True
     num_workers = 16
     num_cpus = 20
     np_cg = NCS(

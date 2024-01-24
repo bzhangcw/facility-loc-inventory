@@ -880,7 +880,6 @@ class Pricing(object):
         )
         _vals["objval"] = self.model.objval
         _vals["status"] = self.model.status
-        print(_vals)
         _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
         if CG_EXTRA_DEBUGGING:
             if type(self.columns_helpers["transportation_cost"]) != float:

@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # arg.conf_label = 1
     # arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
-    datapath = "data/data_0401_V4_1219.xlsx"
+    datapath = "data/data_0401_V4_1219_0inv.xlsx"
     # datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
     # arg.rmp_relaxation = 0

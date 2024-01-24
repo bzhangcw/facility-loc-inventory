@@ -7,7 +7,8 @@ from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
-CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 0))
+CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
+CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 4))
 
 
 class DNPSlim(DNP):
@@ -58,7 +59,7 @@ class DNPSlim(DNP):
         self.model = self.solver.model
         self.cg = cg
 
-        self.model.setParam("Logging", 0)
+        self.model.setParam("Logging", CG_RMP_LOGGING)
         self.model.setParam("LogToConsole", CG_RMP_LOGGING)
         self.model.setParam("Crossover", 0)
         self.model.setParam(self.solver_constant.Param.RelGap, 0.015)

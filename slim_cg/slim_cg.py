@@ -18,7 +18,7 @@ from config.network import *
 import const as const
 import utils as utils
 from entity import SKU, Customer
-from slim_cg.slim_rmp_model import DNPSlim
+from slim_cg.slim_rmp_model import DNPSlim, CG_RMP_METHOD
 from slim_cg.slim_pricing import Pricing, PricingWorker, CG_SUBP_LOGGING
 
 from solver_wrapper import GurobiWrapper, CoptWrapper
@@ -187,7 +187,7 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        self.rmp_model.setParam("LpMethod", 6)
+        self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
         self.solver.solve()
         self.rmp_model.setParam("LogToConsole", 0)
 
@@ -457,7 +457,6 @@ class NetworkColumnGenerationSlim(object):
                             for worker in self.worker_list
                             for cc in ray.get(worker.query_all_columns.remote())
                         ]
-                        print(new_cols)
                     else:
                         new_cols = [
                             oracle.query_columns() for oracle in self.oracles.values()
