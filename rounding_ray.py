@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # arg.conf_label = 1
     # arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
-    # datapath = "data/data_0401_V4_1219.xlsx"
+    # datapath = "data/data_0401_V4_1219_0inv.xlsx"
     datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
     # arg.rmp_relaxation = 0
@@ -31,7 +31,7 @@ if __name__ == "__main__":
     arg.pricing_relaxation = 0
     # arg.backorder = 1
     arg.T = 7
-    arg.rmp_mip_iter = 10
+    arg.rmp_mip_iter = 5
     arg.check_rmp_mip = 1
     # arg.pick_instance = 4
     # arg.production_sku_unit_cost = 0
@@ -111,13 +111,12 @@ if __name__ == "__main__":
     # # #
     # # # # ###############################################################
     # print("----------DCS Model------------")
-    max_iter = 500
+    max_iter = 5
     init_primal = None
     init_dual = None
-    init_ray = True
-    # init_ray = True
-    num_workers = 1
-    num_cpus = 2
+    init_ray = False
+    num_workers = 16
+    num_cpus = 20
     np_cg = NCS(
         arg,
         network,
@@ -128,8 +127,8 @@ if __name__ == "__main__":
         init_primal=init_primal,
         init_dual=init_dual,
         init_ray=init_ray,
-        # num_workers=num_workers,
-        # num_cpus=num_cpus,
+        num_workers=num_workers,
+        num_cpus=num_cpus,
         solver=solver,
     )
     np_cg.run()

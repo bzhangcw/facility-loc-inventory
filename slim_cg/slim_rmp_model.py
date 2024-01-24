@@ -1,10 +1,13 @@
 import utils
+import datetime
 
 from dnp_model import *
 from entity import *
 from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
+
+CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 0))
 
 
 class DNPSlim(DNP):
@@ -55,10 +58,14 @@ class DNPSlim(DNP):
         self.model = self.solver.model
         self.cg = cg
 
-        self.model.setParam(self.solver_constant.Param.Logging, logging)
-        self.model.setParam(self.solver_constant.Param.RelGap, gap)
+        self.model.setParam("Logging", 0)
+        self.model.setParam("LogToConsole", CG_RMP_LOGGING)
+        self.model.setParam("Crossover", 0)
+        self.model.setParam(self.solver_constant.Param.RelGap, 0.015)
         self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
-        self.model.setLogFile(f"{utils.CONF.DEFAULT_TMP_PATH}/rmp.log")
+        self.model.setLogFile(
+            f"{utils.CONF.DEFAULT_TMP_PATH}/rmp-{datetime.datetime.now()}.log"
+        )
         self.model.setParam(self.solver_constant.Param.LpMethod, 4)
         if threads is not None:
             self.model.setParam(self.solver_constant.Param.Threads, threads)
@@ -871,6 +878,9 @@ class DNPSlim(DNP):
                     this_node_fixed_cost = self.arg.warehouse_fixed_cost
             else:
                 continue
+            this_node_fixed_cost = (
+                0.0 if np.isnan(this_node_fixed_cost) else this_node_fixed_cost
+            )
             node_fixed_node_cost = 0.0
             for t in range(self.T):
                 node_fixed_node_cost += (
@@ -935,7 +945,6 @@ class DNPSlim(DNP):
         super().get_solution(data_dir, preserve_zeros)
 
     def fetch_dual_info(self):
-
         node_dual = {
             k: v.pi if v is not None else 0 for k, v in self.cg_binding_constrs.items()
         }

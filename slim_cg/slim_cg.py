@@ -19,7 +19,7 @@ import const as const
 import utils as utils
 from entity import SKU, Customer
 from slim_cg.slim_rmp_model import DNPSlim
-from slim_cg.slim_pricing import Pricing, PricingWorker
+from slim_cg.slim_pricing import Pricing, PricingWorker, CG_SUBP_LOGGING
 
 from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
@@ -187,10 +187,9 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        # self.rmp_model.setParam("LpMethod", 2)
-        self.rmp_model.setParam("Crossover", 0)
+        self.rmp_model.setParam("LpMethod", 6)
         self.solver.solve()
-        self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
+        self.rmp_model.setParam("LogToConsole", 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         if self.init_ray:
@@ -304,7 +303,6 @@ class NetworkColumnGenerationSlim(object):
 
         # construct oracles
         self._logger.info("initialization complete, start generating columns...")
-        self._logger.info("generating column oracles")
         # initialize column helpers
         with utils.TimerContext(self.iter, f"initialize_columns"):
             if self.init_ray:
@@ -344,22 +342,20 @@ class NetworkColumnGenerationSlim(object):
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
             self.init_rmp_by_cols()
-        self.rmp_model.setParam(self.solver_constant.Param.Logging, 1)
-        self._logger.info("initialization of restricted master finished")
-        self._logger.info("solving the first rmp")
+
         while True:
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
+                    self.rmp_model.write(f"rmp@{self.iter}.mps")
                     self.solve_rmp()
-                self._logger.info(
-                    f"rmp solving finished: {self.rmp_model.status}@{iter}"
-                )
+                    self._logger.info(
+                        f"rmp solving finished: {self.rmp_model.status}@{iter}"
+                    )
                 # if self.rmp_model.status != self.solver_constant.OPTIMAL:
                 #     print(self.rmp_model.status, iter)
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("RMP is infeasible")
-                    self.rmp_model.setParam("Logging", 1)
                     self.rmp_model.write(f"rmp@{self.iter}.lp")
                     self.rmp_model.computeIIS()
                     self.rmp_model.write(f"rmp@{self.iter}.iis")
@@ -371,7 +367,6 @@ class NetworkColumnGenerationSlim(object):
                     dual_packs = (
                         self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
                     )
-                self._logger.info("rmp dual fetch finished")
 
                 # TODO: early stopping
                 added = False
@@ -398,10 +393,14 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"solve_columns"):
                     # modify for parallel
                     if self.init_ray:
-                        for worker in tqdm(self.worker_list, ncols=80, leave=False):
+                        for worker_id, worker in tqdm(
+                            enumerate(self.worker_list), ncols=80, leave=False
+                        ):
                             worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
-                            with utils.TimerContext(self.iter, f"update pricing"):
+                            with utils.TimerContext(
+                                self.iter, f"update pricing", logging=worker_id < 1
+                            ):
                                 # worker.update_objective_all.remote(dual_pack_this)
                                 worker.update_objective_all_new.remote(
                                     customer,
@@ -427,7 +426,9 @@ class NetworkColumnGenerationSlim(object):
                                 )
                             else:
                                 dual_pack_this = None
-                            with utils.TimerContext(self.iter, f"update pricing"):
+                            with utils.TimerContext(
+                                self.iter, f"update pricing", logging=col_ind < 1
+                            ):
                                 oracle.update_objective(
                                     customer, dual_packs=dual_pack_this
                                 )
@@ -438,20 +439,25 @@ class NetworkColumnGenerationSlim(object):
                                     if v.getType() == COPT.BINARY:
                                         binary_vars_index.append(v.getIdx())
                                         v.setType(COPT.CONTINUOUS)
+                            if CG_SUBP_LOGGING:
+                                oracle.model.write(
+                                    f"subp@{self.iter}@{customer.idx}.mps"
+                                )
                             oracle.solve()
                             if oracle.model.status == self.solver_constant.INFEASIBLE:
                                 self._logger.info("oracle is infeasible")
                                 oracle.model.computeIIS()
                                 oracle.model.write("oracle{}.iis".format(customer))
                                 print("iis written")
-                    self._logger.info("column solving finished")
+
+                with utils.TimerContext(self.iter, f"generating_columns"):
                     if self.init_ray:
                         new_cols = [
                             cc
                             for worker in self.worker_list
                             for cc in ray.get(worker.query_all_columns.remote())
                         ]
-
+                        print(new_cols)
                     else:
                         new_cols = [
                             oracle.query_columns() for oracle in self.oracles.values()
@@ -490,20 +496,20 @@ class NetworkColumnGenerationSlim(object):
                     if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
                     ):
-                        model = self.rmp_model
-                        self.rmp_oracle.switch_to_milp()
-                        print("-----Solve MIP_RMP-----")
-                        model.solve()
-                        print(
-                            self.iter,
-                            "MIP_RMP",
-                            model.getObjective().getValue(),
-                            "GAP",
-                            model.getObjective().getValue() - lp_objective,
-                        )
-                        ### Reset
-                        self.rmp_oracle.switch_to_lp()
-                        print("Reset Over")
+                        with utils.TimerContext(self.iter, f"rmp milp-heuristic"):
+                            model = self.rmp_model
+                            self.rmp_oracle.switch_to_milp()
+                            model.solve()
+                            print(
+                                self.iter,
+                                "MIP_RMP",
+                                model.getObjective().getValue(),
+                                "GAP",
+                                model.getObjective().getValue() - lp_objective,
+                            )
+                            ### Reset
+                            self.rmp_oracle.switch_to_lp()
+                            self._logger.info("rmp reset over")
                 if self.arg.check_cost_cg:
                     holding_cost_rmp = 0.0
                     transportation_cost_rmp = 0.0
@@ -580,10 +586,8 @@ class NetworkColumnGenerationSlim(object):
                 if bool_early_stop:
                     self._logger.info("early terminated")
                     break
-                self._logger.info("rmp updating started")
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     self.update_rmp_by_cols()
-                self._logger.info("rmp updating finished")
 
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")

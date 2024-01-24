@@ -193,13 +193,7 @@ class Pricing(object):
         arg: argparse.Namespace,
         network: nx.DiGraph,
         model_name: str = "PricingDelivery",
-        # bool_capacity: bool = False,
-        # bool_edge_lb: bool = False,
-        # bool_node_lb: bool = False,
-        # bool_fixed_cost: bool = False,
-        # bool_covering: bool = False,
         bool_dp: bool = False,
-        logging: int = 0,
         gap: float = 1e-4,
         threads: int = None,
         limit: int = 3600,
@@ -262,7 +256,7 @@ class Pricing(object):
         # for remote
         self.columns_helpers = None
 
-        self.args_modeling = (bool_dp, model_name, gap, limit, threads, logging)
+        self.args_modeling = (bool_dp, model_name, gap, limit, threads, CG_SUBP_LOGGING)
 
     def model_reset(self):
         self.model.reset()
@@ -881,12 +875,13 @@ class Pricing(object):
     def eval_helper(self):
         # TOCHeck：column的时候只有sku_flow和beta
         _vals = {}
-        _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
         _vals["beta"] = self._query_a_expr_or_float_or_variable(
             self.columns_helpers["beta"]
         )
         _vals["objval"] = self.model.objval
         _vals["status"] = self.model.status
+        print(_vals)
+        _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
         if CG_EXTRA_DEBUGGING:
             if type(self.columns_helpers["transportation_cost"]) != float:
                 transportation_cost = 0

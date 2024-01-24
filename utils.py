@@ -304,7 +304,7 @@ def add_attr(edge_list, node_list, arg, const):
         # for e in edge_list:
         #     if e.idx in lb_inter["lb"]:
         #         e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
-                # print(f"setting {e.idx} to {e.variable_lb}")
+        # print(f"setting {e.idx} to {e.variable_lb}")
     if arg.node_lb == 1:
         lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
         for n in node_list:
@@ -390,18 +390,26 @@ global_timers = []
 
 
 class TimerContext:
-    def __init__(self, k, name):
+    def __init__(self, k, name, logging=True):
         self.k = k
         self.name = name
+        self.logging = logging
 
     def __enter__(self):
+        if self.logging:
+            logger.info(f"task {self.name} started")
         self.start = time.time()
         return self
 
-    def __exit__(self, *args):
+    def __exit__(
+        self,
+        *arg,
+    ):
         self.end = time.time()
         self.interval = self.end - self.start
         global_timers.append([self.k, self.name, self.interval])
+        if self.logging:
+            logger.info(f"task {self.name} takes {self.interval:.2f} seconds")
 
 
 def visualize_timers():
