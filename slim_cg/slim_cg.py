@@ -347,7 +347,9 @@ class NetworkColumnGenerationSlim(object):
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
-                    self.rmp_model.write(f"rmp@{self.iter}.mps")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
+                    )
                     self.solve_rmp()
                     self._logger.info(
                         f"rmp solving finished: {self.rmp_model.status}@{iter}"
@@ -356,12 +358,18 @@ class NetworkColumnGenerationSlim(object):
                 #     print(self.rmp_model.status, iter)
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
                     self._logger.info("RMP is infeasible")
-                    self.rmp_model.write(f"rmp@{self.iter}.lp")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
+                    )
                     self.rmp_model.computeIIS()
-                    self.rmp_model.write(f"rmp@{self.iter}.iis")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.iis"
+                    )
                 if CG_EXTRA_VERBOSITY:
                     self._logger.info("extra verbosity lp")
-                    self.rmp_model.write(f"rmp@{self.iter}.lp")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
+                    )
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
                     dual_packs = (
@@ -498,6 +506,9 @@ class NetworkColumnGenerationSlim(object):
                         with utils.TimerContext(self.iter, f"rmp milp-heuristic"):
                             model = self.rmp_model
                             self.rmp_oracle.switch_to_milp()
+                            self.rmp_model.write(
+                                f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps"
+                            )
                             model.solve()
                             print(
                                 self.iter,
@@ -679,9 +690,8 @@ class NetworkColumnGenerationSlim(object):
             for ee in edges:
                 c = ee.end
                 this_col = self.columns[c][-1]
-                self.delievery_cons_coef[c].append(
-                    -this_col["sku_flow"].get((t, ee, k), 0)
-                )
+                _val = -this_col["sku_flow"].get((t, ee, k), 0)
+                self.delievery_cons_coef[c].append(_val if abs(_val) > 1e-4 else 0)
 
         for c in self.customer_list:
             _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]

@@ -7,13 +7,12 @@ from collections import defaultdict
 from typing import List
 
 import networkx as nx
+import numpy as np
 import pandas as pd
 
-from entity import Edge, Node
 from config.network import construct_network
 from config.read_data import read_data
-
-import numpy as np
+from entity import Edge, Node
 
 
 class CONF:
@@ -413,6 +412,7 @@ class TimerContext:
 
 
 def visualize_timers():
+    pd.set_option("display.max_columns", None)
     df = pd.DataFrame(data=global_timers, columns=["k", "name", "time"])
     df.set_index(["name", "k"]).to_excel(f"{CONF.DEFAULT_SOL_PATH}/timing.xlsx")
     logger.info(

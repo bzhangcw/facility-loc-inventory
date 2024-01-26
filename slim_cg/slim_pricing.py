@@ -30,6 +30,8 @@ CG_SUBP_LOGGING = int(os.environ.get("CG_SUBP_LOGGING", 0))
 CG_SUBP_THREADS = int(os.environ.get("CG_SUBP_THREADS", 2))
 CG_SUBP_GAP = float(os.environ.get("CG_SUBP_GAP", 0.05))
 CG_SUBP_TIMELIMIT = float(os.environ.get("CG_SUBP_TIMELIMIT", 100))
+# cg big M
+BIG_M_SELECT_EDGE = 1e5
 
 
 @ray.remote
@@ -225,6 +227,9 @@ class Pricing(object):
         self.add_distance = self.arg.add_distance
         self.add_cardinality = self.arg.add_cardinality
         self.bool_edge_lb = False
+
+        self.sku_flow_keys = None
+        self.sku_flow_vars = None
         # self.bool_edge_lb = self.arg.edgelb
         # whether to add edge lower bound constraints
         if self.bool_covering:
@@ -378,7 +383,6 @@ class Pricing(object):
         if self.arg.backorder:
             self.var_types["sku_backorder"] = {
                 "lb": 0,
-                "ub": 1e8,  # TBD
                 # "ub": self.solver_constant.INFINITY,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "s",
@@ -456,7 +460,7 @@ class Pricing(object):
             self.variables[vt] = self.solver.addVars(
                 idx[vt],
                 lb=param["lb"],
-                ub=param["ub"],
+                ub=param["ub"] if "ub" in param else self.solver_constant.INFINITY,
                 vtype=param["vtype"],
                 nameprefix=f"{param['nameprefix']}_",
             )
@@ -464,6 +468,7 @@ class Pricing(object):
         # to avoid repeatedly open new mem for column
         self.column = {}
         self.column["sku_flow"] = {k: 0.0 for k in self.var_idx["sku_flow"].keys()}
+
         self.column["beta"] = 0.0
         self.column["transportation_cost"] = 0
         self.column["unfulfilled_demand_cost"] = 0.0
@@ -553,6 +558,7 @@ class Pricing(object):
                     name=constr_name,
                 )
             self.constrs["flow_conservation"][(t, k)] = constr
+
         return
 
     def add_constr_open_relationship(self, t: int):
@@ -595,7 +601,7 @@ class Pricing(object):
 
                 constr = self.model.addConstr(
                     self.variables["sku_flow"][t, edge, k]
-                    <= 1e10 * self.variables["sku_select_edge"][t, edge, k]
+                    <= BIG_M_SELECT_EDGE * self.variables["sku_select_edge"][t, edge, k]
                 )
                 self.constrs["open_relationship"]["sku_flow_select"][
                     (t, edge, k)
@@ -850,8 +856,11 @@ class Pricing(object):
         return fixed_edge_cost
 
     def solve(self):
-        # self.model.solve()
         self.solver.solve()
+        if self.sku_flow_keys is None:
+            tmp = dict(self.variables["sku_flow"])
+            self.sku_flow_keys = [v.index for k, v in tmp.items()]
+            self.sku_flow_vars = [v for k, v in tmp.items()]
 
     def write(self, name):
         # self.model.write(name)
@@ -880,7 +889,12 @@ class Pricing(object):
         )
         _vals["objval"] = self.model.objval
         _vals["status"] = self.model.status
-        _vals["sku_flow"] = {k: v.x for k, v in self.variables["sku_flow"].items()}
+        _vals["sku_flow"] = {}
+        if len(self.sku_flow_keys) > 0:
+            _vals["sku_flow"] = dict(
+                self.model.getInfo(COPT.Info.Value, self.variables["sku_flow"])
+            )
+
         if CG_EXTRA_DEBUGGING:
             if type(self.columns_helpers["transportation_cost"]) != float:
                 transportation_cost = 0

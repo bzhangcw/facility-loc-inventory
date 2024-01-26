@@ -1,15 +1,18 @@
+import json
+
+import gurobipy as gp
 import numpy as np
 import pandas as pd
 from coptpy import COPT
-from dnp_model import DNP
-import gurobipy as gp
 from gurobipy import GRB
+
 import const
 import utils
-from slim_cg.slim_rmp_model import DNPSlim
-from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
 from config.network import construct_network
 from config.param import Param
+from dnp_model import DNP
+from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
+from slim_cg.slim_rmp_model import DNPSlim
 
 """
 Run following command in the command line of Turing when using Ray:
@@ -24,20 +27,21 @@ if __name__ == "__main__":
     # arg.conf_label = 2
     utils.configuration(arg.conf_label, arg)
     # datapath = "data/data_0401_V4_1219_0inv.xlsx"
-    datapath = "data/data_0401_0inv.xlsx"
+    # datapath = "data/data_0401_0inv.xlsx"
     # datapath = "data/data_0401_V4.xlsx"
-    # arg.rmp_relaxation = 0
-    # arg.pricing_relaxation = 1
+    datapath = arg.fpath
     arg.pricing_relaxation = 0
-    # arg.backorder = 1
     arg.T = 7
     arg.rmp_mip_iter = 5
     arg.check_rmp_mip = 1
-    # arg.pick_instance = 4
-    # arg.production_sku_unit_cost = 0
-    # arg.holding_sku_unit_cost = 0
-    # arg.unfulfill_sku_unit_cost = 1
-    # arg.transportation_sku_unit_cost = 0
+
+    print(
+        json.dumps(
+            arg.__dict__,
+            indent=2,
+            sort_keys=True,
+        )
+    )
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     print(f"save mps name {dnp_mps_name}")
     (
@@ -115,8 +119,8 @@ if __name__ == "__main__":
     init_primal = None
     init_dual = None
     init_ray = True
-    num_workers = 16
-    num_cpus = 20
+    num_workers = 22
+    num_cpus = 22
     np_cg = NCS(
         arg,
         network,

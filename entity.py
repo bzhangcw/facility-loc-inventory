@@ -1,11 +1,11 @@
 from abc import abstractmethod
 from typing import List
-import const
+
 import numpy as np
 import pandas as pd
-from typing import List
-from abc import abstractmethod
 from geopy.distance import geodesic
+
+import const
 
 
 class SKU:

@@ -23,6 +23,13 @@ class Param:
             type=int,
             default=0,
         )
+        parser.add_argument(
+            "--fpath",
+            type=str,
+            help="data path",
+            default="data/data_0401_0inv.xlsx",
+            required=True,
+        )
         ##### 1. Basic parameters #####
         parser.add_argument(
             "--conf_label",
@@ -56,6 +63,11 @@ class Param:
             "--pricing_relaxation",
             type=int,
             default=0,
+            help="""
+            0: no; 1: yes;
+            whether solving pricing problem as LP relaxation; 
+                in principle, pricing problem should be solved as MIP only.
+            """,
         )
 
         parser.add_argument(

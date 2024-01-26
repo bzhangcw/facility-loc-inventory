@@ -1,12 +1,13 @@
-import numpy as np
-import pandas as pd
 from itertools import product
 
+import numpy as np
+import pandas as pd
+
 import utils as utils
-from dnp_model import DNP
 from config.network import construct_network
-from ncg.np_cg import *
 from config.param import Param
+from dnp_model import DNP
+from ncg.np_cg import *
 
 data_basic = "data/basic.xlsx"
 df1 = pd.read_excel(data_basic, sheet_name="wc")

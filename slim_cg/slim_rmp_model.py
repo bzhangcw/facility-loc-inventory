@@ -29,7 +29,7 @@ class DNPSlim(DNP):
         used_plant_capacity: dict = None,
         logging: int = 0,
         gap: float = 1e-4,
-        threads: int = 8,
+        threads: int = 12,
         limit: int = 7200,
         cg: bool = True,
         customer_list: List[Customer] = None,
@@ -231,24 +231,18 @@ class DNPSlim(DNP):
         self.var_types = {
             "sku_flow": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "w",
                 "index": "(t, edge, k)",
             },
             "sku_production": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "x",
                 "index": "(t, plant, k)",
             },
             "sku_delivery": {
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "z",
                 "index": "(t, warehouse, k)",
@@ -256,8 +250,6 @@ class DNPSlim(DNP):
             "sku_inventory": {
                 # "lb": -self.solver_constant.INFINITY if self.arg.backorder is True else 0,
                 "lb": 0,
-                "ub": self.solver_constant.INFINITY,
-                # "ub": 0,
                 "vtype": self.solver_constant.CONTINUOUS,
                 "nameprefix": "I",
                 "index": "(t, warehouse, k)",
@@ -355,7 +347,7 @@ class DNPSlim(DNP):
             self.variables[vt] = self.solver.addVars(
                 idx[vt],
                 lb=param["lb"],
-                ub=param["ub"],
+                ub=param["ub"] if "ub" in param else self.solver_constant.INFINITY,
                 vtype=param["vtype"],
                 nameprefix=f"{param['nameprefix']}_",
             )
@@ -383,6 +375,8 @@ class DNPSlim(DNP):
         for v in variables:
             if v.getName().startswith("lambda"):
                 v.setType(COPT.BINARY)
+        self.model.setParam("CutLevel", 0)
+        self.model.setParam("HeurLevel", 3)
 
     def switch_to_lp(self):
         for v in self.binaries:
@@ -537,7 +531,7 @@ class DNPSlim(DNP):
 
                 constr = self.model.addConstr(
                     self.variables["sku_flow"][t, edge, k]
-                    <= 1e10 * self.variables["sku_select_edge"][t, edge, k]
+                    <= BIG_M_SELECT_EDGE * self.variables["sku_select_edge"][t, edge, k]
                 )
                 self.constrs["open_relationship"]["sku_flow_select"][
                     (t, edge, k)
