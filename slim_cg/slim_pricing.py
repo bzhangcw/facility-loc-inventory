@@ -5,23 +5,21 @@ import os
 import time
 from typing import List
 
+import coptpy as cp
 import networkx as nx
 import numpy as np
-from gurobipy import GRB
 import pandas as pd
 import ray
+from coptpy import COPT
+from gurobipy import GRB
 
 import const as const
-from entity import *
 from config.read_data import read_data
-from utils import get_in_edges, get_out_edges, logger, TimerContext
-
-import coptpy as cp
-from coptpy import COPT
-
-from solver_wrapper import GurobiWrapper, CoptWrapper
+from entity import *
+from solver_wrapper import CoptWrapper, GurobiWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
+from utils import TimerContext, get_in_edges, get_out_edges, logger
 
 ATTR_IN_RMPSLIM = ["sku_flow"]
 # macro for debugging
@@ -211,7 +209,8 @@ class Pricing(object):
         customer: Customer = None,
         solver: str = "COPT",
     ) -> None:
-        self.solver_name = solver
+        self.backend = solver.upper()
+        self.solver_name = solver.upper()
         if solver == "COPT":
             self.solver_constant = CoptConstant
         elif solver == "GUROBI":
@@ -931,7 +930,11 @@ class Pricing(object):
         """
         col_helper = {}
         try:
-            col_helper["beta"] = self.original_obj.getExpr()
+            col_helper["beta"] = (
+                self.original_obj.getExpr()
+                if self.solver_name == "COPT"
+                else self.original_obj
+            )
         except:
             logger.warning(f"customer {self.customer} has null objective")
             col_helper["beta"] = 0.0

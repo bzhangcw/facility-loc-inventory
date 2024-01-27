@@ -1,6 +1,8 @@
-import utils
 from enum import IntEnum
+
 from coptpy import COPT
+
+import utils
 
 
 class PrimalMethod(IntEnum):
@@ -35,32 +37,54 @@ def milp_sequential(self):
     model = self.rmp_model
     binaries = self.rmp_oracle.binaries
 
-    with utils.TimerContext(self.iter, "sequential-column-weights"):
-        for _, v in self.rmp_oracle.variables["column_weights"].items():
-            v.setType(COPT.BINARY)
+    def _set_tob(v):
+        v.setType(COPT.BINARY) if self.rmp_oracle.backend == "COPT" else v.setAttr(
+            "VType", COPT.BINARY
+        )
 
-        model.solve()
+    def _set_toc(v):
+        v.setType(COPT.CONTINUOUS) if self.rmp_oracle.backend == "COPT" else v.setAttr(
+            "VType", COPT.CONTINUOUS
+        )
+
+    def _fix_by_v(v):
+        if self.rmp_oracle.backend == "COPT":
+            v.setInfo(COPT.Info.LB, sol[idx])
+            v.setInfo(COPT.Info.UB, sol[idx])
+        else:
+            v.setAttr(COPT.Info.LB, sol[idx])
+            v.setAttr(COPT.Info.UB, sol[idx])
+
+    def _reset_binary_bound(v):
+        if self.rmp_oracle.backend == "COPT":
+            v.setInfo(COPT.Info.LB, 0)
+            v.setInfo(COPT.Info.UB, 1)
+        else:
+            v.setAttr(COPT.Info.LB, 0)
+            v.setAttr(COPT.Info.UB, 1)
 
     with utils.TimerContext(self.iter, "sequential-major-binaries"):
         for v in binaries:
-            v.setType(COPT.BINARY)
-        # self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps")
+            _set_tob(v)
+        self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps")
 
-        model.solve()
+        self.rmp_oracle.solver.solve()
         # fix the binaries
         sol = [v.x for v in binaries]
         for idx, v in enumerate(binaries):
-            v.setInfo(COPT.Info.LB, sol[idx])
-            v.setInfo(COPT.Info.UB, sol[idx])
+            _fix_by_v(v)
 
+        with utils.TimerContext(self.iter, "sequential-column-weights"):
+            for _, v in self.rmp_oracle.variables["column_weights"].items():
+                _set_tob(v)
+
+            self.rmp_oracle.solver.solve()
     # reset back to LP
     self.rmp_oracle.switch_to_lp()
     for v in binaries:
-        v.setInfo(COPT.Info.LB, 0)
-        v.setInfo(COPT.Info.UB, 1)
+        _reset_binary_bound(v)
     for _, v in self.rmp_oracle.variables["column_weights"].items():
-        v.setInfo(COPT.Info.LB, 0)
-        v.setInfo(COPT.Info.UB, 1)
+        _reset_binary_bound(v)
 
     mip_objective = model.objval
 

@@ -1,11 +1,13 @@
-import utils
-import datetime
 import collections
-from dnp_model import *
-from entity import *
+import datetime
+
 from gurobipy import GRB
 from scipy import sparse
-from solver_wrapper import GurobiWrapper, CoptWrapper
+
+import utils
+from dnp_model import *
+from entity import *
+from solver_wrapper import CoptWrapper, GurobiWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
@@ -39,6 +41,7 @@ class DNPSlim(DNP):
         env=None,
         solver="COPT",
     ) -> None:
+        self.backend = solver.upper()
         if solver == "COPT":
             self.solver = CoptWrapper.CoptWrapper(model_name)
             self.solver_constant = CoptConstant
@@ -374,14 +377,12 @@ class DNPSlim(DNP):
             [c.idx for c in self.customer_list],
         )
         self.variables["column_weights"] = {}
-
+        if self.backend == "GUROBI":
+            self.model.update()
         # record binary variables
         variables = self.model.getVars()
 
-        if self.arg.backend.upper() == "COPT":
-            self.binaries = [v for v in variables if v.getType() == COPT.BINARY]
-        else:
-            self.binaries = [v for v in variables if v.getType() == GRB.BINARY]
+        self.binaries = [v for v in variables if v.vtype == self.solver_constant.BINARY]
 
         # preset this to continuous
         # if only the lagrangian bound is concerned, i.e., rmp is a relaxation
@@ -392,27 +393,35 @@ class DNPSlim(DNP):
 
     def switch_to_milp(self):
         if self.arg.backend.upper() == "COPT":
-            BG = COPT
+            for v in self.binaries:
+                v.setType(self.solver_constant.BINARY)
+            variables = self.model.getVars()
+            for v in variables:
+                if v.getName().startswith("lambda"):
+                    v.setType(self.solver_constant.BINARY)
         else:
-            BG = GRB
-        for v in self.binaries:
-            v.setType(BG.BINARY)
-        variables = self.model.getVars()
-        for v in variables:
-            if v.getName().startswith("lambda"):
-                v.setType(BG.BINARY)
+            for v in self.binaries:
+                v.setAttr(GRB.Attr.VType, self.solver_constant.BINARY)
+            variables = self.model.getVars()
+            for v in variables:
+                if v.varname.startswith("lambda"):
+                    v.setAttr(GRB.Attr.VType, self.solver_constant.BINARY)
 
     def switch_to_lp(self):
         if self.arg.backend.upper() == "COPT":
-            BG = COPT
+            for v in self.binaries:
+                v.setType(self.solver_constant.CONTINUOUS)
+            variables = self.model.getVars()
+            for v in variables:
+                if v.getName().startswith("lambda"):
+                    v.setType(self.solver_constant.CONTINUOUS)
         else:
-            BG = GRB
-        for v in self.binaries:
-            v.setType(BG.CONTINUOUS)
-        variables = self.model.getVars()
-        for v in variables:
-            if v.getName().startswith("lambda"):
-                v.setType(BG.CONTINUOUS)
+            for v in self.binaries:
+                v.setAttr(GRB.Attr.VType, self.solver_constant.CONTINUOUS)
+            variables = self.model.getVars()
+            for v in variables:
+                if v.varname.startswith("lambda"):
+                    v.setAttr(GRB.Attr.VType, self.solver_constant.CONTINUOUS)
 
     def add_constraints(self):
         if self.bool_capacity:

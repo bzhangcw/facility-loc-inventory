@@ -17,6 +17,8 @@ rollsize_dict = {j: rollsize[j] for j in range(len(rollsize))}
 
 # Maximal number of CG iterations
 MAX_CGTIME = 100
+
+
 # Create COPT environment
 def heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand):
     env = Envr()
@@ -72,6 +74,7 @@ nbr = heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand)
 #     print(iter)
 #     heuristic(rollsize_dict, nkind, ninitpat, rollwidth)
 #     nbr
+
 
 # Report solution of the RMP model
 def reportRMP(rmpmodel):

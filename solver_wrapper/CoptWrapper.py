@@ -1,5 +1,4 @@
 import coptpy
-
 from coptpy import COPT
 
 from .SolverWrapper import SolverWrapper

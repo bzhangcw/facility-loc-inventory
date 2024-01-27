@@ -14,15 +14,16 @@ import pandas as pd
 import ray
 from coptpy import COPT
 from tqdm import tqdm
-from config.network import *
+
 import const as const
-import utils
-from entity import SKU, Customer
-from slim_cg.slim_rmp_model import DNPSlim, CG_RMP_METHOD
-from slim_cg.slim_pricing import Pricing, PricingWorker, CG_SUBP_LOGGING
-from slim_cg.slim_checker import check_cost_cg
 import slim_cg.slim_mip_heur as slp
-from solver_wrapper import GurobiWrapper, CoptWrapper
+import utils
+from config.network import *
+from entity import SKU, Customer
+from slim_cg.slim_checker import check_cost_cg
+from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
+from slim_cg.slim_rmp_model import CG_RMP_METHOD, DNPSlim
+from solver_wrapper import CoptWrapper, GurobiWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
@@ -193,7 +194,6 @@ class NetworkColumnGenerationSlim(object):
             pass
         self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
         self.solver.solve()
-        self.rmp_model.setParam("LogToConsole", 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         if self.init_ray:

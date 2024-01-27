@@ -16,15 +16,15 @@ import ray
 from coptpy import COPT
 from tqdm import tqdm
 
-import ncg.cg_col_helper as cg_col_helper
-import ncg.cg_init as cg_init
 import const as const
 import dnp_model
+import ncg.cg_col_helper as cg_col_helper
+import ncg.cg_init as cg_init
 import utils as utils
-from entity import SKU, Customer
 from config.network import construct_network, get_pred_reachable_nodes
 from config.param import Param
 from config.read_data import read_data
+from entity import SKU, Customer
 
 
 class NetworkColumnGeneration:

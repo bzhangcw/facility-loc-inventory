@@ -16,6 +16,7 @@ rollsize_dict = {j: rollsize[j] for j in range(len(rollsize))}
 # Maximal number of CG iterations
 MAX_CGTIME = 1000
 
+
 # Report solution of the RMP model
 def reportRMP(rmpmodel):
     if rmpmodel.status == COPT.OPTIMAL:
