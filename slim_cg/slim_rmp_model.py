@@ -1,8 +1,10 @@
 import utils
 import datetime
-
+import collections
 from dnp_model import *
 from entity import *
+from gurobipy import GRB
+from scipy import sparse
 from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
@@ -46,6 +48,7 @@ class DNPSlim(DNP):
         else:
             raise ValueError("solver must be either COPT or GUROBI")
 
+        self._logger = utils.logger
         self.arg = arg
         self.T = arg.T
         self.network = network
@@ -65,9 +68,15 @@ class DNPSlim(DNP):
         self.model.setParam("Crossover", 0)
         self.model.setParam(self.solver_constant.Param.RelGap, 0.015)
         self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
-        self.model.setLogFile(
-            f"{utils.CONF.DEFAULT_TMP_PATH}/rmp-{datetime.datetime.now()}.log"
-        )
+        if solver == "COPT":
+            self.model.setLogFile(
+                f"{utils.CONF.DEFAULT_TMP_PATH}/rmp-{datetime.datetime.now()}.log",
+            )
+        else:
+            self.model.setParam(
+                "LogFile",
+                f"{utils.CONF.DEFAULT_TMP_PATH}/rmp-{datetime.datetime.now()}.log",
+            )
         self.model.setParam(self.solver_constant.Param.LpMethod, 4)
         if threads is not None:
             self.model.setParam(self.solver_constant.Param.Threads, threads)
@@ -369,7 +378,11 @@ class DNPSlim(DNP):
         # record binary variables
         variables = self.model.getVars()
 
-        self.binaries = [v for v in variables if v.getType() == COPT.BINARY]
+        if self.arg.backend.upper() == "COPT":
+            self.binaries = [v for v in variables if v.getType() == COPT.BINARY]
+        else:
+            self.binaries = [v for v in variables if v.getType() == GRB.BINARY]
+
         # preset this to continuous
         # if only the lagrangian bound is concerned, i.e., rmp is a relaxation
         # it is never set back
@@ -378,22 +391,28 @@ class DNPSlim(DNP):
         self.switch_to_lp()
 
     def switch_to_milp(self):
+        if self.arg.backend.upper() == "COPT":
+            BG = COPT
+        else:
+            BG = GRB
         for v in self.binaries:
-            v.setType(COPT.BINARY)
+            v.setType(BG.BINARY)
         variables = self.model.getVars()
         for v in variables:
             if v.getName().startswith("lambda"):
-                v.setType(COPT.BINARY)
-        self.model.setParam("CutLevel", 0)
-        self.model.setParam("HeurLevel", 3)
+                v.setType(BG.BINARY)
 
     def switch_to_lp(self):
+        if self.arg.backend.upper() == "COPT":
+            BG = COPT
+        else:
+            BG = GRB
         for v in self.binaries:
-            v.setType(COPT.CONTINUOUS)
+            v.setType(BG.CONTINUOUS)
         variables = self.model.getVars()
         for v in variables:
             if v.getName().startswith("lambda"):
-                v.setType(COPT.CONTINUOUS)
+                v.setType(BG.CONTINUOUS)
 
     def add_constraints(self):
         if self.bool_capacity:
@@ -932,13 +951,11 @@ class DNPSlim(DNP):
             for t in range(self.T):
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 for k in sku_list:
-                    # self.cg_binding_constrs[node, k, t] = self.solver.addConstr(
                     self.cg_binding_constrs[node, k, t] = self.solver.addConstr(
                         self.variables["sku_delivery"][t, node, k] == 0,
                         name=f"cg_binding{t, node, k}",
                     )
         for c in self.customer_list:
-            # self.cg_binding_constrs_ws[c] = self.solver.addConstr(
             self.cg_binding_constrs_ws[c] = self.solver.addConstr(
                 self.variables["cg_temporary"][c.idx] == 0.0, name=f"cg_binding_ws{c}"
             )
@@ -948,19 +965,73 @@ class DNPSlim(DNP):
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         super().get_solution(data_dir, preserve_zeros)
 
-    def fetch_dual_info(self):
-        node_dual = {
-            k: v.pi if v is not None else 0 for k, v in self.cg_binding_constrs.items()
-        }
-        # broadcast to edge
-        edge_dual = {
-            (ee, k, t): v
-            for (node, k, t), v in node_dual.items()
-            for ee in self.cg_downstream[node]
-        }
-        # the dual of weight sum = 1
-        ws_dual = {
-            k: v.pi if v is not None else 0
-            for k, v in self.cg_binding_constrs_ws.items()
-        }
-        return edge_dual, ws_dual
+    def fetch_dual_info(self, bool_init):
+        if self.arg.backend.upper() == "COPT":
+            node_dual = {
+                k: v.pi if v is not None else 0
+                for k, v in self.cg_binding_constrs.items()
+            }
+            # the dual of weight sum = 1
+            ws_dual = {
+                k: v.pi if v is not None else 0
+                for k, v in self.cg_binding_constrs_ws.items()
+            }
+        else:
+            for k, v in self.cg_binding_constrs.items():
+                v.getAttr("Pi")
+            node_dual = {
+                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
+                for k, v in self.cg_binding_constrs.items()
+            }
+            # the dual of weight sum = 1
+            ws_dual = {
+                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
+                for k, v in self.cg_binding_constrs_ws.items()
+            }
+
+        node_vals = np.array(list(node_dual.values()))
+
+        if bool_init:
+            with utils.TimerContext(0, "generate-broadcast"):
+                self.dual_vals = {}
+                self.dual_cols = collections.defaultdict(list)
+                self.dual_keys = collections.defaultdict(list)
+                rows = []
+                cols = []
+                vals = []
+
+                row_id = 0
+                col_id = 0
+                for node, k, t in node_dual:
+                    for ee in self.cg_downstream[node]:
+                        cc = ee.end
+                        rows.append(row_id)
+                        cols.append(col_id)
+                        vals.append(1.0)
+                        self.dual_cols[cc].append(col_id)
+                        self.dual_keys[cc].append((ee, k, t))
+                        # accumulate
+                        col_id += 1
+                    row_id += 1
+
+                self.broadcast_matrix = sparse.coo_matrix(
+                    (vals, (rows, cols)), shape=(row_id, col_id)
+                ).T.tocsr()
+
+                self._logger.info(f"broadcasting shape: {self.broadcast_matrix.shape}")
+                # keys = [
+                #     (ee.end, ee, k, t)
+                #     for node, k, t in node_dual
+                #     for ee in self.cg_downstream[node]
+                # ]
+                # self.dual_series = pd.Series(dict.fromkeys(keys, 0.0))
+                # for cc, ccols in self.cc_cols.items():
+                #     self.dual_series[cc] = dict.fromkeys(self.cc_keys[cc], 0.0)
+
+        for cc, ccols in self.dual_cols.items():
+            self.dual_vals[cc] = self.broadcast_matrix[ccols, :] @ node_vals
+        return (
+            node_vals,
+            ws_dual,
+            set(self.dual_keys.keys()),
+        )

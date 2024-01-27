@@ -30,9 +30,16 @@ class Param:
             default="data/data_0401_0inv.xlsx",
             required=True,
         )
-        ##### 1. Basic parameters #####
         parser.add_argument(
-            "--method_mip_heuristic",
+            "--backend",
+            type=str,
+            help="solver backend",
+            default="gurobi",
+            choices=["gurobi", "copt"],
+        )
+        ##### 0. CG parameters #####
+        parser.add_argument(
+            "--cg_method_mip_heuristic",
             "-p",
             type=int,
             help="""
@@ -42,7 +49,25 @@ class Param:
             required=True,
             default=-1,
         )
+        parser.add_argument(
+            "--cg_itermax",
+            "-i",
+            type=int,
+            help="""
+            the maximum number of iterations
+            """,
+            default=5,
+        )
+        parser.add_argument(
+            "--cg_rmp_mip_iter",
+            type=int,
+            default=5,
+            help="""
+            the interval to invoke an integral heuristic
+            """,
+        )
 
+        ##### 1. Basic parameters #####
         parser.add_argument(
             "--conf_label",
             type=int,
@@ -86,12 +111,6 @@ class Param:
             "--rmp_binary",
             type=int,
             default=0,
-        )
-
-        parser.add_argument(
-            "--rmp_mip_iter",
-            type=int,
-            default=2,
         )
 
         parser.add_argument(

@@ -7,13 +7,14 @@ from typing import List
 
 import networkx as nx
 import numpy as np
+from gurobipy import GRB
 import pandas as pd
 import ray
 
 import const as const
 from entity import *
 from config.read_data import read_data
-from utils import get_in_edges, get_out_edges, logger
+from utils import get_in_edges, get_out_edges, logger, TimerContext
 
 import coptpy as cp
 from coptpy import COPT
@@ -25,7 +26,7 @@ from solver_wrapper.GurobiConstant import GurobiConstant
 ATTR_IN_RMPSLIM = ["sku_flow"]
 # macro for debugging
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
-CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
+CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 0))
 CG_SUBP_LOGGING = int(os.environ.get("CG_SUBP_LOGGING", 0))
 CG_SUBP_THREADS = int(os.environ.get("CG_SUBP_THREADS", 2))
 CG_SUBP_GAP = float(os.environ.get("CG_SUBP_GAP", 0.05))
@@ -128,15 +129,23 @@ class PricingWorker:
             self.DNP_dict[customer].update_objective(customer, dual_packs)
 
     def update_objective_all_new(
-        self, customer, iter, dual_series, dual_ws, dual_exists_customers
+        self,
+        iter,
+        broadcast_mat,
+        broadcast_nodes,
+        broadcast_cols,
+        broadcast_keys,
+        dual_ws,
+        dual_exists_customers,
     ):
         for customer in self.cus_list:
             if customer in self.skipped:
                 continue
-
             if iter >= 1 and customer in dual_exists_customers:
+                ccols = broadcast_cols[customer]
                 dual_pack_this = (
-                    dual_series[customer, :].to_dict(),
+                    broadcast_keys[customer],
+                    broadcast_mat[ccols, :] @ broadcast_nodes,
                     dual_ws[customer],
                 )
             else:
@@ -260,7 +269,7 @@ class Pricing(object):
 
         # for remote
         self.columns_helpers = None
-
+        self.primal_vars_sorted = None
         self.args_modeling = (bool_dp, model_name, gap, limit, threads, CG_SUBP_LOGGING)
 
     def model_reset(self):
@@ -296,7 +305,8 @@ class Pricing(object):
         # self.model = self.env.createModel(model_name)
         self.env = self.solver.ENVR
         self.model = self.solver.model
-
+        if self.solver_name == "GUROBI":
+            self.model.setParam("OutputFlag", logging)
         self.model.setParam(self.solver_constant.Param.Logging, logging)
         self.model.setParam(self.solver_constant.Param.RelGap, gap)
         self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
@@ -411,7 +421,7 @@ class Pricing(object):
                     idx["select_edge"].append((t, edge))
                     for k in self.sku_list:
                         idx["sku_select_edge"].append((t, edge, k))
-        # if self.arg.customer_backorder:
+
         for t in range(self.T):
             for k in self.sku_list:
                 if self.arg.backorder:
@@ -427,28 +437,7 @@ class Pricing(object):
                 for k in self.sku_list:
                     # flow of sku k on edge (i,j) at t
                     idx["sku_flow"].append((t, edge, k))
-                    # debug determine delivery
-                    # if str(k) == 'SKU_Y000020':
-                    #     if t == 0 or t == 2:
-                    #         if edge.end.type == const.CUSTOMER:
-                    #             if str(edge.start) == 'T0020':
-                    #                 self.var_types["sku_flow"]["lb"].append(14.30672209)
-                    #                 self.var_types["sku_flow"]["ub"].append(14.30672209)
-                    #             elif str(edge.start) == 'T0021':
-                    #                 self.var_types["sku_flow"]["lb"].append(83.8034806)
-                    #                 self.var_types["sku_flow"]["ub"].append(83.8034806)
-                    #             else:
-                    #                 self.var_types["sku_flow"]["lb"].append(0)
-                    #                 self.var_types["sku_flow"]["ub"].append(0)
-                    #         else:
-                    #             self.var_types["sku_flow"]["lb"].append(0)
-                    #             self.var_types["sku_flow"]["ub"].append(0)
-                    #     else:
-                    #         self.var_types["sku_flow"]["lb"].append(0)
-                    #         self.var_types["sku_flow"]["ub"].append(0)
-                    # else:
-                    #     self.var_types["sku_flow"]["lb"].append(0)
-                    #     self.var_types["sku_flow"]["ub"].append(0)
+
         # for initialization in CG
         self.var_idx = {}
         for var in idx.keys():
@@ -715,14 +704,15 @@ class Pricing(object):
     def extra_objective(self, customer, dual_packs=None):
         if dual_packs is None:
             return 0.0
-        dual, dual_ws = dual_packs
+        dual_keys, dual_vals, dual_ws = dual_packs
+        # dual_series, dual_ws = dual_packs
+
         obj = sum(
             self.variables["sku_flow"].get((t, ee, k), 0) * v
-            for (ee, k, t), v in dual.items()
+            for (ee, k, t), v in zip(dual_keys, dual_vals)
         )
-        obj -= dual_ws
 
-        return obj
+        return obj - dual_ws
 
     def update_objective(self, customer, dual_packs):
         """
@@ -731,7 +721,6 @@ class Pricing(object):
 
         obj = self.original_obj + self.extra_objective(customer, dual_packs)
 
-        # self.model.setObjective(obj, sense=self.solver_constant.MINIMIZE)
         self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
 
     def set_objective(self):
@@ -746,7 +735,6 @@ class Pricing(object):
 
         self.original_obj = self.get_original_objective()
 
-        # self.model.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
         self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
 
         return
@@ -891,9 +879,14 @@ class Pricing(object):
         _vals["status"] = self.model.status
         _vals["sku_flow"] = {}
         if len(self.sku_flow_keys) > 0:
-            _vals["sku_flow"] = dict(
-                self.model.getInfo(COPT.Info.Value, self.variables["sku_flow"])
-            )
+            if self.arg.backend.upper() == "COPT":
+                _vals["sku_flow"] = dict(
+                    self.model.getInfo(COPT.Info.Value, self.variables["sku_flow"])
+                )
+            else:
+                _vals["sku_flow"] = dict(
+                    self.model.getAttr(GRB.Attr.X, self.variables["sku_flow"])
+                )
 
         if CG_EXTRA_DEBUGGING:
             if type(self.columns_helpers["transportation_cost"]) != float:
@@ -954,6 +947,11 @@ class Pricing(object):
             col_helper["unfulfilled_demand_cost"] = self.obj[label]
         except:
             col_helper["unfulfilled_demand_cost"] = 0.0
+
+        # col_helper["sku_flow"] = pd.Series(
+        #     {k: 0 for k, v in self.variables["sku_flow"].items()}
+        # )
+
         self.columns_helpers = col_helper
         self.columns = []
 

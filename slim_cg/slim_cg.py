@@ -186,12 +186,13 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
+        # self.vars_basis = self.rmp_model.getVarBasis()
+        # self.cons_basis = self.rmp_model.getConstrBasis()
         if self.iter > 0:
-            self.rmp_model.setBasis(self.vars_basis, self.cons_basis)
+            # self.rmp_model.setBasis(self.vars_basis, self.cons_basis)
+            pass
         self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
         self.solver.solve()
-        self.vars_basis = self.rmp_model.getVarBasis()
-        self.cons_basis = self.rmp_model.getConstrBasis()
         self.rmp_model.setParam("LogToConsole", 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
@@ -376,29 +377,40 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
                     dual_packs = (
-                        self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
+                        self.rmp_oracle.fetch_dual_info(self.iter == 1)
+                        if self.iter >= 1
+                        else None
                     )
 
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
                 if self.iter >= 1:
-                    dual, dual_ws = dual_packs
-                    dual_series = pd.Series(
-                        {(ee.end, ee, k, t): v for (ee, k, t), v in dual.items()}
-                    )
-                    dual_exists_customers = dual_series.index.get_level_values(0)
+                    (
+                        node_vals,
+                        dual_ws,
+                        dual_exists_customers,
+                    ) = dual_packs
+
+                    # broadcast node dual values
+                    #   and compute edge dual on the remotes
+                    with utils.TimerContext(self.iter, f"put node vals storage"):
+                        broadcast_nodes = ray.put(node_vals)
+
                 else:
-                    dual_series = None
                     dual_ws = None
                     dual_exists_customers = None
-                # if self.iter >= 1 and customer in dual_exists_customers:
-                #     dual_pack_this = (
-                #         dual_series[customer, :].to_dict(),
-                #         dual_ws[customer],
-                #     )
-                # else:
-                #     dual_pack_this = None
+                    broadcast_nodes = None
+                    broadcast_mat = None
+                    broadcast_cols = None
+                    broadcast_keys = None
+
+                if self.init_ray and self.iter == 1:
+                    # put broadcasting only once
+                    with utils.TimerContext(self.iter, f"put obj storage"):
+                        broadcast_mat = ray.put(self.rmp_oracle.broadcast_matrix)
+                        broadcast_cols = ray.put(self.rmp_oracle.dual_cols)
+                        broadcast_keys = ray.put(self.rmp_oracle.dual_keys)
 
                 with utils.TimerContext(self.iter, f"solve_columns"):
                     # modify for parallel
@@ -413,9 +425,11 @@ class NetworkColumnGenerationSlim(object):
                             ):
                                 # worker.update_objective_all.remote(dual_pack_this)
                                 worker.update_objective_all_new.remote(
-                                    customer,
                                     self.iter,
-                                    dual_series,
+                                    broadcast_mat,
+                                    broadcast_nodes,
+                                    broadcast_cols,
+                                    broadcast_keys,
                                     dual_ws,
                                     dual_exists_customers,
                                 )
@@ -431,7 +445,8 @@ class NetworkColumnGenerationSlim(object):
                             oracle.model.reset()
                             if self.iter >= 1 and customer in dual_exists_customers:
                                 dual_pack_this = (
-                                    dual_series[customer, :].to_dict(),
+                                    self.rmp_oracle.dual_keys[customer],
+                                    self.rmp_oracle.dual_vals[customer],
                                     dual_ws[customer],
                                 )
                             else:
@@ -501,10 +516,10 @@ class NetworkColumnGenerationSlim(object):
                 # if self.arg.check_rmp_mip:
                 #     if int(self.iter) % self.arg.rmp_mip_iter == 0:
                 if self.arg.check_rmp_mip and not self.rmp_oracle.bool_is_lp:
-                    if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
+                    if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
                     ):
-                        choice = self.arg.method_mip_heuristic
+                        choice = self.arg.cg_method_mip_heuristic
                         func = slp.PrimalMethod.select(choice)
 
                         with utils.TimerContext(
