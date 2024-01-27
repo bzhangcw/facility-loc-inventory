@@ -56,12 +56,12 @@ class Param:
             help="""
             the maximum number of iterations
             """,
-            default=5,
+            default=10,
         )
         parser.add_argument(
             "--cg_rmp_mip_iter",
             type=int,
-            default=5,
+            default=10,
             help="""
             the interval to invoke an integral heuristic
             """,

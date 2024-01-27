@@ -57,7 +57,7 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
 
     solver = arg.backend.upper()
-    init_ray = False
+    init_ray = True
     num_workers = 22
     num_cpus = 22
     np_cg = NCS(

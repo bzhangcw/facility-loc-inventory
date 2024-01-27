@@ -347,6 +347,7 @@ class NetworkColumnGenerationSlim(object):
             self.init_rmp()
             self.init_rmp_by_cols()
 
+        _obj_last_iterate = 1e20
         while True:
             try:
                 bool_early_stop = False
@@ -358,6 +359,8 @@ class NetworkColumnGenerationSlim(object):
                     self._logger.info(
                         f"rmp solving finished: {self.rmp_model.status}@{iter}"
                     )
+
+                eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
                 # if self.rmp_model.status != self.solver_constant.OPTIMAL:
                 #     print(self.rmp_model.status, iter)
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
@@ -382,6 +385,9 @@ class NetworkColumnGenerationSlim(object):
                         else None
                     )
 
+                improved = (
+                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
+                ) > 1e-2
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -508,16 +514,18 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
 
                 self.iter += 1
-                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
+                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, df: {eps_fixed_point}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
 
                 self._logger.info(_this_log_line)
                 lp_objective = self.rmp_model.objval
 
-                # if self.arg.check_rmp_mip:
-                #     if int(self.iter) % self.arg.rmp_mip_iter == 0:
+                bool_terminate = (
+                    (not improved) or (not added) or self.iter >= self.max_iter
+                )
+
                 if self.arg.check_rmp_mip and not self.rmp_oracle.bool_is_lp:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
-                        self.iter >= self.max_iter
+                        bool_terminate
                     ):
                         choice = self.arg.cg_method_mip_heuristic
                         func = slp.PrimalMethod.select(choice)
@@ -539,7 +547,7 @@ class NetworkColumnGenerationSlim(object):
                 if self.arg.check_cost_cg:
                     # cost checker
                     check_cost_cg(self)
-                if not added or self.iter >= self.max_iter:
+                if bool_terminate:
                     self.red_cost = self.red_cost[: self.iter, :]
                     break
 
@@ -548,6 +556,8 @@ class NetworkColumnGenerationSlim(object):
                     break
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     self.update_rmp_by_cols()
+
+                _obj_last_iterate = self.rmp_model.objval
 
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")
