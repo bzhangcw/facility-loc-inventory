@@ -9,6 +9,7 @@ from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
 CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 4))
+CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 1))
 
 
 class DNPSlim(DNP):
@@ -344,16 +345,24 @@ class DNPSlim(DNP):
         ##########################
         # add variables
         for vt, param in self.var_types.items():
-            self.variables[vt] = self.solver.addVars(
-                idx[vt],
-                lb=param["lb"],
-                ub=param["ub"] if "ub" in param else self.solver_constant.INFINITY,
-                vtype=param["vtype"],
-                nameprefix=f"{param['nameprefix']}_",
-            )
+            if CG_ANONYMOUS:
+                self.variables[vt] = self.solver.addVars(
+                    idx[vt],
+                    lb=param["lb"],
+                    ub=param["ub"] if "ub" in param else self.solver_constant.INFINITY,
+                    vtype=param["vtype"],
+                )
+            else:
+                self.variables[vt] = self.solver.addVars(
+                    idx[vt],
+                    lb=param["lb"],
+                    ub=param["ub"] if "ub" in param else self.solver_constant.INFINITY,
+                    vtype=param["vtype"],
+                    nameprefix=f"{param['nameprefix']}_",
+                )
         # self.variables["cg_temporary"] = self.model.addVars(
         self.variables["cg_temporary"] = self.solver.addVars(
-            [c.idx for c in self.customer_list], nameprefix="lbdtempo"
+            [c.idx for c in self.customer_list],
         )
         self.variables["column_weights"] = {}
 

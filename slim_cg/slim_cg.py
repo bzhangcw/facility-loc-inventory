@@ -16,11 +16,12 @@ from coptpy import COPT
 from tqdm import tqdm
 from config.network import *
 import const as const
-import utils as utils
+import utils
 from entity import SKU, Customer
 from slim_cg.slim_rmp_model import DNPSlim, CG_RMP_METHOD
 from slim_cg.slim_pricing import Pricing, PricingWorker, CG_SUBP_LOGGING
-
+from slim_cg.slim_checker import check_cost_cg
+import slim_cg.slim_mip_heur as slp
 from solver_wrapper import GurobiWrapper, CoptWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
@@ -77,15 +78,13 @@ class NetworkColumnGenerationSlim(object):
         # @note: new,
         #   the oracle extension saves extra constraints for primal feasibility
         #   every time it is used, remove this
-        # self.bool_covering = bool_covering
+        self.vars_basis, self.cons_basis = None, None
         self.bool_edge_lb = self.arg.edge_lb
         self.bool_node_lb = self.arg.node_lb
         self.bool_fixed_cost = self.arg.fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
-        # self.add_distance = self.arg.add_distance
-        # self.add_cardinality = self.arg.add_cardinality
         self.dual_index = dict()
         self.variables = dict()  # variables
         self.iter = 0
@@ -187,8 +186,12 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
+        if self.iter > 0:
+            self.rmp_model.setBasis(self.vars_basis, self.cons_basis)
         self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
         self.solver.solve()
+        self.vars_basis = self.rmp_model.getVarBasis()
+        self.cons_basis = self.rmp_model.getConstrBasis()
         self.rmp_model.setParam("LogToConsole", 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
@@ -376,7 +379,6 @@ class NetworkColumnGenerationSlim(object):
                         self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
                     )
 
-                # TODO: early stopping
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -491,10 +493,9 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
 
                 self.iter += 1
+                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
 
-                self._logger.info(
-                    f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
-                )
+                self._logger.info(_this_log_line)
                 lp_objective = self.rmp_model.objval
 
                 # if self.arg.check_rmp_mip:
@@ -503,92 +504,26 @@ class NetworkColumnGenerationSlim(object):
                     if (int(self.iter) % self.arg.rmp_mip_iter == 0) or (
                         self.iter >= self.max_iter
                     ):
-                        with utils.TimerContext(self.iter, f"rmp milp-heuristic"):
-                            model = self.rmp_model
-                            self.rmp_oracle.switch_to_milp()
-                            self.rmp_model.write(
-                                f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps"
-                            )
-                            model.solve()
-                            print(
-                                self.iter,
-                                "MIP_RMP",
-                                model.getObjective().getValue(),
-                                "GAP",
-                                model.getObjective().getValue() - lp_objective,
-                            )
-                            ### Reset
-                            self.rmp_oracle.switch_to_lp()
-                            self._logger.info("rmp reset over")
-                if self.arg.check_cost_cg:
-                    holding_cost_rmp = 0.0
-                    transportation_cost_rmp = 0.0
-                    self.rmp_oracle.obj["holding_cost"] = {}
-                    for t in self.rmp_oracle.obj["holding_cost"].keys():
-                        holding_cost_rmp += (
-                            self.rmp_oracle.obj["holding_cost"][t].getExpr().getValue()
-                        )
-                    for t in self.rmp_oracle.obj["transportation_cost"].keys():
-                        if (
-                            type(self.rmp_oracle.obj["transportation_cost"][t])
-                            is not float
+                        choice = self.arg.method_mip_heuristic
+                        func = slp.PrimalMethod.select(choice)
+
+                        with utils.TimerContext(
+                            self.iter,
+                            f"{func.__name__}",
                         ):
-                            transportation_cost_rmp += (
-                                self.rmp_oracle.obj["transportation_cost"][t]
-                                .getExpr()
-                                .getValue()
-                            )
-                    print("tr_rmp", transportation_cost_rmp)
-                    transportation_cost_from_customer = 0.0
-                    unfulfilled_cost_from_customer = {t: 0 for t in range(self.arg.T)}
-                    variables = self.rmp_model.getVars()
-                    for v in variables:
-                        if v.getName().startswith("lambda"):
-                            # print(self.iter,v.getName())
-                            # print(v.getName().split('_')[1])
-                            for customer in self.columns.keys():
-                                if v.getName().split("_")[1] == str(customer):
-                                    print(v.getName())
-                                    print("lambda optimal value", v.x)
-                                    col_num = int(v.getName().split("_")[2])
-                                    print(
-                                        self.columns[customer][col_num][
-                                            "unfulfilled_demand_cost"
-                                        ]
-                                    )
-                                    print(
-                                        self.columns[customer][col_num][
-                                            "transportation_cost"
-                                        ]
-                                    )
-                                    # print("transportation_cost", self.columns[customer][0]['transportation_cost'])
-                                    # print("unfulfilled_demand_cost", self.columns[customer][0]['unfulfilled_demand_cost'])
-                                    transportation_cost_from_customer += (
-                                        v.x
-                                        * self.columns[customer][col_num][
-                                            "transportation_cost"
-                                        ]
-                                    )
-                                    for t in range(self.arg.T):
-                                        unfulfilled_cost_from_customer[t] += (
-                                            v.x
-                                            * self.columns[customer][col_num][
-                                                "unfulfilled_demand_cost"
-                                            ][t]
-                                        )
-                    print("tr_pricing", transportation_cost_from_customer)
-                    print(
-                        "transportation_cost",
-                        transportation_cost_rmp + transportation_cost_from_customer,
-                    )
-                    print("holding_cost", holding_cost_rmp)
-                    for t in range(self.arg.T):
-                        print(
-                            "unfulfilled_demand_cost",
-                            t,
-                            unfulfilled_cost_from_customer[t],
-                        )
-                    print("unfulfilled_demand_cost", unfulfilled_cost_from_customer)
+                            if func is None:
+                                pass
+                            else:
+                                mip_objective = func(self)
+
+                                self._logger.info(
+                                    _this_log_line
+                                    + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
+                                )
+
+                if self.arg.check_cost_cg:
+                    # cost checker
+                    check_cost_cg(self)
                 if not added or self.iter >= self.max_iter:
                     self.red_cost = self.red_cost[: self.iter, :]
                     break

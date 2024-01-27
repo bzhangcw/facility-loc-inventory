@@ -135,4 +135,5 @@ if __name__ == "__main__":
         num_cpus=num_cpus,
         solver=solver,
     )
-    np_cg.run()
+    with utils.TimerContext(0, "column generation main routine"):
+        np_cg.run()

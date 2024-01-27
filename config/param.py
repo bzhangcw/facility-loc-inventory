@@ -32,6 +32,18 @@ class Param:
         )
         ##### 1. Basic parameters #####
         parser.add_argument(
+            "--method_mip_heuristic",
+            "-p",
+            type=int,
+            help="""
+            the choice of primal method after collecting a 
+                set of columns (finished convexification)
+            """,
+            required=True,
+            default=-1,
+        )
+
+        parser.add_argument(
             "--conf_label",
             type=int,
             default=0,
