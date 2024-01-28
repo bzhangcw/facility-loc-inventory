@@ -7,7 +7,9 @@ from tqdm import tqdm
 
 import utils
 
-CG_SEQUENTIAL_BSIZE=100
+CG_SEQUENTIAL_BSIZE = 1000
+CG_FIX_TOL = 1e-1
+
 
 class PrimalMethod(IntEnum):
     Null = -1
@@ -59,6 +61,12 @@ def milp_sequential(self):
             v.setAttr(COPT.Info.LB, sol[idx])
             v.setAttr(COPT.Info.UB, sol[idx])
 
+    def _fix_by_attr(attr, v, val):
+        if self.rmp_oracle.backend == "COPT":
+            v.setInfo(attr, val)
+        else:
+            v.setAttr(attr, val)
+
     def _reset_binary_bound(v):
         if self.rmp_oracle.backend == "COPT":
             v.setInfo(COPT.Info.LB, 0)
@@ -77,6 +85,13 @@ def milp_sequential(self):
         sol = [v.x for v in binaries]
         for idx, v in enumerate(binaries):
             _fix_by_v(v)
+
+        # fix if sku_flow < 0
+        _reset_vals = []
+        for k, v in self.rmp_oracle.variables["sku_flow"].items():
+            if v.x < CG_FIX_TOL:
+                _reset_vals.append((v, "UB", v.UB))
+                _fix_by_attr("UB", v, 0.0)
 
     # with utils.TimerContext(self.iter, "sequential-column-weights"):
     #     for _, v in self.rmp_oracle.variables["column_weights"].items():
@@ -117,6 +132,8 @@ def milp_sequential(self):
         _reset_binary_bound(v)
     for _, v in self.rmp_oracle.variables["column_weights"].items():
         _reset_binary_bound(v)
+    for (v, attr, val) in _reset_vals:
+        _fix_by_attr(attr, v, val)
 
     mip_objective = model.objval
 

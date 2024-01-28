@@ -1,6 +1,7 @@
 import logging.handlers
 import os
 import pickle
+from tqdm import tqdm
 import sys
 import time
 from collections import defaultdict
@@ -31,13 +32,32 @@ lft = logging.Formatter("[%(name)s] %(asctime)-8s: %(message)s")
 logger = logging.getLogger("facinv")
 logger.setLevel(logging.INFO)
 
-chd = logging.StreamHandler(sys.stdout)
-chd.setFormatter(lft)
+
+class TqdmLoggingHandler(logging.StreamHandler):
+    """Avoid tqdm progress bar interruption by logger's output to console"""
+
+    # see logging.StreamHandler.eval method:
+    # https://github.com/python/cpython/blob/d2e2534751fd675c4d5d3adc208bf4fc984da7bf/Lib/logging/__init__.py#L1082-L1091
+    # and tqdm.write method:
+    # https://github.com/tqdm/tqdm/blob/f86104a1f30c38e6f80bfd8fb16d5fcde1e7749f/tqdm/std.py#L614-L620
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.write(msg, end=self.terminator)
+        except RecursionError:
+            raise
+        except Exception:
+            self.handleError(record)
+
+
 fhd = logging.handlers.RotatingFileHandler(
     filename=f"{CONF.DEFAULT_TMP_PATH}/events.log", backupCount=5
 )
-logger.addHandler(chd)
+tqd = TqdmLoggingHandler()
+tqd.setFormatter(lft)
 logger.addHandler(fhd)
+logger.addHandler(tqd)
 
 logger.info("{:^20s}".format("-- The FACINV python package --"))
 logger.info("{:^20s}".format("LLLGZ, 2023 (c)"))
@@ -326,9 +346,9 @@ def dump_cfg_tofname(cfg):
     keys = sorted(cfg.keys())
 
     return (
-        cfg["data_dir"].split("/")[-1].split(".")[0]
-        + "-"
-        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+            cfg["data_dir"].split("/")[-1].split(".")[0]
+            + "-"
+            + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     )
 
 
@@ -401,8 +421,8 @@ class TimerContext:
         return self
 
     def __exit__(
-        self,
-        *arg,
+            self,
+            *arg,
     ):
         self.end = time.time()
         self.interval = self.end - self.start
