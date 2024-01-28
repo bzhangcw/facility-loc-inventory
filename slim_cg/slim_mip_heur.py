@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 import utils
 
+CG_SEQUENTIAL_BSIZE=100
 
 class PrimalMethod(IntEnum):
     Null = -1
@@ -77,27 +78,38 @@ def milp_sequential(self):
         for idx, v in enumerate(binaries):
             _fix_by_v(v)
 
+    # with utils.TimerContext(self.iter, "sequential-column-weights"):
+    #     for _, v in self.rmp_oracle.variables["column_weights"].items():
+    #         _set_tob(v)
+    #     self.rmp_oracle.solver.solve()
+
     # summarizing the columns
     df = pd.DataFrame.from_records(
         [{"user_str": c.idx, "user": c, **col} for c, cols in self.columns.items() for col in cols]
     )
     dfn = df.set_index("user_str")["user"].to_dict()
     _sorted_c = df.groupby("user_str")['beta'].max().sort_values(ascending=False).index.to_list()
-    _keys_col = tuplelist(self.rmp_oracle.variables["column_weights"].keys())
-    # with utils.TimerContext(self.iter, "sequential-column-weights"):
-    #     for _, v in self.rmp_oracle.variables["column_weights"].items():
-    #         _set_tob(v)
-    #
-    #     self.rmp_oracle.solver.solve()
-    for idx, c in tqdm(enumerate(_sorted_c), ncols=90, leave=False):
-        with utils.TimerContext(self.iter, "sequential-column-weights"):
-            _c_keys = _keys_col.select(dfn[c], "*")
-            cols = (self.rmp_oracle.variables["column_weights"][cc] for cc in _c_keys)
+    _weight_c = {dfn[c]: idx for idx, c in enumerate(_sorted_c)}
+    _keys_col = sorted(
+        self.rmp_oracle.variables["column_weights"],
+        key=lambda x: (_weight_c[x[0]], -x[1])
+    )
+
+    def chunks(lst, n):
+        """yield successive n-sized chunks from lst."""
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    ckid = 0
+    for ck in tqdm(list(chunks(_keys_col, CG_SEQUENTIAL_BSIZE)), ncols=90, leave=True):
+        with utils.TimerContext(f"{self.iter}@{ckid}", "sequential-column-weights"):
+            cols = (self.rmp_oracle.variables["column_weights"][cc] for cc in ck)
             for v in cols:
                 _set_tob(v)
             self.rmp_oracle.solver.solve()
             for v in cols:
                 _fix_by_v(v)
+        ckid += 1
 
     # reset back to LP
     self.rmp_oracle.switch_to_lp()

@@ -505,7 +505,7 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
 
                 self.iter += 1
-                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, df: {eps_fixed_point}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
+                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, eps_df: {eps_fixed_point:.2e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
 
                 self._logger.info(_this_log_line)
                 lp_objective = self.rmp_model.objval
