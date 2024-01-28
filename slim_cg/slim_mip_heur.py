@@ -1,6 +1,9 @@
 from enum import IntEnum
 
+import pandas as pd
 from coptpy import COPT
+from gurobipy import tuplelist
+from tqdm import tqdm
 
 import utils
 
@@ -74,11 +77,28 @@ def milp_sequential(self):
         for idx, v in enumerate(binaries):
             _fix_by_v(v)
 
+    # summarizing the columns
+    df = pd.DataFrame.from_records(
+        [{"user_str": c.idx, "user": c, **col} for c, cols in self.columns.items() for col in cols]
+    )
+    dfn = df.set_index("user_str")["user"].to_dict()
+    _sorted_c = df.groupby("user_str")['beta'].max().sort_values(ascending=False).index.to_list()
+    _keys_col = tuplelist(self.rmp_oracle.variables["column_weights"].keys())
+    # with utils.TimerContext(self.iter, "sequential-column-weights"):
+    #     for _, v in self.rmp_oracle.variables["column_weights"].items():
+    #         _set_tob(v)
+    #
+    #     self.rmp_oracle.solver.solve()
+    for idx, c in tqdm(enumerate(_sorted_c), ncols=90, leave=False):
         with utils.TimerContext(self.iter, "sequential-column-weights"):
-            for _, v in self.rmp_oracle.variables["column_weights"].items():
+            _c_keys = _keys_col.select(dfn[c], "*")
+            cols = (self.rmp_oracle.variables["column_weights"][cc] for cc in _c_keys)
+            for v in cols:
                 _set_tob(v)
-
             self.rmp_oracle.solver.solve()
+            for v in cols:
+                _fix_by_v(v)
+
     # reset back to LP
     self.rmp_oracle.switch_to_lp()
     for v in binaries:
