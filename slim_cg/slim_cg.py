@@ -6,6 +6,7 @@ from typing import *
 
 import ray
 from coptpy import COPT
+from gurobipy import GRB
 from tqdm import tqdm
 
 import slim_cg.slim_mip_heur as slp
@@ -20,6 +21,8 @@ from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
+CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
+CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 0))
 
 
 class NetworkColumnGenerationSlim(object):
@@ -180,11 +183,59 @@ class NetworkColumnGenerationSlim(object):
         """
         # self.vars_basis = self.rmp_model.getVarBasis()
         # self.cons_basis = self.rmp_model.getConstrBasis()
-        if self.iter > 0:
-            # self.rmp_model.setBasis(self.vars_basis, self.cons_basis)
-            pass
+        if CG_RMP_USE_WS and self.iter > 0:
+            if CG_RMP_WS_OPTION == 0:
+                _ws_v = self.rmp_vbasis_init
+                _ws_c = self.rmp_cbasis_init
+            elif CG_RMP_WS_OPTION == 1:
+                _ws_v = self.rmp_vbasis
+                _ws_c = self.rmp_cbasis
+
+            n_new_rmp_vars = len(self.rmp_model.getVars()) - len(_ws_v)
+            n_new_rmp_cons = len(self.rmp_model.getConstrs()) - len(_ws_c)
+            print(
+                "using option {}: add {} new vars and {} new cons".format(
+                    CG_RMP_WS_OPTION, n_new_rmp_vars, n_new_rmp_cons
+                )
+            )
+            _ws_v = [*_ws_v, *[GRB.NONBASIC_LOWER] * n_new_rmp_vars]
+            _ws_c = [*_ws_c, *[GRB.NONBASIC_LOWER] * n_new_rmp_cons]
+
+            # set the modified basis status back to the model
+            self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), _ws_v)
+            self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
+
         self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
+
         self.solver.solve()
+
+        if CG_RMP_USE_WS:
+            self.rmp_model.setParam("LPWarmStart", 2)
+            # Get the variable basis status
+            self.rmp_vbasis = self.rmp_model.getAttr("VBasis", self.rmp_model.getVars())
+
+            # Get the constraint basis status
+            self.rmp_cbasis = self.rmp_model.getAttr(
+                "CBasis", self.rmp_model.getConstrs()
+            )
+            if self.iter == 0:
+                # save the initial basis.
+                self.rmp_vbasis_init = self.rmp_model.getAttr(
+                    "VBasis", self.rmp_model.getVars()
+                )
+                self.rmp_cbasis_init = self.rmp_model.getAttr(
+                    "CBasis", self.rmp_model.getConstrs()
+                )
+
+        # # Print the initial variable basis status
+        # print("Variable Basis Status:")
+        # for var, status in zip(self.rmp_model.getVars(), vbasis):
+        #     print(f"{var.VarName}: {status}")
+
+        # # Print the initial constraint basis status
+        # print("\nConstraint Basis Status:")
+        # for constr, status in zip(self.rmp_model.getConstrs(), cbasis):
+        #     print(f"{constr.ConstrName}: {status}")
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         if self.init_ray:
