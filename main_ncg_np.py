@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 
 import utils as utils
-from dnp_model import DNP
 from config.network import construct_network
-from ncg.np_cg import *
 from config.param import Param
+from dnp_model import DNP
+from ncg.np_cg import *
 
 if __name__ == "__main__":
     param = Param()

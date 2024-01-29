@@ -3,25 +3,18 @@ import json
 import logging
 import os
 from typing import *
-from typing import List
 
-# import gurobipy as gp
-import coptpy
-import coptpy as cp
-import networkx as nx
-import numpy as np
-import pandas as pd
 import ray
 from coptpy import COPT
 from tqdm import tqdm
-from config.network import *
-import const as const
-import utils as utils
-from entity import SKU, Customer
-from slim_cg.slim_rmp_model import DNPSlim
-from slim_cg.slim_pricing import Pricing, PricingWorker, CG_PRICING_LOGGING
 
-from solver_wrapper import GurobiWrapper, CoptWrapper
+import slim_cg.slim_mip_heur as slp
+import utils
+from config.network import *
+from entity import SKU, Customer
+from slim_cg.slim_checker import check_cost_cg
+from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
+from slim_cg.slim_rmp_model import CG_RMP_METHOD, DNPSlim
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
@@ -36,9 +29,6 @@ class NetworkColumnGenerationSlim(object):
         network: nx.DiGraph,
         customer_list: List[Customer],
         full_sku_list: List[SKU] = None,
-        bool_covering=False,
-        bool_edge_lb=False,
-        bool_node_lb=False,
         max_iter=500,
         init_primal=None,
         init_sweeping=True,
@@ -74,20 +64,19 @@ class NetworkColumnGenerationSlim(object):
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
+        self.obj = dict()
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, Optional[ray.actor.ActorHandle, Pricing]] = {}
         # @note: new,
         #   the oracle extension saves extra constraints for primal feasibility
         #   every time it is used, remove this
-        # self.bool_covering = bool_covering
-        self.bool_edge_lb = self.arg.edgelb
-        self.bool_node_lb = self.arg.nodelb
+        self.vars_basis, self.cons_basis = None, None
+        self.bool_edge_lb = self.arg.edge_lb
+        self.bool_node_lb = self.arg.node_lb
         self.bool_fixed_cost = self.arg.fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
-        # self.add_distance = self.arg.add_distance
-        # self.add_cardinality = self.arg.add_cardinality
         self.dual_index = dict()
         self.variables = dict()  # variables
         self.iter = 0
@@ -111,6 +100,7 @@ class NetworkColumnGenerationSlim(object):
         if self.init_ray:
             if ray.is_initialized():
                 ray.shutdown()
+            self._logger.info("initializing ray")
             ray.init(num_cpus=num_cpus)
         self.skip_customers = set()
 
@@ -166,21 +156,10 @@ class NetworkColumnGenerationSlim(object):
         """
         subgraph = self.subgraph[customer]
         arg = self.arg
+        arg.full_sku_list = self.full_sku_list
         model_name = customer.idx + "_oracle"
 
         if self.init_ray:
-            # oracle = dnp_model.DNP.remote(
-            #     arg,
-            #     subgraph,
-            #     full_sku_list,
-            #     env_name,
-            #     model_name,
-            #     bool_covering=self.bool_covering,
-            #     bool_capacity=True,
-            #     bool_edge_lb=self.bool_edge_lb,
-            #     bool_node_lb=self.bool_node_lb,
-            #     cus_list=[customer],
-            # )  # for initial column, set obj = 0
             oracle = self.worker_cus_dict[customer]
 
         else:
@@ -188,63 +167,26 @@ class NetworkColumnGenerationSlim(object):
                 arg,
                 subgraph,
                 model_name=model_name,
-                # lk: bool_covering应该是False比较好
-                # bool_covering=self.bool_covering,
-                # bool_capacity=self.arg.capacity,
-                # bool_edge_lb=self.arg.lowerbound,
-                # bool_node_lb=self.arg.nodelb,
-                # bool_fixed_cost=self.arg.node_cost,
                 customer=customer,
                 solver=self.solver_name,
-                logging=CG_PRICING_LOGGING,
             )  # for initial column, set obj = 0
             oracle.modeling(customer)
-            # oracle.write(f"{customer}.pricing.lp")
 
         return oracle
-
-    # todo, remove later.
-    # def solve_lp_relaxation(self):
-    #     full_lp_relaxation = dnp_model.DNP(self.arg, self.full_network)
-    #     full_lp_relaxation.modeling()
-    #     # get the LP relaxation
-    #     vars = full_lp_relaxation.model.getVars()
-    #     binary_vars_index = []
-    #     for v in vars:
-    #         if v.getType() == self.solver_constant.BINARY:
-    #             binary_vars_index.append(v.getIdx())
-    #             v.setType(self.solver_constant.CONTINUOUS)
-    #     ######################
-    #     full_lp_relaxation.model.setParam("Logging", 1)
-    #     full_lp_relaxation.solve()
-    #     lp_dual = full_lp_relaxation.model.getDuals()
-    #     dual_index = full_lp_relaxation.dual_index_for_rmp
-    #
-    #     return lp_dual, dual_index
 
     def solve_rmp(self):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        self.rmp_model.setParam("LpMethod", 2)
-        self.rmp_model.setParam("Crossover", 0)
-        if self.arg.rmp_relaxation:
-            variables = self.rmp_model.getVars()
-            binary_vars_index = []
-            for v in variables:
-                if v.getType() == COPT.BINARY:
-                    binary_vars_index.append(v.getIdx())
-                    v.setType(COPT.CONTINUOUS)
-        # self.rmp_model.solve()
+        # self.vars_basis = self.rmp_model.getVarBasis()
+        # self.cons_basis = self.rmp_model.getConstrBasis()
+        if self.iter > 0:
+            # self.rmp_model.setBasis(self.vars_basis, self.cons_basis)
+            pass
+        self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
         self.solver.solve()
-        self.rmp_model.setParam(self.solver_constant.Param.Logging, 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
-        """
-        Construct and solve the subproblem
-        Only need to change the objective function, subject to the same oracle constraints
-        """
-
         if self.init_ray:
             oracle = self.worker_list[self.worker_cus_dict[customer]]
             ray.get(oracle.model_reset.remote(customer))
@@ -269,7 +211,6 @@ class NetworkColumnGenerationSlim(object):
         added = v < -1e-9 or dual_vars is None
 
         if self.init_ray:
-            # new_col = ray.get(oracle.query_columns.remote())
             new_col = ray.get(oracle.query_columns.remote(customer))
         else:
             new_col = oracle.query_columns()
@@ -298,36 +239,56 @@ class NetworkColumnGenerationSlim(object):
 
         return added
 
-    def init_column(self, customer):
+    # def init_column(self, customer):
+    #     _vals = {}
+    #     _vals["sku_flow"] = {
+    #         k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
+    #     }
+    def init_column(self, customer, sku_flow_keys):
         _vals = {}
-        _vals["sku_flow"] = {
-            k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
-        }
+        _vals["sku_flow"] = {k: 0.0 for k in sku_flow_keys}
         unfulfilled_cost = 0.0
+        _vals["unfulfilled_demand_cost"] = {t: 0.0 for t in range(self.arg.T)}
         for t in range(self.arg.T):
-            unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
+            if self.arg.backorder:
+                # self.partial_obj[t] += self.init_sku_backlogged_demand_cost(t, customer)
+                unfulfilled_cost += self.init_sku_backlogged_demand_cost(t, customer)
+                _vals["unfulfilled_demand_cost"][
+                    t
+                ] += self.init_sku_backlogged_demand_cost(t, customer)
+            else:
+                unfulfilled_cost += self.init_sku_unfulfill_demand_cost(t, customer)
+                _vals["unfulfilled_demand_cost"][
+                    t
+                ] += self.init_sku_unfulfill_demand_cost(t, customer)
         _vals["beta"] = unfulfilled_cost
+        _vals["transportation_cost"] = 0
         return _vals
 
     def init_sku_unfulfill_demand_cost(self, t: int, customer: Customer):
-        # lk：check完了没问题 就是把unfulfill_demand_cost取小了
         unfulfill_demand_cost = 0.0
         if customer.has_demand(t):
             for k in customer.demand_sku[t]:
-                if customer.unfulfill_sku_unit_cost is not None:
-                    unfulfill_sku_unit_cost = customer.unfulfill_sku_unit_cost[(t, k)]
-                else:
-                    unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
+                # if customer.unfulfill_sku_unit_cost is not None:
+                #     unfulfill_sku_unit_cost = customer.unfulfill_sku_unit_cost[(t, k)]
+                # else:
+                unfulfill_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
 
                 unfulfill_node_sku_cost = unfulfill_sku_unit_cost * customer.demand.get(
                     (t, k), 0
                 )
-
                 unfulfill_demand_cost = unfulfill_demand_cost + unfulfill_node_sku_cost
 
-                # self.obj["unfulfill_demand_cost"][(t, k)] = unfulfill_node_sku_cost
-
         return unfulfill_demand_cost
+
+    def init_sku_backlogged_demand_cost(self, t: int, customer: Customer):
+        backlogged_demand_cost = 0.0
+        for v in range(t + 1):
+            for k in self.full_sku_list:
+                backlogged_demand_cost += (
+                    self.arg.unfulfill_sku_unit_cost * customer.demand.get((v, k), 0)
+                )
+        return backlogged_demand_cost
 
     def run(self):
         """
@@ -337,112 +298,162 @@ class NetworkColumnGenerationSlim(object):
 
         # construct oracles
         self._logger.info("initialization complete, start generating columns...")
-        self._logger.info("generating column oracles")
         # initialize column helpers
         with utils.TimerContext(self.iter, f"initialize_columns"):
             if self.init_ray:
                 self.construct_worker()
                 ray.get(
                     [
-                        worker.construct_pricings.remote(self.subgraph)
+                        worker.construct_Pricings.remote(self.subgraph)
                         for worker in self.worker_list
                     ]
                 )
-            for customer in tqdm(self.customer_list):
-                self.oracles[customer] = self.construct_oracle(customer)
-                init_col = self.init_column(customer)
+                all_var_keys = ray.get(
+                    [
+                        worker.get_all_var_keys.remote("sku_flow")
+                        for worker in self.worker_list
+                    ]
+                )
+
+                var_keys = []
+                for var_key in all_var_keys:
+                    # todo, why extend, this not working in non-ray mode.
+                    var_keys.extend(var_key)
+            else:
+                var_keys = []
+                for customer in tqdm(self.customer_list):
+                    self.oracles[customer] = self.construct_oracle(customer)
+                    var_keys.append(self.oracles[customer].get_var_keys("sku_flow"))
+
+                    # init_col = self.init_column(customer)
+                    # self.columns[customer] = []
+                    # self.columns[customer].append(init_col)
+
+            for customer, i in zip(self.customer_list, range(self.cus_num)):
+                init_col = self.init_column(customer, var_keys[i])
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
 
-        # use the sweeping method to initialize
-        # @note,
-        #   is the primal sweeping needed for this formulation ?
-        #   do we ever need an initialization
-        # cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
-            self.rmp_model.write("init_rmp0.lp")
             self.init_rmp_by_cols()
-            self.rmp_model.write("init_rmp1.lp")
-        self.rmp_model.setParam(self.solver_constant.Param.Logging, 1)
 
-        self._logger.info("initialization of restricted master finished")
-        self._logger.info("solving the first rmp")
-        while True:  # may need to add a termination condition
+        _obj_last_iterate = 1e20
+        while True:
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"solve_rmp"):
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
+                    )
                     self.solve_rmp()
-                if self.rmp_model.status != self.solver_constant.OPTIMAL:
-                    print(self.rmp_model.status, iter)
-                    self.rmp_model.write("rmp{}.lp".format(self.iter))
-                # if self.rmp_model.status == self.solver_constant.NUMERICAL:
-                #     # print("NUMERICAL",self.rmp_model.status, iter)
-                #     self.rmp_model.write("rmp{}.lp".format(self.iter))
+                    self._logger.info(
+                        f"rmp solving finished: {self.rmp_model.status}@{iter}"
+                    )
+
+                eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
+                # if self.rmp_model.status != self.solver_constant.OPTIMAL:
+                #     print(self.rmp_model.status, iter)
                 if self.rmp_model.status == self.solver_constant.INFEASIBLE:
-                    self._logger.info("initial column of RMP is infeasible")
-                    # self.rmp_model.write("1109/rmp.lp")
+                    self._logger.info("RMP is infeasible")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
+                    )
                     self.rmp_model.computeIIS()
-                    self.rmp_model.write("12.14/rmp.iis")
-                    # vv = self.rmp_oracle.constrs.get("flow_conservation")
-                    # if vv is not None:
-                    #     self.rmp_model.remove(vv)
-                    # for t in range(self.arg.T):
-                    #     self.add_new_flow_conservation(t,self.rmp_model)
-                    # self.rmp_model.update_objective()
-                    # self.solve_rmp()
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.iis"
+                    )
                 if CG_EXTRA_VERBOSITY:
                     self._logger.info("extra verbosity lp")
-                    self.rmp_model.write(f"rmp@{self.iter}.lp")
+                    self.rmp_model.write(
+                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
+                    )
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
                     dual_packs = (
-                        self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
+                        self.rmp_oracle.fetch_dual_info(self.iter == 1)
+                        if self.iter >= 1
+                        else None
                     )
 
-                ######################################
-                # todo: 额外写个early stopping的功能
+                improved = (
+                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
+                ) > 1e-2
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
                 if self.iter >= 1:
-                    dual, dual_ws = dual_packs
-                    dual_series = pd.Series(
-                        {(ee.end, t, ee, k): v for (ee, k, t), v in dual.items()}
-                    )
+                    (
+                        node_vals,
+                        dual_ws,
+                        dual_exists_customers,
+                    ) = dual_packs
+
+                    # broadcast node dual values
+                    #   and compute edge dual on the remotes
+                    with utils.TimerContext(self.iter, f"put node vals storage"):
+                        broadcast_nodes = ray.put(node_vals)
+
+                else:
+                    dual_ws = None
+                    dual_exists_customers = None
+                    broadcast_nodes = None
+                    broadcast_mat = None
+                    broadcast_cols = None
+                    broadcast_keys = None
+
+                if self.init_ray and self.iter == 1:
+                    # put broadcasting only once
+                    with utils.TimerContext(self.iter, f"put obj storage"):
+                        broadcast_mat = ray.put(self.rmp_oracle.broadcast_matrix)
+                        broadcast_cols = ray.put(self.rmp_oracle.dual_cols)
+                        broadcast_keys = ray.put(self.rmp_oracle.dual_keys)
 
                 with utils.TimerContext(self.iter, f"solve_columns"):
                     # modify for parallel
                     if self.init_ray:
-                        for worker in tqdm(self.worker_list, ncols=80, leave=False):
+                        for worker_id, worker in tqdm(
+                            enumerate(self.worker_list), ncols=80, leave=False
+                        ):
                             worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
-                            # todo: not sure,
-                            worker.update_objective_all.remote(
-                                (dual_series[customer, :], dual_ws[customer])
-                            )
+                            with utils.TimerContext(
+                                self.iter, f"update pricing", logging=worker_id < 1
+                            ):
+                                # worker.update_objective_all.remote(dual_pack_this)
+                                worker.update_objective_all_new.remote(
+                                    self.iter,
+                                    broadcast_mat,
+                                    broadcast_nodes,
+                                    broadcast_cols,
+                                    broadcast_keys,
+                                    dual_ws,
+                                    dual_exists_customers,
+                                )
+
+                            if self.arg.pricing_relaxation:
+                                worker.set_all_relaxation.remote()
                             worker.solve_all.remote()
                     else:
-                        for customer in tqdm(self.customer_list, ncols=80, leave=False):
-                            # lk: 这里的oracle是pricing问题的oracle init_RMP之前的oracle
-                            #   emm那么请问这里reset之后右不加新的约束不是没有任何约束了嘛？？？
+                        for col_ind, customer in tqdm(
+                            enumerate(self.customer_list), ncols=80, leave=False
+                        ):
                             oracle: Pricing = self.oracles[customer]
                             oracle.model.reset()
-                            # 把对偶变量加上后update oracle 然后solve 这是第一次求解
-                            if CG_PRICING_LOGGING:
-                                self._logger.info(f"start update {customer.idx}")
-                            with utils.TimerContext(self.iter, f"update pricing"):
-                                oracle.update_objective(
-                                    customer,
-                                    dual_packs=(
-                                        dual_series[customer, :],
-                                        dual_ws[customer],
-                                    )
-                                    if self.iter >= 1
-                                    else None,
+                            if self.iter >= 1 and customer in dual_exists_customers:
+                                dual_pack_this = (
+                                    self.rmp_oracle.dual_keys[customer],
+                                    self.rmp_oracle.dual_vals[customer],
+                                    dual_ws[customer],
                                 )
-                            if CG_PRICING_LOGGING:
-                                self._logger.info(f"end update {customer.idx}")
+                            else:
+                                dual_pack_this = None
+                            with utils.TimerContext(
+                                self.iter, f"update pricing", logging=col_ind < 1
+                            ):
+                                oracle.update_objective(
+                                    customer, dual_packs=dual_pack_this
+                                )
                             if self.arg.pricing_relaxation:
                                 variables = oracle.model.getVars()
                                 binary_vars_index = []
@@ -450,82 +461,84 @@ class NetworkColumnGenerationSlim(object):
                                     if v.getType() == COPT.BINARY:
                                         binary_vars_index.append(v.getIdx())
                                         v.setType(COPT.CONTINUOUS)
+                            if CG_SUBP_LOGGING:
+                                oracle.model.write(
+                                    f"subp@{self.iter}@{customer.idx}.mps"
+                                )
                             oracle.solve()
                             if oracle.model.status == self.solver_constant.INFEASIBLE:
                                 self._logger.info("oracle is infeasible")
-                                oracle.model.write(
-                                    f"{utils.CONF.DEFAULT_TMP_PATH}/oracle{customer}.lp"
-                                )
                                 oracle.model.computeIIS()
-                                oracle.model.write(
-                                    f"{utils.CONF.DEFAULT_TMP_PATH}/oracle{customer}.iis"
-                                )
+                                oracle.model.write("oracle{}.iis".format(customer))
                                 print("iis written")
 
+                with utils.TimerContext(self.iter, f"generating_columns"):
                     if self.init_ray:
-                        all_new_cols = ray.get(
-                            [
-                                worker.query_all_columns.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
-                        all_v = ray.get(
-                            [
-                                worker.get_all_model_objval.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
-                        all_model_status_list = ray.get(
-                            [
-                                worker.get_all_model_status.remote()
-                                for worker in self.worker_list
-                            ]
-                        )
-
-                        new_cols = []
-                        v = []
-                        model_status_list = []
-                        for new_col, _v, _model_status in zip(
-                            all_new_cols, all_v, all_model_status_list
-                        ):
-                            new_cols.extend(new_col)
-                            v.extend(_v)
-                            model_status_list.extend(_model_status)
+                        new_cols = [
+                            cc
+                            for worker in self.worker_list
+                            for cc in ray.get(worker.query_all_columns.remote())
+                        ]
                     else:
-                        # lk: 是否RMP初始化结束之后就要给出一些column？或者说这个时候column都是0也应该给出一个 🚬
                         new_cols = [
                             oracle.query_columns() for oracle in self.oracles.values()
                         ]
-                        v = [oracle.model.objval for oracle in self.oracles.values()]
-                        model_status_list = [
-                            oracle.model.status for oracle in self.oracles.values()
-                        ]
-
+                        # v = [oracle.model.objval for oracle in self.oracles.values()]
+                        # model_status_list = [
+                        #     oracle.model.status for oracle in self.oracles.values()
+                        # ]
+                    self._logger.info("column generating finished")
                     for col_ind, customer in enumerate(self.customer_list):
-                        self.red_cost[self.iter, col_ind] = v[col_ind]
-                        added = (v[col_ind] < -1e-9 or dual_packs is None) or added
+                        _redcost = new_cols[col_ind]["objval"]
+                        _status = new_cols[col_ind]["status"]
+                        self.red_cost[self.iter, col_ind] = _redcost
+                        added = (_redcost < -1e-9 or dual_packs is None) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
-                        model_status = model_status_list[col_ind]
-                        if (
-                            # self.oracles[customer].model.status
-                            # ray.get(self.oracles[customer].get_model_status.remote())
-                            model_status
-                            == self.solver_constant.INTERRUPTED
-                        ):
+                        if _status == self.solver_constant.INTERRUPTED:
                             bool_early_stop = True
                             self._logger.info("early terminated")
                             break
+                        if _status == self.solver_constant.INFEASIBLE:
+                            self._logger.info("oracle is infeasible")
                     # modify for parallel
 
                 self.iter += 1
+                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, eps_df: {eps_fixed_point:.2e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
 
-                self._logger.info(
-                    f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e}",
+                self._logger.info(_this_log_line)
+                lp_objective = self.rmp_model.objval
+
+                bool_terminate = (
+                    (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
-                if not added or self.iter >= self.max_iter:
+                if self.arg.check_rmp_mip and not self.rmp_oracle.bool_is_lp:
+                    if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
+                        bool_terminate
+                    ):
+                        choice = self.arg.cg_method_mip_heuristic
+                        func = slp.PrimalMethod.select(choice)
+
+                        with utils.TimerContext(
+                            self.iter,
+                            f"{func.__name__}",
+                        ):
+                            if func is None:
+                                pass
+                            else:
+                                mip_objective = func(self)
+
+                                self._logger.info(
+                                    _this_log_line
+                                    + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
+                                )
+
+                if self.arg.check_cost_cg:
+                    # cost checker
+                    check_cost_cg(self)
+                if bool_terminate:
                     self.red_cost = self.red_cost[: self.iter, :]
                     break
 
@@ -535,27 +548,26 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     self.update_rmp_by_cols()
 
+                _obj_last_iterate = self.rmp_model.objval
+
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")
                 break
         utils.visualize_timers()
         self._logger.info(f"save solutions to {utils.CONF.DEFAULT_SOL_PATH}")
-        self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
+        # todo
+        # self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
     def init_rmp_by_cols(self):
         """
         update the RMP with new columns
         """
-        # lk：就是说没看懂这个update_rmp_by_cols的东西 和上面的solve_columns的东西有什么关系吗？？？ lambda的体现呢？
-        # self.rmp_model.reset()
         if not self.bool_rmp_update_initialized:
-            # 这个是放binding约束的
+            # sku_flow
             self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
-            # 这个是放sku_flow的值的
             self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
-            # 这个是放ws的约束的
+            # lambda
             self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
-            # lk:cg_binding_constrs要加点名字啊不然都不知道谁是谁
             for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
                 edges = self.rmp_oracle.cg_downstream[node]
                 for ee in edges:
@@ -583,11 +595,7 @@ class NetworkColumnGenerationSlim(object):
             col_idxs = list(zip(_cons_idx, _cons_coef))
             # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
             try:
-                # new_col = cp.Column(
-                #     col_idxs,
-                # )
                 new_col = self.solver.addColumn(_cons_idx, _cons_coef)
-                # 这块还要再看看怎么搞
                 self.rmp_oracle.variables["column_weights"][
                     c, self.columns[c].__len__() - 1
                 ] = self.rmp_model.addVar(
@@ -595,6 +603,7 @@ class NetworkColumnGenerationSlim(object):
                     name=f"lambda_{c.idx}_{len(self.columns[c])}",
                     lb=0.0,
                     ub=1.0,
+                    vtype=self.solver_constant.CONTINUOUS,
                     column=new_col,
                 )
             except Exception as e:
@@ -611,16 +620,10 @@ class NetworkColumnGenerationSlim(object):
         """
         update the RMP with new columns
         """
-        # lk：就是说没看懂这个update_rmp_by_cols的东西 和上面的solve_columns的东西有什么关系吗？？？ lambda的体现呢？
-        # self.rmp_model.reset()
         if not self.bool_rmp_update_initialized:
-            # 这个是放binding约束的
             self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
-            # 这个是放sku_flow的值的
             self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
-            # 这个是放ws的约束的
             self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
-            # lk:cg_binding_constrs要加点名字啊不然都不知道谁是谁
             for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
                 edges = self.rmp_oracle.cg_downstream[node]
                 for ee in edges:
@@ -638,21 +641,15 @@ class NetworkColumnGenerationSlim(object):
             for ee in edges:
                 c = ee.end
                 this_col = self.columns[c][-1]
-                self.delievery_cons_coef[c].append(
-                    -this_col["sku_flow"].get((t, ee, k), 0)
-                )
+                _val = -this_col["sku_flow"].get((t, ee, k), 0)
+                self.delievery_cons_coef[c].append(_val if abs(_val) > 1e-4 else 0)
 
         for c in self.customer_list:
             _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
             _cons_coef = [*self.delievery_cons_coef[c], 1]
             col_idxs = list(zip(_cons_idx, _cons_coef))
-            # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
             try:
-                # new_col = cp.Column(
-                #     col_idxs,
-                # )
                 new_col = self.solver.addColumn(_cons_idx, _cons_coef)
-                # 这块还要再看看怎么搞
                 self.rmp_oracle.variables["column_weights"][
                     c, self.columns[c].__len__() - 1
                 ] = self.rmp_model.addVar(
@@ -665,11 +662,6 @@ class NetworkColumnGenerationSlim(object):
             except Exception as e:
                 print(f"failed at {c}\n\t{col_idxs}")
                 raise e
-        # vv = self.rmp_oracle.variables.get("cg_temporary")
-        # if vv is not None:
-        #     self.rmp_model.remove(vv)
-        #     self.rmp_oracle.variables["cg_temporary"] = None
-        #     print(f"removed initial skeleton")
 
     def init_rmp(self):
         """
@@ -680,11 +672,6 @@ class NetworkColumnGenerationSlim(object):
             network=self.network,
             full_sku_list=self.full_sku_list,
             customer_list=self.customer_list,
-            # bool_covering=self.bool_covering,
-            # bool_edge_lb=self.bool_edge_lb,
-            # bool_node_lb=self.bool_node_lb,
-            # bool_fixed_cost=self.arg.node_cost,
-            # bool_capacity=self.arg.capacity,
             used_edge_capacity=None,
             used_warehouse_capacity=None,
             used_plant_capacity=None,
@@ -694,116 +681,6 @@ class NetworkColumnGenerationSlim(object):
         self.rmp_model = self.rmp_oracle.model
         self.rmp_oracle.create_cg_bindings()
         self.solver = self.rmp_oracle.solver
-
-    # def add_new_flow_conservation(self, t: int,solver):
-    #     for node in self._iterate_no_c_nodes():
-    #         in_edges = utils.get_in_edges(self.network, node)
-    #         out_edges = utils.get_out_edges(self.network, node)
-    #         out_edges_master = [e for e in out_edges if e.end.type != const.CUSTOMER]
-    #
-    #         sku_list = node.get_node_sku_list(t, self.full_sku_list)
-    #         for k in sku_list:
-    #             constr_name = f"flow_conservation_{t}_{node.idx}_{k.idx}"
-    #
-    #             if node.type == const.PLANT:
-    #                 # constr = self.model.addConstr(
-    #                 constr = self.solver.addConstr(
-    #                     self.variables["sku_production"][t, node, k]
-    #                     - self.variables["sku_flow"].sum(t, out_edges_master, k)
-    #                     == 0,
-    #                     name=constr_name,
-    #                 )
-    #
-    #             elif node.type == const.WAREHOUSE:
-    #                 fulfilled_demand = 0
-    #                 if node.has_demand(t, k):
-    #                     fulfilled_demand = (
-    #                             node.demand[t, k]
-    #                             - self.variables["sku_demand_slack"][t, node, k]
-    #                     )
-    #
-    #                 last_period_inventory = 0.0
-    #
-    #                 if t == 0:
-    #                     if self.bool_covering:
-    #                         if node.initial_inventory is not None:
-    #                             # if self.open_relationship:
-    #                             # self.model.addConstr(
-    #                             self.solver.addConstr(
-    #                                 self.variables["open"][self.T - 1, node] == 1
-    #                             )
-    #                             last_period_inventory = (
-    #                                 node.initial_inventory[k]
-    #                                 if k in node.initial_inventory
-    #                                 else 0.0
-    #                             )
-    #                         else:
-    #                             last_period_inventory = 0.0
-    #                     else:
-    #                         last_period_inventory = 0.0
-    #                 else:
-    #                     last_period_inventory = self.variables["sku_inventory"][
-    #                         t - 1, node, k
-    #                     ]
-    #                 # last_period_inventory *= self.cus_ratio
-    #                 # if self.arg.backorder:
-    #                 #     constr = self.solver.addConstr(
-    #                 #         self.variables["sku_flow"].sum(t, in_edges, k)
-    #                 #         + last_period_inventory
-    #                 #         + self.variables["sku_backorder"][t,node, k]
-    #                 #         - fulfilled_demand
-    #                 #         - self.variables["sku_flow"].sum(t, out_edges_master, k)
-    #                 #         - self.variables["sku_delivery"][t, node, k]
-    #                 #         - self.variables["sku_backorder"].get((t - 1,node, k), 0)
-    #                 #         == self.variables["sku_inventory"][t, node, k],
-    #                 #         name=constr_name,
-    #                 #     )
-    #                 # else:
-    #                 constr = self.solver.addConstr(
-    #                     self.variables["sku_flow"].sum(t, in_edges, k)
-    #                     + last_period_inventory
-    #                     + self.variables["sku_backorder"][t,node, k]
-    #                     - fulfilled_demand
-    #                     - self.variables["sku_flow"].sum(t, out_edges_master, k)
-    #                     - self.variables["sku_delivery"][t, node, k]
-    #                     == self.variables["sku_inventory"][t, node, k],
-    #                     name=constr_name,
-    #                 )
-    #             elif node.type == const.CUSTOMER:
-    #                 raise ValueError("flow in RMP do not contain customers")
-    #
-    #             self.constrs["flow_conservation"][(t, node, k)] = constr
-    #
-    #     return
-    # def update_objective(self,solver):
-    #     ud = sum(self.cal_sku_unfulfill_demand_cost(t) for t in range(self.arg.T))
-    #     solver.setObjective(self.rmp_model.obj + ud, sense=self.solver_constant.MINIMIZE)
-
-    # def cal_sku_unfulfill_demand_cost(self, t: int):
-    #     unfulfill_demand_cost = 0.0
-    #
-    #     for node in self._iterate_no_c_nodes():
-    #         if node.type == const.WAREHOUSE:
-    #             if node.has_demand(t):
-    #                 for k in node.get_node_sku_list(t, self.full_sku_list):
-    #
-    #                     if node.unfulfill_sku_unit_cost is not None:
-    #                         unfulfill_sku_unit_cost = node.unfulfill_sku_unit_cost[
-    #                             (t, k)
-    #                         ]
-    #                     else:
-    #                         unfulfill_sku_unit_cost = 50000
-    #
-    #                     unfulfill_node_sku_cost = (
-    #                             unfulfill_sku_unit_cost
-    #                             * self.variables["sku_backorder"][(t, node, k)]
-    #                     )
-    #
-    #                     unfulfill_demand_cost = (
-    #                             unfulfill_demand_cost + unfulfill_node_sku_cost
-    #                     )
-    #
-    #     return unfulfill_demand_cost
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         self.variables["column_weights"] = self.rmp_oracle.variables["column_weights"]

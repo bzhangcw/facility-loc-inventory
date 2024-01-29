@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 
 import utils as utils
+from config.network import construct_network
+from config.param import Param
 from dnp_model import DNP
 from entity import Edge, Warehouse
-from config.network import construct_network
 from ncg.np_cg import *
-from config.param import Param
 
 if __name__ == "__main__":
     param = Param()
@@ -47,7 +47,7 @@ if __name__ == "__main__":
             customer_num=100,
             one_period=True,
         )
-        
+
     else:
         cfg = dict(data_dir=datapath, one_period=True)
     (

@@ -6,7 +6,6 @@ from .SolverWrapper import SolverWrapper
 
 class GurobiWrapper(SolverWrapper):
     def __init__(self, model_name="model"):
-        print("use GUROBI to build and solve model")
         super().__init__(model_name, "GUROBI")
         self.model = self.create_solver_model()
         self.ENVR = None
@@ -56,7 +55,7 @@ class GurobiWrapper(SolverWrapper):
 
     def getVarValue(self, var):
         return var.getAttr("x")
-    
+
     def setEqualConstr(self, constr, value):
         constr.setAttr("RHS", value)
         constr.setAttr("Sense", GRB.EQUAL)

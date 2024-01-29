@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from config.param import Param
 from entity import *
 
 loc = np.array([0, 0])
@@ -48,6 +49,13 @@ def read_data(
     # edge_time_df = pd.read_excel(data_dir, sheet_name='6-edge-time')
     node_sku_time_df = pd.read_excel(data_dir, sheet_name="7-node-sku-time")
     # edge_sku_time_df = pd.read_excel(data_dir, sheet_name='8-edge-sku-time')
+
+    sku_df.fillna(0)
+    node_df.fillna(0)
+    edge_df.fillna(0)
+    node_sku_df.fillna(0)
+    edge_sku_df.fillna(0)
+    node_sku_time_df.fillna(0)
 
     # ==================== control data size ============================
     sku_num = min(sku_num, len(sku_df))
@@ -104,7 +112,7 @@ def read_data(
     #     ["id", "total_capacity"]
     # ]
     plant_df = node_df.query("id.str.startswith('P')", engine="python")[
-        ["x","y","id", "total_capacity"]
+        ["x", "y", "id", "total_capacity"]
     ]
     plant_sku_df_dict = dict(
         list(node_sku_df.query("id.str.startswith('P')", engine="python").groupby("id"))
@@ -172,7 +180,9 @@ def read_data(
         # if_current = bool(items[3])
         ws_id = items[2]
         capacity = items[3]
-        fixed_cost = items[4] if not pd.isna(items[2]) else 0
+        fixed_cost = items[4] if not (pd.isna(items[2]) or pd.isna(items[4])) else 0
+        # if fixed_cost.isna():
+        #     print("NAN", ws_id,fixed_cost)
         if_current = bool(items[5])
 
         if ws_id in warehouse_sku_df_dict.keys():
@@ -217,7 +227,9 @@ def read_data(
         warehouse_list.append(this_warehouse)
         nodes_dict[ws_id] = this_warehouse
     # ==================== construct customer ============================
-    customer_df = node_df.query("id.str.startswith('C')", engine="python")[["x", "y", "id"]]
+    customer_df = node_df.query("id.str.startswith('C')", engine="python")[
+        ["x", "y", "id"]
+    ]
     customer_sku_time_df_list = dict(
         list(
             node_sku_time_df.query("id.str.startswith('C')", engine="python").groupby(
@@ -240,7 +252,7 @@ def read_data(
                 .set_index(["time", "sku"])["demand"]
                 .dropna()
             )
-            demand.sort_index(level='time')
+            demand.sort_index(level="time")
 
             demand_sku = {}
             for t in list(cst_df.groupby("time")):

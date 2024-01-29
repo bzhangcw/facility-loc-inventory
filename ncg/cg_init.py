@@ -7,8 +7,8 @@ from typing import Any, Dict, Tuple
 import ray
 from coptpy import COPT
 
-import ncg.cg_col_helper as cg_col_helper
 import dnp_model
+import ncg.cg_col_helper as cg_col_helper
 from entity import Customer, Plant
 from utils import get_in_edges, get_out_edges
 
