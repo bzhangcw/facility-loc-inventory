@@ -333,19 +333,21 @@ class NetworkColumnGenerationSlim(object):
 
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
-            self.init_rmp_by_cols()
 
         _obj_last_iterate = 1e20
         while True:
             try:
                 bool_early_stop = False
+                with utils.TimerContext(self.iter, f"update_rmp"):
+                    self.update_rmp_by_cols()
+
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.rmp_model.write(
                         f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
                     )
                     self.solve_rmp()
                     self._logger.info(
-                        f"rmp solving finished: {self.rmp_model.status}@{iter}"
+                        f"rmp solving finished: {self.rmp_model.status}@{self.iter}"
                     )
 
                 eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
@@ -368,9 +370,7 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
                     dual_packs = (
-                        self.rmp_oracle.fetch_dual_info(self.iter == 1)
-                        if self.iter >= 1
-                        else None
+                        self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
                     )
 
                 improved = (
@@ -545,8 +545,6 @@ class NetworkColumnGenerationSlim(object):
                 if bool_early_stop:
                     self._logger.info("early terminated")
                     break
-                with utils.TimerContext(self.iter, f"update_rmp"):
-                    self.update_rmp_by_cols()
 
                 _obj_last_iterate = self.rmp_model.objval
 
@@ -610,13 +608,15 @@ class NetworkColumnGenerationSlim(object):
                 print(f"failed at {c}\n\t{col_idxs}")
                 raise e
 
-        vv = self.rmp_oracle.variables.get("cg_temporary")
-        if vv is not None:
-            self.rmp_model.remove(vv)
-            self.rmp_oracle.variables["cg_temporary"] = None
-            print(f"removed initial skeleton")
-
     def update_rmp_by_cols(self):
+        if not self.bool_rmp_update_initialized:
+            vv = self.rmp_oracle.variables.get("cg_temporary")
+            if vv is not None:
+                self.rmp_model.remove(vv)
+                self.rmp_oracle.variables["cg_temporary"] = None
+                print(f"removed initial skeleton")
+            self.bool_rmp_update_initialized = True
+
         sla.update(self)
 
     def init_rmp(self):
