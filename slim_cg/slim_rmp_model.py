@@ -12,7 +12,6 @@ from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
-CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 4))
 CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 1))
 
 

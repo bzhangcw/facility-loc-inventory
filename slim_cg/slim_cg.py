@@ -15,14 +15,13 @@ from config.network import *
 from entity import SKU, Customer
 from slim_cg.slim_checker import check_cost_cg
 from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
-from slim_cg.slim_rmp_model import CG_RMP_METHOD, DNPSlim
+from slim_cg.slim_rmp_model import DNPSlim
+import slim_cg.slim_rmp_alg as sla
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
-CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
-CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 
 
 class NetworkColumnGenerationSlim(object):
@@ -181,66 +180,8 @@ class NetworkColumnGenerationSlim(object):
         """
         Solve the RMP and get the dual variables to construct the subproblem
         """
-        # self.vars_basis = self.rmp_model.getVarBasis()
-        # self.cons_basis = self.rmp_model.getConstrBasis()
-        if CG_RMP_USE_WS and self.iter > 0:
-            if CG_RMP_WS_OPTION == 0:
-                _ws_v = self.rmp_vbasis_init
-                _ws_c = self.rmp_cbasis_init
-            elif CG_RMP_WS_OPTION == 1:
-                _ws_v = self.rmp_vbasis
-                _ws_c = self.rmp_cbasis
 
-            n_new_rmp_vars = len(self.rmp_model.getVars()) - len(_ws_v)
-            n_new_rmp_cons = len(self.rmp_model.getConstrs()) - len(_ws_c)
-            self._logger.info(
-                "using option {}: add {} new vars and {} new cons".format(
-                    CG_RMP_WS_OPTION, n_new_rmp_vars, n_new_rmp_cons
-                )
-            )
-            _ws_v = [*_ws_v, *[GRB.NONBASIC_LOWER] * n_new_rmp_vars]
-            _ws_c = [*_ws_c, *[GRB.NONBASIC_LOWER] * n_new_rmp_cons]
-
-            # set the modified basis status back to the model
-            self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), _ws_v)
-            self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
-            self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
-            # for k, v in self.rmp_oracle.variables["column_weights"].items():
-            #     v.VBasis = -1
-            #     if k[-1] == self.iter:
-            #         v.VBasis = 0
-
-        self.rmp_model.setParam(self.solver_constant.Param.LpMethod, CG_RMP_METHOD)
-
-        self.solver.solve()
-
-        if CG_RMP_USE_WS:
-            self.rmp_model.setParam("LPWarmStart", 2)
-            # Get the variable basis status
-            self.rmp_vbasis = self.rmp_model.getAttr("VBasis", self.rmp_model.getVars())
-
-            # Get the constraint basis status
-            self.rmp_cbasis = self.rmp_model.getAttr(
-                "CBasis", self.rmp_model.getConstrs()
-            )
-            if self.iter == 0:
-                # save the initial basis.
-                self.rmp_vbasis_init = self.rmp_model.getAttr(
-                    "VBasis", self.rmp_model.getVars()
-                )
-                self.rmp_cbasis_init = self.rmp_model.getAttr(
-                    "CBasis", self.rmp_model.getConstrs()
-                )
-
-        # # Print the initial variable basis status
-        # print("Variable Basis Status:")
-        # for var, status in zip(self.rmp_model.getVars(), vbasis):
-        #     print(f"{var.VarName}: {status}")
-
-        # # Print the initial constraint basis status
-        # print("\nConstraint Basis Status:")
-        # for constr, status in zip(self.rmp_model.getConstrs(), cbasis):
-        #     print(f"{constr.ConstrName}: {status}")
+        sla.solve(self)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         if self.init_ray:
@@ -676,51 +617,7 @@ class NetworkColumnGenerationSlim(object):
             print(f"removed initial skeleton")
 
     def update_rmp_by_cols(self):
-        """
-        update the RMP with new columns
-        """
-        if not self.bool_rmp_update_initialized:
-            self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
-            self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
-            self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
-            for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
-                edges = self.rmp_oracle.cg_downstream[node]
-                for ee in edges:
-                    c = ee.end
-                    self.delievery_cons_idx[c].append(v)
-
-            for c, v in self.rmp_oracle.cg_binding_constrs_ws.items():
-                self.ws_cons_idx[c] = v
-                # v.lb = 1.0
-                # v.ub = 1.0
-                self.solver.setEqualConstr(v, 1.0)
-
-        for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
-            edges = self.rmp_oracle.cg_downstream[node]
-            for ee in edges:
-                c = ee.end
-                this_col = self.columns[c][-1]
-                _val = -this_col["sku_flow"].get((t, ee, k), 0)
-                self.delievery_cons_coef[c].append(_val if abs(_val) > 1e-4 else 0)
-
-        for c in self.customer_list:
-            _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
-            _cons_coef = [*self.delievery_cons_coef[c], 1]
-            col_idxs = list(zip(_cons_idx, _cons_coef))
-            try:
-                new_col = self.solver.addColumn(_cons_idx, _cons_coef)
-                self.rmp_oracle.variables["column_weights"][
-                    c, self.columns[c].__len__() - 1
-                ] = self.rmp_model.addVar(
-                    obj=self.columns[c][-1]["beta"],
-                    name=f"lambda_{c.idx}_{len(self.columns[c])}",
-                    lb=0.0,
-                    ub=1.0,
-                    column=new_col,
-                )
-            except Exception as e:
-                print(f"failed at {c}\n\t{col_idxs}")
-                raise e
+        sla.update(self)
 
     def init_rmp(self):
         """
