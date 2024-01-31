@@ -139,6 +139,20 @@ class DNPSlim(DNP):
         self.binaries = []
 
     #####################
+    def load_params(self):
+        """
+        Method 1
+        Aggregate 2
+        AggFill 0
+        PrePasses 2
+        Presolve 2
+        """
+        if self.arg.backend.upper() == "GUROBI":
+            self.model.setParam("Method", 1)
+            self.model.setParam("Aggregate", 2)
+            self.model.setParam("AggFill", 0)
+            self.model.setParam("PrePasses", 2)
+            self.model.setParam("Presolve", 2)
 
     def modeling(self):
         """
@@ -154,6 +168,8 @@ class DNPSlim(DNP):
         # print("set objective ...")
 
         self.set_objective()
+
+        self.load_params()
 
         # for remote
         # self.init_col_helpers()

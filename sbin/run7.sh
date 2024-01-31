@@ -1,4 +1,4 @@
-output=240129
+output=$1
 fnames=(
     "data/data_0401_0inv.xlsx"
     "data/data_0401_V4_1219_0inv.xlsx"

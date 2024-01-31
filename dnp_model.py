@@ -377,6 +377,7 @@ class DNP:
         if self.arg.backorder:
             self.var_types["sku_backorder"] = {
                 "lb": 0,
+                "ub": [],
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "s",
                 "index": "(t, customer, k)",
@@ -384,6 +385,7 @@ class DNP:
         else:
             self.var_types["sku_slack"] = {
                 "lb": 0,
+                "ub": [],
                 "vtype": COPT.CONTINUOUS,
                 "nameprefix": "s",
                 "index": "(t, customer, k)",

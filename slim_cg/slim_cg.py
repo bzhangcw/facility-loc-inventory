@@ -22,7 +22,7 @@ from solver_wrapper.GurobiConstant import GurobiConstant
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
-CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 0))
+CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 
 
 class NetworkColumnGenerationSlim(object):
@@ -193,7 +193,7 @@ class NetworkColumnGenerationSlim(object):
 
             n_new_rmp_vars = len(self.rmp_model.getVars()) - len(_ws_v)
             n_new_rmp_cons = len(self.rmp_model.getConstrs()) - len(_ws_c)
-            print(
+            self._logger.info(
                 "using option {}: add {} new vars and {} new cons".format(
                     CG_RMP_WS_OPTION, n_new_rmp_vars, n_new_rmp_cons
                 )
@@ -204,8 +204,13 @@ class NetworkColumnGenerationSlim(object):
             # set the modified basis status back to the model
             self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), _ws_v)
             self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
+            self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
+            # for k, v in self.rmp_oracle.variables["column_weights"].items():
+            #     v.VBasis = -1
+            #     if k[-1] == self.iter:
+            #         v.VBasis = 0
 
-        self.rmp_model.setParam("LpMethod", CG_RMP_METHOD)
+        self.rmp_model.setParam(self.solver_constant.Param.LpMethod, CG_RMP_METHOD)
 
         self.solver.solve()
 
@@ -543,7 +548,10 @@ class NetworkColumnGenerationSlim(object):
                         _redcost = new_cols[col_ind]["objval"]
                         _status = new_cols[col_ind]["status"]
                         self.red_cost[self.iter, col_ind] = _redcost
-                        added = (_redcost < -1e-9 or dual_packs is None) or added
+                        added = (
+                            (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
+                            or dual_packs is None
+                        ) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
