@@ -12,7 +12,7 @@ from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
-CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 1))
+CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 0))
 
 
 class DNPSlim(DNP):
@@ -759,10 +759,8 @@ class DNPSlim(DNP):
 
         obj = 0.0
         for t in range(self.T):
-            # obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
             obj = obj + self.cal_sku_transportation_cost(t)
-            # obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
 
         if self.bool_fixed_cost:
             obj += self.cal_fixed_node_cost()
@@ -993,38 +991,6 @@ class DNPSlim(DNP):
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         super().get_solution(data_dir, preserve_zeros)
-
-    def fetch_dual_info(self):
-        if self.arg.backend.upper() == "COPT":
-            node_dual = {
-                k: v.pi if v is not None else 0
-                for k, v in self.cg_binding_constrs.items()
-            }
-            # the dual of weight sum = 1
-            ws_dual = {
-                k: v.pi if v is not None else 0
-                for k, v in self.cg_binding_constrs_ws.items()
-            }
-        else:
-            node_dual = {
-                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-                for k, v in self.cg_binding_constrs.items()
-            }
-            # the dual of weight sum = 1
-            ws_dual = {
-                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-                for k, v in self.cg_binding_constrs_ws.items()
-            }
-
-        node_vals = np.array(list(node_dual.values()))
-
-        for cc, ccols in self.dual_cols.items():
-            self.dual_vals[cc] = self.broadcast_matrix[ccols, :] @ node_vals
-        return (
-            node_vals,
-            ws_dual,
-            set(self.dual_keys.keys()),
-        )
 
     def _generate_broadcasting_matrix(self):
         with utils.TimerContext(0, "generate-broadcast"):

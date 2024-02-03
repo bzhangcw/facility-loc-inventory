@@ -32,7 +32,7 @@ if __name__ == "__main__":
     datapath = arg.fpath
     arg.pricing_relaxation = 0
     arg.T = 7
-    arg.check_rmp_mip = 1
+    arg.cg_mip_recover = 1
 
     print(
         json.dumps(
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
 
     solver = arg.backend.upper()
-    init_ray = True
+    init_ray = arg.use_ray
     num_workers = 22
     num_cpus = 22
     np_cg = NCS(

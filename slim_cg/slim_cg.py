@@ -40,6 +40,7 @@ class NetworkColumnGenerationSlim(object):
         num_cpus=8,
         solver="COPT",
     ) -> None:
+
         if solver == "COPT":
             self.solver_name = "COPT"
             self.solver_constant = CoptConstant
@@ -82,6 +83,7 @@ class NetworkColumnGenerationSlim(object):
         self.dual_index = dict()
         self.variables = dict()  # variables
         self.iter = 0
+        self.rmp_objval = 1e20
         self.max_iter = max_iter
         self.red_cost = np.zeros((max_iter, len(customer_list)))
         self.full_network = self.network.copy()
@@ -370,7 +372,7 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
                     dual_packs = (
-                        self.rmp_oracle.fetch_dual_info() if self.iter >= 1 else None
+                        sla.fetch_dual_info(self) if self.iter >= 1 else None
                     )
 
                 improved = (
@@ -505,7 +507,7 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
 
                 self.iter += 1
-                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_model.objval:.6e}, eps_df: {eps_fixed_point:.2e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
+                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_objval:.6e}, eps_df: {eps_fixed_point:.2e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
 
                 self._logger.info(_this_log_line)
                 lp_objective = self.rmp_model.objval
@@ -514,16 +516,16 @@ class NetworkColumnGenerationSlim(object):
                     (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
-                if self.arg.check_rmp_mip and not self.rmp_oracle.bool_is_lp:
+                if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
                         bool_terminate
                     ):
                         choice = self.arg.cg_method_mip_heuristic
                         func = slp.PrimalMethod.select(choice)
-
+                        _fname = func.__name__ if func is not None else "none"
                         with utils.TimerContext(
                             self.iter,
-                            f"{func.__name__}",
+                            f"{_fname}",
                         ):
                             if func is None:
                                 pass
@@ -591,7 +593,6 @@ class NetworkColumnGenerationSlim(object):
             _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
             _cons_coef = [*self.delievery_cons_coef[c], 1]
             col_idxs = list(zip(_cons_idx, _cons_coef))
-            # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
             try:
                 new_col = self.solver.addColumn(_cons_idx, _cons_coef)
                 self.rmp_oracle.variables["column_weights"][
@@ -610,12 +611,9 @@ class NetworkColumnGenerationSlim(object):
 
     def update_rmp_by_cols(self):
         if not self.bool_rmp_update_initialized:
-            vv = self.rmp_oracle.variables.get("cg_temporary")
-            if vv is not None:
-                self.rmp_model.remove(vv)
-                self.rmp_oracle.variables["cg_temporary"] = None
-                print(f"removed initial skeleton")
-            self.bool_rmp_update_initialized = True
+            # now the bindings have been created
+            # do the clean-ups
+            sla.cleanup(self)
 
         sla.update(self)
 

@@ -30,7 +30,7 @@ if __name__ == "__main__":
     arg.backorder = 1
     arg.T = 7
     arg.rmp_mip_iter = 20
-    arg.check_rmp_mip = 0
+    arg.cg_mip_recover = 0
     # 7: full scale
     # arg.pick_instance = 4
     arg.pick_instance = 7

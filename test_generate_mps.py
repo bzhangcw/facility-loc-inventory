@@ -23,7 +23,7 @@ if __name__ == "__main__":
     utils.configuration(arg.conf_label, arg)
    
     arg.pricing_relaxation = 0
-    arg.check_rmp_mip = 1
+    arg.cg_mip_recover = 1
     datapath = arg.fpath
     dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     print(f"save mps name {dnp_mps_name}")

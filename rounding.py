@@ -33,7 +33,7 @@ if __name__ == "__main__":
     # arg.backorder = 1
     arg.T = 7
     arg.rmp_mip_iter = 10
-    arg.check_rmp_mip = 1
+    arg.cg_mip_recover = 1
     # arg.pick_instance = 4
     # arg.production_sku_unit_cost = 0
     # arg.holding_sku_unit_cost = 0
