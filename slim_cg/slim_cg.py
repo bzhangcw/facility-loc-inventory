@@ -473,11 +473,14 @@ class NetworkColumnGenerationSlim(object):
 
                 with utils.TimerContext(self.iter, f"generating_columns"):
                     if self.init_ray:
-                        new_cols = [
-                            cc
-                            for worker in self.worker_list
-                            for cc in ray.get(worker.query_all_columns.remote())
-                        ]
+                        # new_cols = [
+                        #     cc
+                        #     for worker in self.worker_list
+                        #     for cc in ray.get(worker.query_all_columns.remote())
+                        # ]
+                        # correct version, about 2x faster
+                        all_new_cols = ray.get([worker.query_all_columns.remote() for worker in self.worker_list])
+                        new_cols = [col for new_col in all_new_cols for col in new_col]
                     else:
                         new_cols = [
                             oracle.query_columns() for oracle in self.oracles.values()
