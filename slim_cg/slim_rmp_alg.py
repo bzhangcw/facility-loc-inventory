@@ -2,6 +2,8 @@ from enum import IntEnum
 from gurobipy import *
 import numpy as np
 import scipy.sparse as scisp
+
+import utils
 from slim_cg.slim_rmp_model import *
 
 CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
@@ -12,6 +14,7 @@ CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 1))
 class RMPAlg(IntEnum):
     Direct = 0
     ALM = 1
+    CPM = 2
 
 
 class ALMConf(object):
@@ -19,7 +22,13 @@ class ALMConf(object):
     max_inner_iter = 10
 
 
+class CPMConf(object):
+    max_iter = 10
+    max_inner_iter = 10
+
+
 _alm_default_conf = ALMConf()
+_cpm_default_conf = CPMConf()
 
 
 def mute(*args, bool_unmute=False):
@@ -40,6 +49,12 @@ def cleanup(self):
         for k, v in self.rmp_oracle.cg_binding_constrs.items():
             self.rmp_model.remove(v)
 
+    if CG_RMP_METHOD == RMPAlg.CPM:
+        # remove cg bindings constraints
+        self._logger.info(f"remove the binding blocks in RMP LP blocks")
+        for k, v in self.rmp_oracle.cg_binding_constrs.items():
+            self.rmp_model.remove(v)
+
     self.bool_rmp_update_initialized = True
     return None
 
@@ -49,13 +64,21 @@ def solve(self):
         solve_direct(self)
     elif CG_RMP_METHOD == RMPAlg.ALM:
         solve_alm(self)
+    elif CG_RMP_METHOD == RMPAlg.CPM:
+        solve_cpm(self)
+    else:
+        raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
 
 def update(self):
     if CG_RMP_METHOD == RMPAlg.Direct:
         update_direct(self)
-    elif CG_RMP_METHOD == RMPAlg.ALM:
+    elif CG_RMP_METHOD in {RMPAlg.ALM}:
         update_alm(self)
+    elif CG_RMP_METHOD in {RMPAlg.CPM}:
+        update_cpm(self)
+    else:
+        raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
 
 def update_coefficients(self):
@@ -76,7 +99,11 @@ def fetch_dual_info(self):
     if CG_RMP_METHOD == RMPAlg.Direct:
         return fetch_dual_info_direct(self.rmp_oracle)
     elif CG_RMP_METHOD == RMPAlg.ALM:
-        return fetch_dual_info_alm(self)
+        return fetch_dual_info_matrix_mode(self)
+    elif CG_RMP_METHOD == RMPAlg.CPM:
+        return fetch_dual_info_matrix_mode(self)
+    else:
+        raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
 
 #############################################################################################
@@ -224,7 +251,6 @@ def update_alm(self):
         # keep a k-1 th iterate.
         self.etaz = np.zeros((self.m, 1))
         self.lmbd = None
-        self.lmbd = None
 
     for idb, c in enumerate(self.customer_list):
         _newcol = np.zeros(self.m)
@@ -272,13 +298,17 @@ def solve_alm(self):
     else:
         lmbd = [np.ones(X[ibd].shape[0]) / X[ibd].shape[0] for ibd in clst]
 
-    self.qpmodel = Model("qp")
     self.var_lmbda = {}
     self.con_lmbda = {}
+    if len(self.var_lmbda) > 0:
+        for idb in clst:
+            lp_model.remove(self.var_lmbda[idb])
+            lp_model.remove(self.con_lmbda[idb])
+
     for idb in clst:
         Xc = X[idb]
-        self.var_lmbda[idb] = self.qpmodel.addMVar(Xc.shape[0], ub=1.0)
-        self.con_lmbda[idb] = self.qpmodel.addConstr(self.var_lmbda[idb].sum() == 1)
+        self.var_lmbda[idb] = lp_model.addMVar(Xc.shape[0], ub=1.0)
+        self.con_lmbda[idb] = lp_model.addConstr(self.var_lmbda[idb].sum() == 1)
 
     _var_Xl = [self.var_lmbda[idb] @ X[idb] for idb in clst]
     _var_Xls = sum(_var_Xl)
@@ -286,40 +316,34 @@ def solve_alm(self):
     _Xls = sum(_Xl)
     _sumquadz = quicksum(v * v for v in z)
 
-    mute(lp_model, self.qpmodel)
-    # mute(self.qpmodel)
+    mute(lp_model)
+
+    # linear optimization oracle
+    with utils.TimerContext(self.iter, "setting ALM obj"):
+        mvz = MVar.fromlist(z)
+        var_feas_z = mvz - _var_Xls
+        zobj = (
+                + (p / 2 + 1e-5) * (mvz @ mvz)
+                + (p / 2 + 1e-5) * (_var_Xls @ _var_Xls)
+                - p * (mvz @ _var_Xls)
+                + sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
+        )
+
     while k <= _alm_default_conf.max_iter:
-
-        # linear optimization oracle
-        var_feas_z = z - _Xls
-
-        zobj = eta @ var_feas_z + p / 2 * (_sumquadz + _Xls @ _Xls) - p * (z @ _Xls)
-        # zlobj = LinExpr(eta, z)
-        # zqobj =
         lp_oracle.solver.setObjective(
-            lp_oracle.original_obj + zobj, sense=self.solver_constant.MINIMIZE
+            lp_oracle.original_obj + zobj + eta @ var_feas_z, sense=self.solver_constant.MINIMIZE
         )
         lp_model.optimize()
         lp_model.setParam("LPWarmStart", 2)
+        lp_model.setParam("Method", 4)
 
         zk = np.array(lp_model.getAttr("x", z))
-        _feas = zk - _Xls
-
-        var_feas = zk - _var_Xls
-
-        _obj_quad = p / 2 * (zk @ zk + _var_Xls @ _var_Xls) - p * (_var_Xls @ zk)
-        _obj_lin = sum(
-            (beta[idb] - X[idb] @ eta) @ self.var_lmbda[idb] for idb in clst
-        )
-        self.qpmodel.setObjective(_obj_quad + _obj_lin)
-        self.qpmodel.optimize()
-
         lmbd = [self.var_lmbda[ibd].x for ibd in clst]
 
         # update
         _Xl = [lmbd[idb] @ X[idb] for idb in clst]
         _Xls = sum(_Xl)
-        _feas = zk - _Xls
+        _feas = var_feas_z.getValue()
         _eps_feas = np.linalg.norm(_feas)
         _eps_feas_rel = _eps_feas / (sum(_Xls) + 1e-1)
 
@@ -329,12 +353,12 @@ def solve_alm(self):
                 + _feas @ _feas * p / 2
                 + sum(beta[idb] @ lmbd[idb] for idb in clst)
         )
-        print(f"-- k: {k}, |df|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, f: {fk: .6e}")
-        if _eps_feas_rel < 1e-6:
+        print(f"-- k: {k}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, f: {fk: .6e}")
+        if _eps_feas_rel < 1e-4:
             break
 
         eta += p * _feas
-        p *= 1.02
+        p *= 2
         k += 1
 
     self.rmp_objval = fk
@@ -345,7 +369,7 @@ def solve_alm(self):
     self.lmbd = lmbd
 
 
-def fetch_dual_info_alm(self):
+def fetch_dual_info_matrix_mode(self):
     lp_oracle = self.rmp_oracle
     for cc, ccols in lp_oracle.dual_cols.items():
         lp_oracle.dual_vals[cc] = lp_oracle.broadcast_matrix[ccols, :] @ self.eta
@@ -354,3 +378,142 @@ def fetch_dual_info_alm(self):
         self.eta_ws,
         set(lp_oracle.dual_keys.keys()),
     )
+
+
+#############################################################################################
+# cutting planes methods
+# @note: it is very likely to be infeasible for the Benders type subproblems,
+#   since z should be moving in the convex hull of λ
+#   classical CPM requires the inequalities.
+#############################################################################################
+def update_cpm(self):
+    """
+    update the RMP with new columns
+    """
+    update_coefficients(self)
+    if self.iter == 0:
+        self.X = []
+        self.beta = []
+        self.nu = {c: 0 for c in self.customer_list}
+        self.m = self.rmp_oracle.cg_binding_constrs_keys.__len__()
+        self.eta = np.zeros((self.m, 1))
+        self.z = [
+            self.rmp_oracle.variables["sku_delivery"][t, node, k]
+            for node, k, t in
+            self.rmp_oracle.cg_binding_constrs
+        ]
+        self.fk = 1e20
+        self.zk = np.zeros_like(self.z)
+        self.f = [v.obj for v in self.z]
+        # keep a k-1 th iterate.
+        self.etaz = np.zeros((self.m, 1))
+        self.lmbd = None
+        ##################################
+        # value function on first-stage
+        ##################################
+        self._var_q = self.rmp_model.addVar(lb=0.0)
+        self.rmp_oracle.solver.setObjective(
+            self.rmp_oracle.original_obj + self._var_q, sense=self.solver_constant.MINIMIZE
+        )
+        self.cps = []
+
+    for idb, c in enumerate(self.customer_list):
+        _newcol = np.zeros(self.m)
+        _newcol[self.delievery_cons_rows[c]] = self.delievery_cons_coef[c]
+        if self.iter == 0:
+            self.X.append(scisp.csr_matrix(-_newcol))
+            self.beta.append([self.columns[c][-1]["beta"]])
+        else:
+            self.X[idb] = scisp.vstack([self.X[idb], -_newcol])
+            self.beta[idb].append(self.columns[c][-1]["beta"])
+
+
+def solve_cpm(self):
+    # using cutting plane methods to solve rmp
+    # basic
+    _card = self.customer_list.__len__()
+    clst = list(range(_card))
+
+    lp_model = self.rmp_model
+    lp_oracle = self.rmp_oracle
+
+    # alias
+    X = self.X
+    z = self.z
+    f = np.array(self.f)
+    eta = self.eta.copy().flatten()
+    beta = [np.array(bb) for bb in self.beta]
+
+    # reset the iterations
+    # clear the cutting planes
+    zk = self.zk
+    lp_model.remove(self.cps)
+    self.cps = []
+    lp_model.update()
+    k = 0
+
+    ##################################
+    # declare a second-stage model
+    #   on the value function Q
+    ##################################
+    _card = self.customer_list.__len__()
+    clst = list(range(_card))
+    qval_model = Model("valuef")
+    _zsurro = qval_model.addMVar(len(self.z))
+    _epsz = _zsurro = qval_model.addMVar(len(self.z))
+    ee = np.ones_like(zk) * 100
+    self.var_lmbda = {}
+    self.con_lmbda = {}
+    for idb in clst:
+        Xc = X[idb]
+        self.var_lmbda[idb] = qval_model.addMVar(Xc.shape[0], ub=1.0)
+        self.con_lmbda[idb] = qval_model.addConstr(self.var_lmbda[idb].sum() == 1)
+    _obj_lin = sum(
+        beta[idb] @ self.var_lmbda[idb] for idb in clst
+    ) + ee @ _epsz
+    qval_model.setObjective(_obj_lin)
+
+    # recal the bindings
+    _var_Xl = [self.var_lmbda[idb] @ X[idb] for idb in clst]
+    _var_Xls = sum(_var_Xl)
+    binding = qval_model.addConstr(_zsurro - _var_Xls - _epsz == 0)
+    bindingz = qval_model.addConstr(_zsurro == zk)
+
+    mute(lp_model, qval_model)
+    fz = -1e6
+    while k <= _cpm_default_conf.max_iter:
+
+        # 2nd optimization oracle
+        bindingz.setAttr("RHS", zk)
+        qval_model.optimize()
+        _qval = qval_model.objval
+        lmbd = [self.var_lmbda[ibd].x for ibd in clst]
+        #
+        eta = - bindingz.pi
+        _expr_cut = LinExpr(eta, z) + _qval - eta @ zk
+        _cut = lp_model.addConstr(_expr_cut <= self._var_q)
+        self.cps.append(_cut)
+
+        # 1st
+        lp_model.optimize()
+        zk = np.array(lp_model.getAttr("x", z))
+
+        # summarize
+        _val = lp_model.objval
+        # update
+        fk = _val  # + _qval
+        _eps_fixedpoint = fk - fz
+        _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
+        print(f"-- k: {k}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}")
+        if _eps_fixedpoint < 1e-7:
+            break
+
+        k += 1
+        fz = fk
+
+    self.rmp_objval = fk
+    self.eta_ws = {c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)}
+    self.etaz = self.eta
+    self.eta = eta
+    self.zk = zk
+    self.lmbd = lmbd
