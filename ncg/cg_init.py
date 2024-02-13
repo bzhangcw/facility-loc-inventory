@@ -75,6 +75,7 @@ def primal_sweeping_method(self, sort_method=sorted):
         {t: {} for t in range(self.arg.T)},
         {t: {} for t in range(self.arg.T)},
     )
+    reset = {t: {} for t in range(self.arg.T)}
     sequence = sort_method(range(self.customer_list.__len__()))
 
     for col_ind in sequence:
@@ -88,6 +89,30 @@ def primal_sweeping_method(self, sort_method=sorted):
             ray.get(oracle.update_constr_capacity.remote(_this_customer, ec, pc, wc))
         else:
             oracle: dnp_model.DNP = self.oracles[_this_customer]
+            oracle.del_constr_capacity()
+
+            (
+                oracle.used_edge_capacity,
+                oracle.used_plant_capacity,
+                oracle.used_warehouse_capacity,
+            ) = (
+                ec,
+                pc,
+                wc,
+            )
+            # why this works, because of the typedef in line 96?
+        # for t in range(oracle.T):
+        for t in range(self.arg.T):
+            if self.init_ray:
+                ray.get(oracle.add_constr_holding_capacity.remote(t))
+                ray.get(oracle.add_constr_production_capacity.remote(t))
+                ray.get(oracle.add_constr_transportation_capacity.remote(t))
+                # ray.get(oracle.add_constr_transportation_capacity.remote(t, True))
+
+            else:
+                oracle.add_constr_holding_capacity(t)
+                oracle.add_constr_production_capacity(t)
+                oracle.add_constr_transportation_capacity(t)
 
         self.subproblem(_this_customer, col_ind)
 
@@ -96,3 +121,33 @@ def primal_sweeping_method(self, sort_method=sorted):
 
         else:
             columns = oracle.query_columns()
+
+        update_edge_capacity(self, _this_customer, ec, columns)
+        update_plant_capacity(self, _this_customer, pc, columns)
+        update_warehouse_capacity(self, _this_customer, wc, columns)
+
+        # then reset column constraints
+
+        if self.init_ray:
+            ray.get(oracle.del_constr_capacity.remote())
+            ray.get(oracle.update_constr_capacity.remote(reset, reset, reset))
+        else:
+            oracle.del_constr_capacity()
+
+            (
+                oracle.used_edge_capacity,
+                oracle.used_plant_capacity,
+                oracle.used_warehouse_capacity,
+            ) = (reset, reset, reset)
+
+        # for t in range(oracle.T):
+
+        for t in range(self.arg.T):
+            if self.init_ray:
+                ray.get(oracle.add_constr_holding_capacity.remote(t))
+                ray.get(oracle.add_constr_production_capacity.remote(t))
+                ray.get(oracle.add_constr_transportation_capacity.remote(t))
+            else:
+                oracle.add_constr_holding_capacity(t)
+                oracle.add_constr_production_capacity(t)
+                oracle.add_constr_transportation_capacity(t)

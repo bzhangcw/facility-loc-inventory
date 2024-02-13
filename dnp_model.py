@@ -287,12 +287,12 @@ class DNP:
                     col_helper["sku_inventory_sum"][t][node] = self.variables[
                         "sku_inventory"
                     ].sum(t, node, "*")
-
+        solver = self.arg.backend.upper()
         col_helper["beta"] = (
             self.original_obj
             if type(self.original_obj) == float
-            # else self.original_obj.getExpr()
-            else self.solver.getExpr(self.original_obj)
+            else self.original_obj.getExpr()
+            # else solver.getExpr(self.original_obj)
         )
 
         self.columns_helpers = col_helper
@@ -341,7 +341,8 @@ class DNP:
         self.set_objective()
 
         # for remote
-        # self.init_col_helpers()
+        if self.arg.DNP == 0:
+            self.init_col_helpers()
 
     def add_vars(self):
         """

@@ -8,7 +8,7 @@ from slim_cg.slim_rmp_model import *
 
 CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
 CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
-CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 1))
+CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 0))
 
 
 class RMPAlg(IntEnum):

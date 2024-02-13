@@ -1,5 +1,5 @@
 import json
-
+from ncg.np_cg import *
 import gurobipy as gp
 import numpy as np
 import pandas as pd
@@ -31,8 +31,9 @@ if __name__ == "__main__":
     # datapath = "data/data_0401_V4.xlsx"
     datapath = arg.fpath
     arg.pricing_relaxation = 0
-    arg.T = 7
+    # arg.T = 7
     arg.cg_mip_recover = 1
+    arg.backorder = 0
 
     print(
         json.dumps(
@@ -57,7 +58,50 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
 
     solver = arg.backend.upper()
-    init_ray = arg.use_ray
+    print("----------DNP Model------------")
+    arg.DNP = 1
+    arg.sku_list = sku_list
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 3600)
+    model.model.setParam("LpMethod", 2)
+    model.model.setParam("Crossover", 0)
+    # model.model.write(dnp_mps_name)
+    # dnp_mps_lp_name = f"allinone_lp_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}.mps"
+    variables = model.model.getVars()
+    print('MIP')
+    model.model.solve()
+    for v in variables:
+        if v.getType() == COPT.BINARY:
+            v.setType(COPT.CONTINUOUS)
+    # model.model.write(dnp_mps_lp_name)
+    model.model.solve()
+
+    print("----------NCG------------")
+    arg.DNP = 0
+    max_iter = 100
+    init_primal = None
+    init_dual = None  # 'dual'
+    init_sweeping = True
+    np_cg = NetworkColumnGeneration(
+        arg,
+        network,
+        customer_list,
+        sku_list,
+        max_iter=max_iter,
+        init_primal=init_primal,
+        init_dual=init_dual,
+        init_sweeping=init_sweeping,
+        init_ray=False,
+    )
+
+    np_cg.run()
+    np_cg.get_solution("new_sol_1/")
+    print("----------NCS------------")
+    # init_ray = arg.use_ray
+    init_ray = True
     num_workers = 22
     num_cpus = 22
     np_cg = NCS(

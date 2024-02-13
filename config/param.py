@@ -24,7 +24,20 @@ class Param:
             type=str,
             help="data path",
             default="data/data_0401_0inv.xlsx",
-            required=True,
+            # required=True,
+        )
+        parser.add_argument(
+            "--DNP",
+            type=int,
+            default=0,
+            # required=True,
+        )
+
+        parser.add_argument(
+            "--sku_list",
+            type=list,
+            default=[],
+            # required=True,
         )
         parser.add_argument(
             "--backend",

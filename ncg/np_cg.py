@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import ray
 from coptpy import COPT
+from gurobipy import GRB
 from tqdm import tqdm
 
 import const as const
@@ -26,6 +27,8 @@ from config.param import Param
 from config.read_data import read_data
 from entity import SKU, Customer
 
+CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
+CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 class NetworkColumnGeneration:
     def __init__(
@@ -34,9 +37,6 @@ class NetworkColumnGeneration:
         network: nx.DiGraph,
         customer_list: List[Customer],
         full_sku_list: List[SKU] = None,
-        bool_covering=False,
-        bool_edge_lb=False,
-        bool_node_lb=False,
         max_iter=500,
         init_primal=None,
         init_sweeping=True,
@@ -72,10 +72,13 @@ class NetworkColumnGeneration:
         # @note: new,
         #   the oracle extension saves extra constraints for primal feasibility
         #   every time it is used, remove this
-        self.oracles_extension: Dict[Customer, dnp_model.DNP] = {}  #
-        self.bool_covering = bool_covering
-        self.bool_edge_lb = bool_edge_lb
-        self.bool_node_lb = bool_node_lb
+        self.vars_basis, self.cons_basis = None, None
+        self.bool_edge_lb = self.arg.edge_lb
+        self.bool_node_lb = self.arg.node_lb
+        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_covering = self.arg.covering
+        self.bool_capacity = self.arg.capacity
+        self.add_in_upper = self.arg.add_in_upper
         self.dual_index = dict()
         self.vars = dict()  # variables
         self.iter = 0
@@ -170,10 +173,6 @@ class NetworkColumnGeneration:
                 worker = dnp_model.DNP_worker.remote(
                     cus_list,
                     self.arg,
-                    self.bool_covering,
-                    True,
-                    self.bool_edge_lb,
-                    self.bool_node_lb,
                 )
                 self.worker_list.append(worker)
             cus_worker_id = n // cus_per_worker
@@ -215,10 +214,6 @@ class NetworkColumnGeneration:
                 full_sku_list,
                 env_name,
                 model_name,
-                bool_covering=self.bool_covering,
-                bool_capacity=True,
-                bool_edge_lb=self.bool_edge_lb,
-                bool_node_lb=self.bool_node_lb,
                 env=self.RMP_env,
                 cus_list=[customer],
             )  # for initial column, set obj = 0
@@ -356,7 +351,7 @@ class NetworkColumnGeneration:
                     self._logger.info("initial column of RMP is infeasible")
                     self.RMP_model.write(f"rmp@{self.iter}.lp")
                     self.RMP_model.computeIIS()
-                    self.RMP_model.write(f"rmp@{self.iter}.ilp")
+                    self.RMP_model.write(f"rmp@{self.iter}.iis")
                     break
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
