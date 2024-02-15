@@ -12,8 +12,7 @@ from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 
 CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
-CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 4))
-CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 1))
+CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 0))
 
 
 class DNPSlim(DNP):
@@ -139,6 +138,20 @@ class DNPSlim(DNP):
         self.binaries = []
 
     #####################
+    def load_params(self):
+        """
+        Method 1
+        Aggregate 2
+        AggFill 0
+        PrePasses 2
+        Presolve 2
+        """
+        if self.arg.backend.upper() == "GUROBI":
+            self.model.setParam("Method", 1)
+            self.model.setParam("Aggregate", 2)
+            self.model.setParam("AggFill", 0)
+            self.model.setParam("PrePasses", 2)
+            self.model.setParam("Presolve", 2)
 
     def modeling(self):
         """
@@ -154,6 +167,8 @@ class DNPSlim(DNP):
         # print("set objective ...")
 
         self.set_objective()
+
+        self.load_params()
 
         # for remote
         # self.init_col_helpers()
@@ -744,10 +759,8 @@ class DNPSlim(DNP):
 
         obj = 0.0
         for t in range(self.T):
-            # obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
             obj = obj + self.cal_sku_transportation_cost(t)
-            # obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
 
         if self.bool_fixed_cost:
             obj += self.cal_fixed_node_cost()
@@ -946,6 +959,8 @@ class DNPSlim(DNP):
         return fixed_edge_cost
 
     def create_cg_bindings(self):
+        # the keys are order preserving, and may be used elsewhere
+        self.cg_binding_constrs_keys = []
         self.cg_binding_constrs = {}
         self.cg_binding_constrs_ws = {}
         self.cg_downstream = {}
@@ -964,83 +979,53 @@ class DNPSlim(DNP):
                         self.variables["sku_delivery"][t, node, k] == 0,
                         name=f"cg_binding{t, node, k}",
                     )
+                    self.cg_binding_constrs_keys.append((node, k, t))
+
         for c in self.customer_list:
             self.cg_binding_constrs_ws[c] = self.solver.addConstr(
                 self.variables["cg_temporary"][c.idx] == 0.0, name=f"cg_binding_ws{c}"
             )
 
+        self._generate_broadcasting_matrix()
         return
 
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         super().get_solution(data_dir, preserve_zeros)
 
-    def fetch_dual_info(self, bool_init):
-        if self.arg.backend.upper() == "COPT":
-            node_dual = {
-                k: v.pi if v is not None else 0
-                for k, v in self.cg_binding_constrs.items()
-            }
-            # the dual of weight sum = 1
-            ws_dual = {
-                k: v.pi if v is not None else 0
-                for k, v in self.cg_binding_constrs_ws.items()
-            }
-        else:
-            for k, v in self.cg_binding_constrs.items():
-                v.getAttr("Pi")
-            node_dual = {
-                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-                for k, v in self.cg_binding_constrs.items()
-            }
-            # the dual of weight sum = 1
-            ws_dual = {
-                k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-                for k, v in self.cg_binding_constrs_ws.items()
-            }
+    def _generate_broadcasting_matrix(self):
+        with utils.TimerContext(0, "generate-broadcast"):
+            self.dual_vals = {}
+            self.dual_cols = collections.defaultdict(list)
+            self.dual_keys = collections.defaultdict(list)
+            rows = []
+            cols = []
+            vals = []
 
-        node_vals = np.array(list(node_dual.values()))
+            row_id = 0
+            col_id = 0
+            for node, k, t in self.cg_binding_constrs_keys:
+                for ee in self.cg_downstream[node]:
+                    cc = ee.end
+                    rows.append(row_id)
+                    cols.append(col_id)
+                    vals.append(1.0)
+                    self.dual_cols[cc].append(col_id)
+                    self.dual_keys[cc].append((ee, k, t))
+                    # accumulate
+                    col_id += 1
+                row_id += 1
 
-        if bool_init:
-            with utils.TimerContext(0, "generate-broadcast"):
-                self.dual_vals = {}
-                self.dual_cols = collections.defaultdict(list)
-                self.dual_keys = collections.defaultdict(list)
-                rows = []
-                cols = []
-                vals = []
+            self.broadcast_matrix = sparse.coo_matrix(
+                (vals, (rows, cols)), shape=(row_id, col_id)
+            ).T.tocsr()
 
-                row_id = 0
-                col_id = 0
-                for node, k, t in node_dual:
-                    for ee in self.cg_downstream[node]:
-                        cc = ee.end
-                        rows.append(row_id)
-                        cols.append(col_id)
-                        vals.append(1.0)
-                        self.dual_cols[cc].append(col_id)
-                        self.dual_keys[cc].append((ee, k, t))
-                        # accumulate
-                        col_id += 1
-                    row_id += 1
-
-                self.broadcast_matrix = sparse.coo_matrix(
-                    (vals, (rows, cols)), shape=(row_id, col_id)
-                ).T.tocsr()
-
-                self._logger.info(f"broadcasting shape: {self.broadcast_matrix.shape}")
-                # keys = [
-                #     (ee.end, ee, k, t)
-                #     for node, k, t in node_dual
-                #     for ee in self.cg_downstream[node]
-                # ]
-                # self.dual_series = pd.Series(dict.fromkeys(keys, 0.0))
-                # for cc, ccols in self.cc_cols.items():
-                #     self.dual_series[cc] = dict.fromkeys(self.cc_keys[cc], 0.0)
-
-        for cc, ccols in self.dual_cols.items():
-            self.dual_vals[cc] = self.broadcast_matrix[ccols, :] @ node_vals
-        return (
-            node_vals,
-            ws_dual,
-            set(self.dual_keys.keys()),
-        )
+            self._logger.info(f"broadcasting shape: {self.broadcast_matrix.shape}")
+            # keys = [
+            #     (ee.end, ee, k, t)
+            #     for node, k, t in node_dual
+            #     for ee in self.cg_downstream[node]
+            # ]
+            # self.dual_series = pd.Series(dict.fromkeys(keys, 0.0))
+            # for cc, ccols in self.cc_cols.items():
+            #     self.dual_series[cc] = dict.fromkeys(self.cc_keys[cc], 0.0)
+        pass

@@ -1,3 +1,9 @@
+python rounding_ray.py --conf_label 1 --pick_instance 1 --T 7 &>110.log
+python rounding_ray.py --conf_label 3 --pick_instance 2 --T 7 &>320.log
+python rounding_ray.py --conf_label 7 --pick_instance 2 --T 2 &>720.log
+python rounding_ray.py --conf_label 5 --pick_instance 3 --T 2 &>530.log
+python rounding_ray.py --conf_label 5 --pick_instance 5 --T 7 &>7550.log
+
 #python rounding.py --conf_label 1 --T 7 --pick_instance 1 &> 0inv_1_7_1.log
 #python rounding.py --conf_label 1 --T 7 --pick_instance 2 &> 0inv_1_7_2.log
 #python rounding.py --conf_label 1 --T 7 --pick_instance 5 &> 0inv_1_7_5.log
@@ -29,10 +35,10 @@
 #python rounding.py --conf_label 5 --T 7 --pick_instance 2 --backorder 0 &> 0inv_5_7_2_0.log
 #python rounding.py --conf_label 5 --T 7 --pick_instance 2 --backorder 1 &> 0inv_5_7_2_1.log
 
-python rounding.py --conf_label 6 --T 7 --pick_instance 1 --backorder 0 &> 0inv_6_7_1_0.log
-python rounding.py --conf_label 6 --T 7 --pick_instance 1 --backorder 1 &> 0inv_6_7_1_1.log
-python rounding.py --conf_label 6 --T 7 --pick_instance 2 --backorder 0 &> 0inv_6_7_2_0.log
-python rounding.py --conf_label 6 --T 7 --pick_instance 2 --backorder 1 &> 0inv_6_7_2_1.log
+# python rounding.py --conf_label 6 --T 7 --pick_instance 1 --backorder 0 &> 0inv_6_7_1_0.log
+# python rounding.py --conf_label 6 --T 7 --pick_instance 1 --backorder 1 &> 0inv_6_7_1_1.log
+# python rounding.py --conf_label 6 --T 7 --pick_instance 2 --backorder 0 &> 0inv_6_7_2_0.log
+# python rounding.py --conf_label 6 --T 7 --pick_instance 2 --backorder 1 &> 0inv_6_7_2_1.log
 #python rounding.py --conf_label 5 --T 7 --pick_instance 4 --backorder 0 &> 0inv_5_7_4_0.log
 #python rounding.py --conf_label 5 --T 7 --pick_instance 4 --backorder 1 &> 0inv_5_7_4_1.log
 #python rounding.py --conf_label 8 --T 7 --pick_instance 1 --backorder 0 &> 0inv_8_7_1_0.log

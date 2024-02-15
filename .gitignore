@@ -1,6 +1,7 @@
+
 .idea
 *.lp
-new_sol/
+new_sol*
 mps/
 output/
 out/

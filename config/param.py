@@ -18,24 +18,46 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-        parser.add_argument(
-            "--rmp_mip",
-            type=int,
-            default=0,
-        )
+
         parser.add_argument(
             "--fpath",
             type=str,
             help="data path",
             default="data/data_0401_0inv.xlsx",
-            required=True,
+            # required=True,
         )
+        parser.add_argument(
+            "--bool_use_ncg",
+            type=int,
+            default=1,
+        )
+
+        parser.add_argument(
+            "--sku_list",
+            type=list,
+            default=[],
+            # required=True,
+        )
+
+        parser.add_argument(
+            "--T",
+            type=int,
+            default=7,
+            help='time horizon'
+        )
+
         parser.add_argument(
             "--backend",
             type=str,
             help="solver backend",
             default="gurobi",
             choices=["gurobi", "copt"],
+        )
+        parser.add_argument(
+            "--use_ray",
+            type=int,
+            help="whether to use distributed mode powered by ray",
+            default=1,
         )
         ##### 0. CG parameters #####
         parser.add_argument(
@@ -46,9 +68,9 @@ class Param:
             the choice of primal method after collecting a 
                 set of columns (finished convexification)
             """,
-            required=True,
             default=-1,
         )
+
         parser.add_argument(
             "--cg_itermax",
             "-i",
@@ -58,6 +80,16 @@ class Param:
             """,
             default=10,
         )
+
+        parser.add_argument(
+            "--cg_mip_recover",
+            type=int,
+            default=1,
+            help="""
+            whether to recover an integral feasible solution
+                in the RMP
+            """,
+        )
         parser.add_argument(
             "--cg_rmp_mip_iter",
             type=int,
@@ -66,32 +98,33 @@ class Param:
             the interval to invoke an integral heuristic
             """,
         )
-
-        ##### 1. Basic parameters #####
-        parser.add_argument(
-            "--conf_label",
-            type=int,
-            default=0,
-        )
-        parser.add_argument(
-            "--data_1219",
-            type=int,
-            default=0,
-        )
         parser.add_argument(
             "--check_cost_cg",
             type=int,
             default=0,
+            help="""
+            for debugging only, 
+                check the cost functions of CG
+            """
+        )
+
+        ##############################
+        # 1. problem size & configuration
+        ##############################
+        parser.add_argument(
+            "--conf_label",
+            type=int,
+            default=0,
+            help="""
+            a problem is defined by
+             - a config that specify
+             - using the same config you can choose different size by
+                `pick_instance` 
+            """
         )
 
         parser.add_argument(
             "--pick_instance",
-            type=int,
-            default=0,
-        )
-
-        parser.add_argument(
-            "--rmp_relaxation",
             type=int,
             default=0,
         )
@@ -103,35 +136,14 @@ class Param:
             help="""
             0: no; 1: yes;
             whether solving pricing problem as LP relaxation; 
-                in principle, pricing problem should be solved as MIP only.
+                in principle, pricing should be solved as MIP only.
             """,
         )
 
-        parser.add_argument(
-            "--rmp_binary",
-            type=int,
-            default=0,
-        )
 
-        parser.add_argument(
-            "--check_rmp_mip",
-            type=int,
-            default=0,
-        )
-
-        parser.add_argument(
-            "--T",
-            type=int,
-            default=1,
-        )
-
-        parser.add_argument(
-            "--M",
-            type=float,
-            # default=1e10,
-            default=1e6,
-        )
-        ##### 2. Fixed costs #####
+        ##############################
+        # 2. fixed cost
+        ##############################
         parser.add_argument(
             "--production_sku_unit_cost",
             type=float,
@@ -175,13 +187,28 @@ class Param:
             type=float,
             default=20,
         )
+        ##############################
+        # 3. geometric restrictions
+        ##############################
 
-        ##### 3. Limitation associated with partial constraints #####
+        parser.add_argument(
+            "--add_cardinality",
+            type=int,
+            default=0,
+        )
+
         parser.add_argument(
             "--cardinality_limit",
             type=int,
             default=2,
         )
+
+        parser.add_argument(
+            "--add_distance",
+            type=int,
+            default=0,
+        )
+
         parser.add_argument(
             "--distance_limit",
             type=int,
@@ -201,9 +228,9 @@ class Param:
             whether to allow backorder, inventory can be true if backorder allowed
             """,
         )
-
-        ##### 4. Basic configuration #####
-
+        ##############################
+        # 4. basic configuration
+        ##############################
         parser.add_argument(
             "--covering",
             type=int,
@@ -220,18 +247,6 @@ class Param:
         )
         parser.add_argument(
             "--add_in_upper",
-            type=int,
-            default=0,
-        )
-
-        parser.add_argument(
-            "--add_distance",
-            type=int,
-            default=0,
-        )
-
-        parser.add_argument(
-            "--add_cardinality",
             type=int,
             default=0,
         )
@@ -254,7 +269,9 @@ class Param:
             default=0,
         )
 
-        ##### 5. Others #####
+        ##############################
+        # 5. miscellanea
+        ##############################
         parser.add_argument(
             "--total_cus_num",
             type=int,

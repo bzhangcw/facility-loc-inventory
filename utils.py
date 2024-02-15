@@ -1,7 +1,6 @@
 import logging.handlers
 import os
 import pickle
-from tqdm import tqdm
 import sys
 import time
 from collections import defaultdict
@@ -10,6 +9,7 @@ from typing import List
 import networkx as nx
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from config.network import construct_network
 from config.read_data import read_data

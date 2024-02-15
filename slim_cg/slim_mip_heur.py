@@ -30,7 +30,7 @@ def milp_direct(self):
     model = self.rmp_model
     self.rmp_oracle.switch_to_milp()
     self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps")
-    model.solve()
+    model.optimize()
     mip_objective = model.objval
     # reset back to LP
     self.rmp_oracle.switch_to_lp()
@@ -42,6 +42,10 @@ def milp_direct(self):
 def milp_sequential(self):
     model = self.rmp_model
     binaries = self.rmp_oracle.binaries
+
+    self.rmp_model.setParam("LPWarmStart", 2)
+    self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), self.rmp_vbasis)
+    self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), self.rmp_cbasis)
 
     def _set_tob(v):
         v.setType(COPT.BINARY) if self.rmp_oracle.backend == "COPT" else v.setAttr(
@@ -100,20 +104,29 @@ def milp_sequential(self):
 
     # summarizing the columns
     df = pd.DataFrame.from_records(
-        [{"user_str": c.idx, "user": c, **col} for c, cols in self.columns.items() for col in cols]
+        [
+            {"user_str": c.idx, "user": c, **col}
+            for c, cols in self.columns.items()
+            for col in cols
+        ]
     )
     dfn = df.set_index("user_str")["user"].to_dict()
-    _sorted_c = df.groupby("user_str")['beta'].max().sort_values(ascending=False).index.to_list()
+    _sorted_c = (
+        df.groupby("user_str")["beta"]
+        .max()
+        .sort_values(ascending=False)
+        .index.to_list()
+    )
     _weight_c = {dfn[c]: idx for idx, c in enumerate(_sorted_c)}
     _keys_col = sorted(
         self.rmp_oracle.variables["column_weights"],
-        key=lambda x: (_weight_c[x[0]], -x[1])
+        key=lambda x: (_weight_c[x[0]], -x[1]),
     )
 
     def chunks(lst, n):
         """yield successive n-sized chunks from lst."""
         for i in range(0, len(lst), n):
-            yield lst[i:i + n]
+            yield lst[i : i + n]
 
     ckid = 0
     for ck in tqdm(list(chunks(_keys_col, CG_SEQUENTIAL_BSIZE)), ncols=90, leave=True):
@@ -132,7 +145,7 @@ def milp_sequential(self):
         _reset_binary_bound(v)
     for _, v in self.rmp_oracle.variables["column_weights"].items():
         _reset_binary_bound(v)
-    for (v, attr, val) in _reset_vals:
+    for v, attr, val in _reset_vals:
         _fix_by_attr(attr, v, val)
 
     mip_objective = model.objval
