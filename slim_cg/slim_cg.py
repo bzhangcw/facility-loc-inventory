@@ -10,13 +10,13 @@ from gurobipy import GRB
 from tqdm import tqdm
 
 import slim_cg.slim_mip_heur as slp
+import slim_cg.slim_rmp_alg as sla
 import utils
 from config.network import *
 from entity import SKU, Customer
 from slim_cg.slim_checker import check_cost_cg
 from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
 from slim_cg.slim_rmp_model import DNPSlim
-import slim_cg.slim_rmp_alg as sla
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
 

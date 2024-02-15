@@ -27,10 +27,9 @@ class Param:
             # required=True,
         )
         parser.add_argument(
-            "--DNP",
+            "--bool_use_ncg",
             type=int,
-            default=0,
-            # required=True,
+            default=1,
         )
 
         parser.add_argument(
@@ -39,6 +38,14 @@ class Param:
             default=[],
             # required=True,
         )
+
+        parser.add_argument(
+            "--T",
+            type=int,
+            default=7,
+            help='time horizon'
+        )
+
         parser.add_argument(
             "--backend",
             type=str,
@@ -133,11 +140,6 @@ class Param:
             """,
         )
 
-        parser.add_argument(
-            "--T",
-            type=int,
-            default=1,
-        )
 
         ##############################
         # 2. fixed cost

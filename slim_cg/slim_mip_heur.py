@@ -30,7 +30,7 @@ def milp_direct(self):
     model = self.rmp_model
     self.rmp_oracle.switch_to_milp()
     self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps")
-    model.solve()
+    model.optimize()
     mip_objective = model.objval
     # reset back to LP
     self.rmp_oracle.switch_to_lp()

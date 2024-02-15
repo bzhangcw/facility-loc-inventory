@@ -1,7 +1,8 @@
 from enum import IntEnum
-from gurobipy import *
+
 import numpy as np
 import scipy.sparse as scisp
+from gurobipy import *
 
 import utils
 from slim_cg.slim_rmp_model import *

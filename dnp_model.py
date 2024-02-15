@@ -341,7 +341,7 @@ class DNP:
         self.set_objective()
 
         # for remote
-        if self.arg.DNP == 0:
+        if self.arg.bool_use_ncg:
             self.init_col_helpers()
 
     def add_vars(self):
