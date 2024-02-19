@@ -684,9 +684,7 @@ def solve_cpm(self):
 
         # feed zk
         lp_model.setAttr("LB", self.zsurro, _Xls)
-        lp_model.setAttr("UB", self.zsurro, _Xls)
         lp_model.optimize()
-        status = None
         if lp_model.status == GRB.OPTIMAL:
             _val = lp_model.objval
             eta = np.array([v.Pi for v in self.zsurro_constrs.values()])
@@ -696,8 +694,8 @@ def solve_cpm(self):
             status = "optm-c"
         else:
             eta = np.array([v.FarkasDual for v in self.zsurro_constrs.values()])
-            _expr_cut = eta @ _var_Xls
-            _cut = lp_model.addConstr(_expr_cut == 0)
+            _expr_cut = eta @ (_var_Xls - zk)
+            _cut = lp_model.addConstr(_expr_cut <= 0)
             cps.append(_cut)
             status = "feas-c"
 
@@ -706,7 +704,7 @@ def solve_cpm(self):
         _eps_fixedpoint = fk - fz
         _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
         print(
-            f"-- k: {k}/{status}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
+            f"-- k: {k}/{status}, |dgitf|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
         )
         if _eps_fixedpoint < 1e-7:
             break
