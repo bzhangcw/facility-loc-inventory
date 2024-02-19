@@ -16,6 +16,7 @@ class RMPAlg(IntEnum):
     Direct = 0
     ALM = 1
     CPM = 2
+    ProxALM = 3
 
 
 class ALMConf(object):
@@ -44,17 +45,17 @@ def cleanup(self):
         self.rmp_oracle.variables["cg_temporary"] = None
         self._logger.info(f"removed initial skeleton")
 
-    if CG_RMP_METHOD == RMPAlg.ALM:
+    if CG_RMP_METHOD != RMPAlg.Direct:
         # remove cg bindings constraints
         self._logger.info(f"remove the binding blocks in RMP LP blocks")
         for k, v in self.rmp_oracle.cg_binding_constrs.items():
             self.rmp_model.remove(v)
 
-    if CG_RMP_METHOD == RMPAlg.CPM:
-        # remove cg bindings constraints
-        self._logger.info(f"remove the binding blocks in RMP LP blocks")
-        for k, v in self.rmp_oracle.cg_binding_constrs.items():
-            self.rmp_model.remove(v)
+    # if CG_RMP_METHOD == RMPAlg.CPM:
+    #     # remove cg bindings constraints
+    #     self._logger.info(f"remove the binding blocks in RMP LP blocks")
+    #     for k, v in self.rmp_oracle.cg_binding_constrs.items():
+    #         self.rmp_model.remove(v)
 
     self.bool_rmp_update_initialized = True
     return None
@@ -63,10 +64,16 @@ def cleanup(self):
 def solve(self):
     if CG_RMP_METHOD == RMPAlg.Direct:
         solve_direct(self)
+        self.rmp_status = self.rmp_model.status
     elif CG_RMP_METHOD == RMPAlg.ALM:
         solve_alm(self)
+        self.rmp_status = 2
     elif CG_RMP_METHOD == RMPAlg.CPM:
         solve_cpm(self)
+        self.rmp_status = 2
+    elif CG_RMP_METHOD == RMPAlg.ProxALM:
+        solve_prox_alm(self)
+        self.rmp_status = 2
     else:
         raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
@@ -78,6 +85,8 @@ def update(self):
         update_alm(self)
     elif CG_RMP_METHOD in {RMPAlg.CPM}:
         update_cpm(self)
+    elif CG_RMP_METHOD in {RMPAlg.ProxALM}:
+        update_prox_alm(self)
     else:
         raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
@@ -99,12 +108,8 @@ def update_coefficients(self):
 def fetch_dual_info(self):
     if CG_RMP_METHOD == RMPAlg.Direct:
         return fetch_dual_info_direct(self.rmp_oracle)
-    elif CG_RMP_METHOD == RMPAlg.ALM:
-        return fetch_dual_info_matrix_mode(self)
-    elif CG_RMP_METHOD == RMPAlg.CPM:
-        return fetch_dual_info_matrix_mode(self)
     else:
-        raise ValueError(f"unknown choice {CG_RMP_METHOD}")
+        return fetch_dual_info_matrix_mode(self)
 
 
 #############################################################################################
@@ -230,7 +235,7 @@ def fetch_dual_info_direct(lp_oracle):
 
 
 #############################################################################################
-# alm
+# augmented lagrangians (ALM)
 #############################################################################################
 def update_alm(self):
     """
@@ -245,8 +250,7 @@ def update_alm(self):
         self.eta = np.zeros((self.m, 1))
         self.z = [
             self.rmp_oracle.variables["sku_delivery"][t, node, k]
-            for node, k, t in
-            self.rmp_oracle.cg_binding_constrs
+            for node, k, t in self.rmp_oracle.cg_binding_constrs
         ]
         self.f = [v.obj for v in self.z]
         # keep a k-1 th iterate.
@@ -324,15 +328,16 @@ def solve_alm(self):
         mvz = MVar.fromlist(z)
         var_feas_z = mvz - _var_Xls
         zobj = (
-                + (p / 2 + 1e-5) * (mvz @ mvz)
-                + (p / 2 + 1e-5) * (_var_Xls @ _var_Xls)
-                - p * (mvz @ _var_Xls)
-                + sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
+            +(p / 2 + 1e-5) * (mvz @ mvz)
+            + (p / 2 + 1e-5) * (_var_Xls @ _var_Xls)
+            - p * (mvz @ _var_Xls)
+            + sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
         )
 
     while k <= _alm_default_conf.max_iter:
         lp_oracle.solver.setObjective(
-            lp_oracle.original_obj + zobj + eta @ var_feas_z, sense=self.solver_constant.MINIMIZE
+            lp_oracle.original_obj + zobj + eta @ var_feas_z,
+            sense=self.solver_constant.MINIMIZE,
         )
         lp_model.optimize()
         lp_model.setParam("LPWarmStart", 2)
@@ -349,12 +354,14 @@ def solve_alm(self):
         _eps_feas_rel = _eps_feas / (sum(_Xls) + 1e-1)
 
         fk = (
-                lp_oracle.original_obj.getValue()
-                + eta @ _feas
-                + _feas @ _feas * p / 2
-                + sum(beta[idb] @ lmbd[idb] for idb in clst)
+            lp_oracle.original_obj.getValue()
+            + eta @ _feas
+            + _feas @ _feas * p / 2
+            + sum(beta[idb] @ lmbd[idb] for idb in clst)
         )
-        print(f"-- k: {k}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, f: {fk: .6e}")
+        print(
+            f"-- k: {k}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, f: {fk: .6e}"
+        )
         if _eps_feas_rel < 1e-4:
             break
 
@@ -363,7 +370,9 @@ def solve_alm(self):
         k += 1
 
     self.rmp_objval = fk
-    self.eta_ws = {c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)}
+    self.eta_ws = {
+        c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)
+    }
     self.etaz = self.eta
     self.eta = eta
     self.zk = zk
@@ -382,10 +391,196 @@ def fetch_dual_info_matrix_mode(self):
 
 
 #############################################################################################
-# cutting planes methods
-# @note: it is very likely to be infeasible for the Benders type subproblems,
-#   since z should be moving in the convex hull of λ
-#   classical CPM requires the inequalities.
+# prox-linear augmented lagrangians (ALM)
+#############################################################################################
+def update_prox_alm(self):
+    """
+    update the RMP with new columns
+    """
+    update_coefficients(self)
+    if self.iter == 0:
+        self.X = []
+        self.beta = []
+        self.nu = {c: 0 for c in self.customer_list}
+        self.m = self.rmp_oracle.cg_binding_constrs_keys.__len__()
+        self.eta = np.zeros((self.m, 1))
+        self.z = [
+            self.rmp_oracle.variables["sku_delivery"][t, node, k]
+            for node, k, t in self.rmp_oracle.cg_binding_constrs
+        ]
+        self.zk = np.zeros_like(self.z, dtype=float)
+        self.f = [v.obj for v in self.z]
+        # keep a k-1 th iterate.
+        self.etaz = np.zeros((self.m, 1))
+        self.lmbd = None
+        self.rmp_alobj = 1e20
+
+    for idb, c in enumerate(self.customer_list):
+        _newcol = np.zeros(self.m)
+        _newcol[self.delievery_cons_rows[c]] = self.delievery_cons_coef[c]
+        if self.iter == 0:
+            self.X.append(scisp.csr_matrix(-_newcol))
+            self.beta.append([self.columns[c][-1]["beta"]])
+        else:
+            self.X[idb] = scisp.vstack([self.X[idb], -_newcol])
+            self.beta[idb].append(self.columns[c][-1]["beta"])
+
+
+def solve_prox_alm(self):
+    # in this case, you never add columns to RMP,
+    #   the RMP LP block always allows the same size
+    # we run a block-coordinate-descent type method here,
+    # see: WZPGW: A Greedy Augmented Lagrangian Method for Block-Structured Integer Programming
+    # 1 + |C| blocks,
+    # -  (y, z) \in RMP oracle (By LP to the exact sense)
+    # -  z + Σ Xc λc
+    #       each λ_c in a unit simplex + positive orthant
+    # take:
+    # Xl = Σ Xc λc
+    # L+ = c'y + f'z + β'(z - Σ Xc λc) + ρ/2 |z - Σ Xc λc|^2
+    #
+    # basic
+    _card = self.customer_list.__len__()
+    block_z_lp_model = self.rmp_model
+    block_z_lp_oracle = self.rmp_oracle
+
+    # alias
+
+    X = self.X
+    z = self.z
+    f = np.array(self.f)
+    eta = self.eta.copy().flatten()
+    beta = [np.array(bb) for bb in self.beta]
+
+    clst = list(range(_card))
+    if self.lmbd is not None:
+        # use last iterate
+        lmbd = []
+        for ibd in clst:
+            ds = X[ibd].shape[0] - self.lmbd[ibd].shape[0]
+            if ds > 0:
+                lmbd.append(np.append(self.lmbd[ibd] * 0.5, np.ones(ds) * 0.5))
+    else:
+        lmbd = [np.zeros(X[ibd].shape[0]) for ibd in clst]
+
+    # define the model for λ block
+    block_lmb_lp_model = Model("block_lmb")
+    self.var_lmbda = var_lmbda = {}
+    self.con_lmbda = con_lmbda = {}
+    for idb in clst:
+        Xc = X[idb]
+        var_lmbda[idb] = block_lmb_lp_model.addMVar(Xc.shape[0], ub=1.0)
+        con_lmbda[idb] = block_lmb_lp_model.addConstr(var_lmbda[idb].sum() == 1)
+    block_lmb_cost = sum(beta[idb] @ var_lmbda[idb] for idb in clst)
+
+    _var_Xl = [var_lmbda[idb] @ X[idb] for idb in clst]
+    _var_Xls = sum(_var_Xl)
+    _Xl = [lmbd[idb] @ X[idb] for idb in clst]
+    _Xls = sum(_Xl)
+
+    mute(block_z_lp_model, bool_unmute=False)
+    mute(block_lmb_lp_model, bool_unmute=False)
+    block_z_lp_model.setParam("LPWarmStart", 2)
+    block_z_lp_model.setParam("Method", 4)
+
+    zk = self.zk
+
+    # iterate hyperparams
+    k = 0
+    p = 2e1
+
+    _feas = zk - _Xls
+    lk = self.rmp_objval + eta @ _feas + _feas @ _feas * p / 2
+    tau = 2.0
+    while k <= _alm_default_conf.max_iter:
+        for j in range(_alm_default_conf.max_inner_iter):
+            # compute gradient
+            dz = _feas * p
+            prox_z = (z - zk) @ (z - zk)
+            ##############################################
+            # gradient for λ
+            ##############################################
+            # dl = [-p * X[idb] @ _feas for idb in clst]
+            # prox_lmbd = quicksum(
+            #     (self.var_lmbda[ibd] - lmbd[idb]) @ (self.var_lmbda[ibd] - lmbd[idb])
+            #     for ibd in clst
+            # )
+            _lin_z_part = block_z_lp_oracle.original_obj + (eta + dz) @ z
+            _lin_lmb_part = block_lmb_cost - eta @ _var_Xls
+            bool_acc = False
+            zz = zk.copy()
+
+            for cc in range(10):
+                block_z_lp_oracle.solver.setObjective(
+                    _lin_z_part + tau * prox_z,
+                    sense=self.solver_constant.MINIMIZE,
+                )
+                block_z_lp_model.optimize()
+                zk = np.array(block_z_lp_model.getAttr("x", z))
+
+                var_eps_feas = _var_Xls - zk
+                block_lmb_lp_model.setObjective(
+                    _lin_lmb_part + p / 2 * var_eps_feas @ var_eps_feas,
+                )
+                block_lmb_lp_model.optimize()
+
+                lmbd = [self.var_lmbda[ibd].x for ibd in clst]
+                #
+                # update
+                _Xl = [lmbd[idb] @ X[idb] for idb in clst]
+                _Xls = sum(_Xl)
+                _feas = zk - _Xls
+                _eps_feas = np.linalg.norm(_feas)
+                _eps_feas_rel = _eps_feas / (sum(_Xls) + 1e-1)
+                _eps_fp = np.linalg.norm(zz - zk)
+                # augmented lagrangian
+                # trial step
+                _lk = (
+                    block_z_lp_oracle.original_obj.getValue()
+                    + eta @ _feas
+                    + _feas @ _feas * p / 2
+                    + sum(beta[idb] @ lmbd[idb] for idb in clst)
+                )
+
+                if lk - _lk >= 1e2 * _eps_fp:
+                    bool_acc = True
+                print(
+                    f"-- k/i/c: {k,j,cc}, |x-x'|: {_eps_fp:.1e}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, ff: {_lk:.6e}, f: {lk: .6e} => {bool_acc}"
+                )
+                if bool_acc:
+                    tau /= 1.5
+                    lk = _lk
+                    break
+                tau *= 1.3
+
+            if _eps_fp < 1e-2:
+                break
+
+        if _eps_feas_rel < 1e-4:
+            break
+
+        eta += p * _feas
+        p *= 2
+        k += 1
+
+    self.rmp_alobj = lk
+    self.rmp_objval = block_z_lp_oracle.original_obj.getValue() + sum(
+        beta[idb] @ lmbd[idb] for idb in clst
+    )
+    self.eta_ws = {
+        c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)
+    }
+    self.etaz = self.eta
+    self.eta = eta
+    self.zk = zk
+    self.lmbd = lmbd
+
+
+#############################################################################################
+# cutting planes methods (CPM)
+# @note:
+#   it is very likely to be infeasible for the Benders-type subproblems,
+#   since z should be moving in the convex hull of λ,
 #############################################################################################
 def update_cpm(self):
     """
@@ -400,8 +595,7 @@ def update_cpm(self):
         self.eta = np.zeros((self.m, 1))
         self.z = [
             self.rmp_oracle.variables["sku_delivery"][t, node, k]
-            for node, k, t in
-            self.rmp_oracle.cg_binding_constrs
+            for node, k, t in self.rmp_oracle.cg_binding_constrs
         ]
         self.fk = 1e20
         self.zk = np.zeros_like(self.z)
@@ -410,13 +604,19 @@ def update_cpm(self):
         self.etaz = np.zeros((self.m, 1))
         self.lmbd = None
         ##################################
-        # value function on first-stage
+        # set objective function on the second-stage
         ##################################
-        self._var_q = self.rmp_model.addVar(lb=0.0)
+
         self.rmp_oracle.solver.setObjective(
-            self.rmp_oracle.original_obj + self._var_q, sense=self.solver_constant.MINIMIZE
+            self.rmp_oracle.original_obj,
+            sense=self.solver_constant.MINIMIZE,
         )
-        self.cps = []
+        self.rmp_model.Params.InfUnbdInfo = 1
+        # surrogate variable for setting different zk
+        self.zsurro = self.rmp_model.addVars(list(range(self.zk.shape[0])), lb=0.0)
+        self.zsurro_constrs = self.rmp_model.addConstrs(
+            self.z[idz] == self.zsurro[idz] for idz in list(range(self.zk.shape[0]))
+        )
 
     for idb, c in enumerate(self.customer_list):
         _newcol = np.zeros(self.m)
@@ -447,11 +647,8 @@ def solve_cpm(self):
 
     # reset the iterations
     # clear the cutting planes
-    zk = self.zk
-    lp_model.remove(self.cps)
-    self.cps = []
-    lp_model.update()
     k = 0
+    cps = []
 
     ##################################
     # declare a second-stage model
@@ -459,53 +656,58 @@ def solve_cpm(self):
     ##################################
     _card = self.customer_list.__len__()
     clst = list(range(_card))
-    qval_model = Model("valuef")
-    _zsurro = qval_model.addMVar(len(self.z))
-    _epsz = _zsurro = qval_model.addMVar(len(self.z))
-    ee = np.ones_like(zk) * 100
+    qval_model = Model("master_lambda")
+    nu = qval_model.addVar(lb=0.0)
+
     self.var_lmbda = {}
     self.con_lmbda = {}
     for idb in clst:
         Xc = X[idb]
         self.var_lmbda[idb] = qval_model.addMVar(Xc.shape[0], ub=1.0)
         self.con_lmbda[idb] = qval_model.addConstr(self.var_lmbda[idb].sum() == 1)
-    _obj_lin = sum(
-        beta[idb] @ self.var_lmbda[idb] for idb in clst
-    ) + ee @ _epsz
-    qval_model.setObjective(_obj_lin)
-
+    _obj_lin = sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
+    qval_model.setObjective(nu + _obj_lin)
     # recal the bindings
     _var_Xl = [self.var_lmbda[idb] @ X[idb] for idb in clst]
     _var_Xls = sum(_var_Xl)
-    binding = qval_model.addConstr(_zsurro - _var_Xls - _epsz == 0)
-    bindingz = qval_model.addConstr(_zsurro == zk)
 
     mute(lp_model, qval_model)
     fz = -1e6
     while k <= _cpm_default_conf.max_iter:
-
-        # 2nd optimization oracle
-        bindingz.setAttr("RHS", zk)
+        # 1st-stage optimization oracle
         qval_model.optimize()
         _qval = qval_model.objval
         lmbd = [self.var_lmbda[ibd].x for ibd in clst]
-        #
-        eta = - bindingz.pi
-        _expr_cut = LinExpr(eta, z) + _qval - eta @ zk
-        _cut = lp_model.addConstr(_expr_cut <= self._var_q)
-        self.cps.append(_cut)
 
-        # 1st
+        _Xl = [lmbd[idb] @ X[idb] for idb in clst]
+        zk = _Xls = sum(_Xl)
+
+        # feed zk
+        lp_model.setAttr("LB", self.zsurro, _Xls)
+        lp_model.setAttr("UB", self.zsurro, _Xls)
         lp_model.optimize()
-        zk = np.array(lp_model.getAttr("x", z))
+        status = None
+        if lp_model.status == GRB.OPTIMAL:
+            _val = lp_model.objval
+            eta = np.array([v.Pi for v in self.zsurro_constrs.values()])
+            _expr_cut = eta @ _var_Xls + _val - eta @ zk
+            _cut = qval_model.addConstr(_expr_cut <= nu)
+            cps.append(_cut)
+            status = "optm-c"
+        else:
+            eta = np.array([v.FarkasDual for v in self.zsurro_constrs.values()])
+            _expr_cut = eta @ _var_Xls
+            _cut = lp_model.addConstr(_expr_cut == 0)
+            cps.append(_cut)
+            status = "feas-c"
 
-        # summarize
-        _val = lp_model.objval
         # update
-        fk = _val  # + _qval
+        fk = _qval
         _eps_fixedpoint = fk - fz
         _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
-        print(f"-- k: {k}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}")
+        print(
+            f"-- k: {k}/{status}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
+        )
         if _eps_fixedpoint < 1e-7:
             break
 
@@ -513,7 +715,9 @@ def solve_cpm(self):
         fz = fk
 
     self.rmp_objval = fk
-    self.eta_ws = {c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)}
+    self.eta_ws = {
+        c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)
+    }
     self.etaz = self.eta
     self.eta = eta
     self.zk = zk

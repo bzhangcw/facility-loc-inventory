@@ -40,7 +40,6 @@ class NetworkColumnGenerationSlim(object):
         num_cpus=8,
         solver="COPT",
     ) -> None:
-
         if solver == "COPT":
             self.solver_name = "COPT"
             self.solver_constant = CoptConstant
@@ -338,7 +337,9 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     self.update_rmp_by_cols()
 
-                with utils.TimerContext(self.iter, f"solve_rmp"):
+                with utils.TimerContext(
+                    self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
+                ):
                     self.rmp_model.write(
                         f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
                     )
@@ -350,7 +351,7 @@ class NetworkColumnGenerationSlim(object):
                 eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
                 # if self.rmp_model.status != self.solver_constant.OPTIMAL:
                 #     print(self.rmp_model.status, iter)
-                if self.rmp_model.status == self.solver_constant.INFEASIBLE:
+                if self.rmp_status == self.solver_constant.INFEASIBLE:
                     self._logger.info("RMP is infeasible")
                     self.rmp_model.write(
                         f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
@@ -366,9 +367,7 @@ class NetworkColumnGenerationSlim(object):
                     )
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    dual_packs = (
-                        sla.fetch_dual_info(self) if self.iter >= 1 else None
-                    )
+                    dual_packs = sla.fetch_dual_info(self) if self.iter >= 1 else None
 
                 improved = (
                     eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
@@ -474,7 +473,12 @@ class NetworkColumnGenerationSlim(object):
                         #     for cc in ray.get(worker.query_all_columns.remote())
                         # ]
                         # correct version, about 2x faster
-                        all_new_cols = ray.get([worker.query_all_columns.remote() for worker in self.worker_list])
+                        all_new_cols = ray.get(
+                            [
+                                worker.query_all_columns.remote()
+                                for worker in self.worker_list
+                            ]
+                        )
                         new_cols = [col for new_col in all_new_cols for col in new_col]
                     else:
                         new_cols = [
