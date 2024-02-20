@@ -27,7 +27,9 @@ class ALMConf(object):
 class CPMConf(object):
     max_iter = 100
     max_inner_iter = 10
-    LOGGING_SLOTS = []
+    LOGGING_SLOTS = ["k", "df", "f", "feas"]
+    HEADER = "{:^3s} {:^8s} {:^14s} {:^8s}".format(*LOGGING_SLOTS)
+    LOGGING_FORMATS = "{:3d} {:+.1e} {:+.7e} {:+.1e}"
 
 
 _alm_default_conf = ALMConf()
@@ -694,7 +696,7 @@ def solve_cpm(self):
 
     mute(lp_model, qval_model)
     fz = -1e6
-
+    print(_cpm_default_conf.HEADER)
     while k <= _cpm_default_conf.max_iter:
         # 1st-stage optimization oracle
         # add proximal term
@@ -738,9 +740,12 @@ def solve_cpm(self):
         fk = _qval
         _eps_fixedpoint = fk - fz
         _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
-        print(
-            f"-- k: {k:3d}/{status}, df: {_eps_fixedpoint_rel: .1e}, f: {fk: .6e}/feas: {self.zsurror_eps_feas.getValue():.1e}"
-        )
+        _vals = [k, _eps_fixedpoint_rel, fk, self.zsurror_eps_feas.getValue()]
+
+        # print(
+        #     f"-- k: {k:3d}, df: {_eps_fixedpoint_rel: .1e}, f: {fk: .6e}/feas: {self.zsurror_eps_feas.getValue():.1e}"
+        # )
+        print(_cpm_default_conf.LOGGING_FORMATS.format(*_vals))
         if _eps_fixedpoint_rel < 1e-7 and bool_acc:
             break
 
