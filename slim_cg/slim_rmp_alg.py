@@ -25,8 +25,9 @@ class ALMConf(object):
 
 
 class CPMConf(object):
-    max_iter = 10
+    max_iter = 100
     max_inner_iter = 10
+    LOGGING_SLOTS = []
 
 
 _alm_default_conf = ALMConf()
@@ -607,15 +608,21 @@ def update_cpm(self):
         # set objective function on the second-stage
         ##################################
 
-        self.rmp_oracle.solver.setObjective(
-            self.rmp_oracle.original_obj,
-            sense=self.solver_constant.MINIMIZE,
-        )
         self.rmp_model.Params.InfUnbdInfo = 1
         # surrogate variable for setting different zk
+        # where: z + ε >= zk:= Xλ (first-stage)
         self.zsurro = self.rmp_model.addVars(list(range(self.zk.shape[0])), lb=0.0)
-        self.zsurro_constrs = self.rmp_model.addConstrs(
-            self.z[idz] == self.zsurro[idz] for idz in list(range(self.zk.shape[0]))
+        self.zsurro_eps = self.rmp_model.addVars(list(range(self.zk.shape[0])), lb=0.0)
+        self.zsurro_constrs = [
+            self.rmp_model.addConstr(
+                self.z[idz] + self.zsurro_eps[idz] >= self.zsurro[idz]
+            )
+            for idz in list(range(self.zk.shape[0]))
+        ]
+        self.zsurror_eps_feas = quicksum(self.zsurro_eps)
+        self.rmp_oracle.solver.setObjective(
+            self.rmp_oracle.original_obj + 1e10 * self.zsurror_eps_feas,
+            sense=self.solver_constant.MINIMIZE,
         )
 
     for idb, c in enumerate(self.customer_list):
@@ -680,16 +687,18 @@ def solve_cpm(self):
         self.con_lmbda[idb] = qval_model.addConstr(self.var_lmbda[idb].sum() == 1)
     _obj_lin = sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
     _obj_lin_nu = nu + _obj_lin
-    # recal the bindings
+
+    # calculate the bindings
     _var_Xl = [self.var_lmbda[idb] @ X[idb] for idb in clst]
     _var_Xls = sum(_var_Xl)
 
-    bmax = [bb.max() for bb in beta]
     mute(lp_model, qval_model)
     fz = -1e6
 
     while k <= _cpm_default_conf.max_iter:
         # 1st-stage optimization oracle
+        # add proximal term
+        # bmax = [bb.max() for bb in beta]
         # prox_lmbd = quicksum(
         #     (self.var_lmbda[ibd] - lmbd[idb])
         #     @ (self.var_lmbda[ibd] - lmbd[idb])
@@ -707,18 +716,19 @@ def solve_cpm(self):
 
         # feed zk
         lp_model.setAttr("LB", self.zsurro, _Xls)
+        lp_model.setAttr("UB", self.zsurro, _Xls)
         lp_model.optimize()
         bool_acc = False
         if lp_model.status == GRB.OPTIMAL:
             _val = lp_model.objval
-            eta = np.array([v.Pi for v in self.zsurro_constrs.values()])
+            eta = np.array([v.Pi for v in self.zsurro_constrs])
             _expr_cut = eta @ _var_Xls + _val - eta @ zk
             _cut = qval_model.addConstr(_expr_cut <= nu)
             cps.append(_cut)
             status = "optm-c"
             bool_acc = True
         else:
-            eta = np.array([v.FarkasDual for v in self.zsurro_constrs.values()])
+            eta = np.array([v.FarkasDual for v in self.zsurro_constrs])
             _expr_cut = eta @ _var_Xls
             _cut = qval_model.addConstr(_expr_cut >= 0)
             cps.append(_cut)
@@ -729,9 +739,9 @@ def solve_cpm(self):
         _eps_fixedpoint = fk - fz
         _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
         print(
-            f"-- k: {k}/{status}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
+            f"-- k: {k:3d}/{status}, df: {_eps_fixedpoint_rel: .1e}, f: {fk: .6e}/feas: {self.zsurror_eps_feas.getValue():.1e}"
         )
-        if _eps_fixedpoint < 1e-7 and bool_acc:
+        if _eps_fixedpoint_rel < 1e-7 and bool_acc:
             break
 
         k += 1

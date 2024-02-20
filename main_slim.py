@@ -48,10 +48,11 @@ if __name__ == "__main__":
 
     solver = arg.backend.upper()
     print("----------NCS------------")
-    print(f"using up to {os.cpu_count()} cores")
     init_ray = True
     num_workers = min(os.cpu_count(), 24)
     num_cpus = min(os.cpu_count(), 24)
+    utils.logger.info(f"detecting up to {os.cpu_count()} cores")
+    utils.logger.info(f"using     up to {num_cpus} cores")
     np_cg = NCS(
         arg,
         network,
