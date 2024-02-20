@@ -67,7 +67,6 @@ class DNPSlim(DNP):
 
         self.model.setParam("Logging", CG_RMP_LOGGING)
         self.model.setParam("LogToConsole", CG_RMP_LOGGING)
-        self.model.setParam("Crossover", 0)
         self.model.setParam(self.solver_constant.Param.RelGap, 0.015)
         self.model.setParam(self.solver_constant.Param.TimeLimit, limit)
         if solver == "COPT":
@@ -147,11 +146,12 @@ class DNPSlim(DNP):
         Presolve 2
         """
         if self.arg.backend.upper() == "GUROBI":
-            self.model.setParam("Method", 1)
-            self.model.setParam("Aggregate", 2)
-            self.model.setParam("AggFill", 0)
-            self.model.setParam("PrePasses", 2)
-            self.model.setParam("Presolve", 2)
+            # self.model.setParam("Method", 1)
+            # self.model.setParam("Aggregate", 2)
+            # self.model.setParam("AggFill", 0)
+            # self.model.setParam("PrePasses", 2)
+            # self.model.setParam("Presolve", 2)
+            pass
 
     def modeling(self):
         """

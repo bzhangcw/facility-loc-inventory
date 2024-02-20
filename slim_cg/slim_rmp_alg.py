@@ -38,7 +38,7 @@ _cpm_default_conf = CPMConf()
 
 def mute(*args, bool_unmute=False):
     for v in args:
-        v.Params.OutputFlag = bool_unmute
+        v.Params.LogToConsole = bool_unmute
 
 
 def cleanup(self):
@@ -696,6 +696,14 @@ def solve_cpm(self):
 
     mute(lp_model, qval_model)
     fz = -1e6
+    _redcost = np.min(self.red_cost[self.iter - 1, :]) if self.iter > 1 else 0
+    if _redcost > -1e7:
+        print(f"using ws aggressively (last c': {_redcost:.1e})")
+        lp_model.setParam("LPWarmStart", 2)
+    else:
+        print(f"using ws as default (last c': {_redcost:.1e})")
+        lp_model.setParam("LPWarmStart", 1)
+
     print(_cpm_default_conf.HEADER)
     while k <= _cpm_default_conf.max_iter:
         # 1st-stage optimization oracle
@@ -746,7 +754,7 @@ def solve_cpm(self):
         #     f"-- k: {k:3d}, df: {_eps_fixedpoint_rel: .1e}, f: {fk: .6e}/feas: {self.zsurror_eps_feas.getValue():.1e}"
         # )
         print(_cpm_default_conf.LOGGING_FORMATS.format(*_vals))
-        if _eps_fixedpoint_rel < 1e-7 and bool_acc:
+        if _eps_fixedpoint_rel < 1e-7 and bool_acc and _vals[-1] < 1e0:
             break
 
         k += 1
