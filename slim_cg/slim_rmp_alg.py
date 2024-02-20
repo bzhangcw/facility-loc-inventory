@@ -649,7 +649,18 @@ def solve_cpm(self):
     # clear the cutting planes
     k = 0
     cps = []
-
+    kappa = 0.95
+    if self.lmbd is not None:
+        # use last iterate
+        lmbd = []
+        for ibd in clst:
+            ds = X[ibd].shape[0] - self.lmbd[ibd].shape[0]
+            if ds > 0:
+                lmbd.append(
+                    np.append(self.lmbd[ibd] * kappa, np.ones(ds) * (1 - kappa))
+                )
+    else:
+        lmbd = [np.zeros(X[ibd].shape[0]) for ibd in clst]
     ##################################
     # declare a second-stage model
     #   on the value function Q
@@ -663,18 +674,30 @@ def solve_cpm(self):
     self.con_lmbda = {}
     for idb in clst:
         Xc = X[idb]
-        self.var_lmbda[idb] = qval_model.addMVar(Xc.shape[0], ub=1.0)
+        self.var_lmbda[idb] = qval_model.addMVar(
+            Xc.shape[0], ub=1.0, name=f"lmbd-{idb}"
+        )
         self.con_lmbda[idb] = qval_model.addConstr(self.var_lmbda[idb].sum() == 1)
     _obj_lin = sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
-    qval_model.setObjective(nu + _obj_lin)
+    _obj_lin_nu = nu + _obj_lin
     # recal the bindings
     _var_Xl = [self.var_lmbda[idb] @ X[idb] for idb in clst]
     _var_Xls = sum(_var_Xl)
 
+    bmax = [bb.max() for bb in beta]
     mute(lp_model, qval_model)
     fz = -1e6
+
     while k <= _cpm_default_conf.max_iter:
         # 1st-stage optimization oracle
+        # prox_lmbd = quicksum(
+        #     (self.var_lmbda[ibd] - lmbd[idb])
+        #     @ (self.var_lmbda[ibd] - lmbd[idb])
+        #     * bmax[ibd]
+        #     / 10
+        #     for ibd in clst
+        # )
+        qval_model.setObjective(_obj_lin_nu)  # + prox_lmbd)
         qval_model.optimize()
         _qval = qval_model.objval
         lmbd = [self.var_lmbda[ibd].x for ibd in clst]
@@ -685,6 +708,7 @@ def solve_cpm(self):
         # feed zk
         lp_model.setAttr("LB", self.zsurro, _Xls)
         lp_model.optimize()
+        bool_acc = False
         if lp_model.status == GRB.OPTIMAL:
             _val = lp_model.objval
             eta = np.array([v.Pi for v in self.zsurro_constrs.values()])
@@ -692,10 +716,11 @@ def solve_cpm(self):
             _cut = qval_model.addConstr(_expr_cut <= nu)
             cps.append(_cut)
             status = "optm-c"
+            bool_acc = True
         else:
             eta = np.array([v.FarkasDual for v in self.zsurro_constrs.values()])
-            _expr_cut = eta @ (_var_Xls - zk)
-            _cut = lp_model.addConstr(_expr_cut <= 0)
+            _expr_cut = eta @ _var_Xls
+            _cut = qval_model.addConstr(_expr_cut >= 0)
             cps.append(_cut)
             status = "feas-c"
 
@@ -704,9 +729,9 @@ def solve_cpm(self):
         _eps_fixedpoint = fk - fz
         _eps_fixedpoint_rel = _eps_fixedpoint / (fk + 1e-1)
         print(
-            f"-- k: {k}/{status}, |dgitf|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
+            f"-- k: {k}/{status}, |df|/ε: {_eps_fixedpoint: .1e}/{_eps_fixedpoint_rel: .1e}, f: {fk: .6e}"
         )
-        if _eps_fixedpoint < 1e-7:
+        if _eps_fixedpoint < 1e-7 and bool_acc:
             break
 
         k += 1

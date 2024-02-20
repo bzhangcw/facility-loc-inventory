@@ -1,5 +1,5 @@
 import json
-
+import os
 import gurobipy as gp
 import numpy as np
 import pandas as pd
@@ -48,10 +48,10 @@ if __name__ == "__main__":
 
     solver = arg.backend.upper()
     print("----------NCS------------")
-    # init_ray = arg.use_ray
+    print(f"using up to {os.cpu_count()} cores")
     init_ray = True
-    num_workers = 22
-    num_cpus = 22
+    num_workers = min(os.cpu_count(), 24)
+    num_cpus = min(os.cpu_count(), 24)
     np_cg = NCS(
         arg,
         network,
