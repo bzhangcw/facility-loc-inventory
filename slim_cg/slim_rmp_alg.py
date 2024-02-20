@@ -10,6 +10,7 @@ from slim_cg.slim_rmp_model import *
 CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
 CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 0))
+CG_RMP_USE_WS_TOL = int(os.environ.get("CG_RMP_USE_WS_TOL", 1e8))
 
 
 class RMPAlg(IntEnum):
@@ -697,7 +698,7 @@ def solve_cpm(self):
     mute(lp_model, qval_model)
     fz = -1e6
     _redcost = np.min(self.red_cost[self.iter - 1, :]) if self.iter > 1 else 0
-    if _redcost > -1e7:
+    if _redcost > -CG_RMP_USE_WS_TOL:
         print(f"using ws aggressively (last c': {_redcost:.1e})")
         lp_model.setParam("LPWarmStart", 2)
     else:
