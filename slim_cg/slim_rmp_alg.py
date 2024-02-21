@@ -639,6 +639,51 @@ def update_cpm(self):
             self.beta[idb].append(self.columns[c][-1]["beta"])
 
 
+def retrieve_basis(self):
+    if self.iter > 0:
+        if CG_RMP_WS_OPTION == 0:
+            _ws_v = self.rmp_vbasis_init
+            _ws_c = self.rmp_cbasis_init
+        elif CG_RMP_WS_OPTION == 1:
+            _ws_v = self.rmp_vbasis
+            _ws_c = self.rmp_cbasis
+        else:
+            raise ValueError("unrecognized option")
+
+        n_new_rmp_vars = len(self.rmp_model.getVars()) - len(_ws_v)
+        n_new_rmp_cons = len(self.rmp_model.getConstrs()) - len(_ws_c)
+        self._logger.info(
+            "using option {}: rmp have added {} new vars and {} new cons".format(
+                CG_RMP_WS_OPTION, n_new_rmp_vars, n_new_rmp_cons
+            )
+        )
+        _ws_v = [*_ws_v, *[GRB.NONBASIC_LOWER] * n_new_rmp_vars]
+        _ws_c = [*_ws_c, *[GRB.NONBASIC_LOWER] * n_new_rmp_cons]
+
+        # set the modified basis status back to the model
+        self.rmp_model.setParam("LPWarmStart", 2)
+        self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), _ws_v)
+        self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
+        self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
+
+
+def save_basis(self):
+    self._logger.info("saving basis...")
+    # get the variable basis status
+    self.rmp_vbasis = self.rmp_model.getAttr("VBasis", self.rmp_model.getVars())
+
+    # get the constraint basis status
+    self.rmp_cbasis = self.rmp_model.getAttr("CBasis", self.rmp_model.getConstrs())
+    if self.iter == 0:
+        # save the initial basis.
+        self.rmp_vbasis_init = self.rmp_model.getAttr(
+            "VBasis", self.rmp_model.getVars()
+        )
+        self.rmp_cbasis_init = self.rmp_model.getAttr(
+            "CBasis", self.rmp_model.getConstrs()
+        )
+
+
 def solve_cpm(self):
     # using cutting plane methods to solve rmp
     # basic
@@ -704,7 +749,7 @@ def solve_cpm(self):
     else:
         print(f"using ws as default (last c': {_redcost:.1e})")
         lp_model.setParam("LPWarmStart", 1)
-
+    _qval = self.rmp_objval
     print(_cpm_default_conf.HEADER)
     while k <= _cpm_default_conf.max_iter:
         # 1st-stage optimization oracle
@@ -717,10 +762,11 @@ def solve_cpm(self):
         #     / 10
         #     for ibd in clst
         # )
-        qval_model.setObjective(_obj_lin_nu)  # + prox_lmbd)
-        qval_model.optimize()
-        _qval = qval_model.objval
-        lmbd = [self.var_lmbda[ibd].x for ibd in clst]
+        if k >= 1:
+            qval_model.setObjective(_obj_lin_nu)  # + prox_lmbd)
+            qval_model.optimize()
+            _qval = qval_model.objval
+            lmbd = [self.var_lmbda[ibd].x for ibd in clst]
 
         _Xl = [lmbd[idb] @ X[idb] for idb in clst]
         zk = _Xls = sum(_Xl)
