@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from config.instance_generator import *
 from config.network import construct_network
 from config.read_data import read_data
 from entity import Edge, Node
@@ -299,6 +300,46 @@ def scale(pick_instance, datapath, arg):
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
+    elif pick_instance == 12:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=500,
+            plant_num=2,
+            warehouse_num=5,
+            customer_num=4,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 13:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=500,
+            plant_num=200,
+            warehouse_num=500,
+            customer_num=100,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 14:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=500,
+            plant_num=200,
+            warehouse_num=1000,
+            customer_num=1000,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 15:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=500,
+            plant_num=200,
+            warehouse_num=1841,
+            customer_num=1456,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
     package = get_data_from_cfg(cfg)
@@ -310,22 +351,25 @@ def add_attr(edge_list, node_list, arg, const):
     for e in edge_list:
         e.variable_lb = 0
     if arg.capacity == 1:
-        cap = pd.read_csv("data/random_capacity_updated.csv").set_index("id")
+        capacity_path = arg.fpath + "capacity.csv"
+        cap = pd.read_csv(capacity_path).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
             e.capacity = cap["qty"].get(e.idx, 1e4)
     if arg.edge_lb == 1:
-        lb_end = pd.read_csv("data/lb_end.csv").set_index("id")
+        lb_end_path = arg.fpath + "lb_end.csv"
+        lb_end = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-        # lb_inter = pd.read_csv("data/lb_inter.csv").set_index("id")
-        # for e in edge_list:
-        #     if e.idx in lb_inter["lb"]:
-        #         e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
-        # print(f"setting {e.idx} to {e.variable_lb}")
+        lb_end_path = arg.fpath + "lb_inter.csv"
+        lb_inter = pd.read_csv(lb_end_path).set_index("id")
+        for e in edge_list:
+            if e.idx in lb_inter["lb"]:
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
     if arg.node_lb == 1:
-        lb_df = pd.read_csv("./data/node_lb_V3.csv").set_index("id")
+        lb_node_path = arg.fpath + "lb_node.csv"
+        lb_df = pd.read_csv(lb_node_path).set_index("id")
         for n in node_list:
             if n.type == const.WAREHOUSE:
                 n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)
@@ -345,10 +389,15 @@ def dump_cfg_tofname(cfg):
     logger.info(infostr)
     keys = sorted(cfg.keys())
 
+    # return (
+    #         cfg["data_dir"].split("/")[-1].split(".")[0]
+    #         + "-"
+    #         + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+    # )
     return (
-            cfg["data_dir"].split("/")[-1].split(".")[0]
-            + "-"
-            + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+        cfg["data_dir"].split("/")[1]
+        + "-"
+        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     )
 
 
@@ -362,9 +411,16 @@ def get_data_from_cfg(cfg):
     else:
         logger.info("current data has not been generated before")
         logger.info(f"creating a temporary cache @{fp}")
-        sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-            **cfg
-        )
+        (
+            sku_list,
+            plant_list,
+            warehouse_list,
+            customer_list,
+            edge_list,
+        ) = generate_instance(**cfg)
+        # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
+        #     **cfg
+        # )
 
         node_list = plant_list + warehouse_list + customer_list
         network = construct_network(node_list, edge_list, sku_list)
@@ -421,8 +477,8 @@ class TimerContext:
         return self
 
     def __exit__(
-            self,
-            *arg,
+        self,
+        *arg,
     ):
         self.end = time.time()
         self.interval = self.end - self.start

@@ -224,7 +224,8 @@ class Pricing(object):
         self.arg = arg
         self.T = arg.T
         self.network = network
-        self.sku_list = self.network.graph["sku_list"]
+        # self.sku_list = self.network.graph["sku_list"]
+        self.sku_list = self.arg.sku_list
         # self.bool_capacity = bool_capacity
         # self.bool_fixed_cost = bool_fixed_cost
         # self.bool_covering = bool_covering

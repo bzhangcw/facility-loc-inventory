@@ -89,6 +89,7 @@ class Plant(Node):
         production_fixed_cost: float = 0.0,
         production_sku_fixed_cost: "pd.Series[SKU, float]" = None,
         production_sku_unit_cost: "pd.Series[SKU, float]" = None,
+        open_fixed_cost: float = 0.0,
     ) -> None:
         super().__init__(idx, location)
         self.production_capacity = production_capacity
@@ -100,6 +101,7 @@ class Plant(Node):
         self.production_sku_fixed_cost = production_sku_fixed_cost
         self.production_sku_unit_cost = production_sku_unit_cost
         self.visited = None
+        self.open_fixed_cost = open_fixed_cost
         self.type = const.PLANT
 
     def get_node_sku_list(self, t: int, full_sku_list: List[SKU]):
@@ -155,6 +157,7 @@ class Warehouse(Node):
         end_inventory_bias_cost: float = 0.0,
         demand: "pd.Series[(int, SKU), float]" = None,
         demand_sku: "pd.Series[int, List[SKU]]" = None,
+        open_fixed_cost: float = 0.0,
         unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
     ) -> None:
         super().__init__(idx, location)
@@ -169,6 +172,7 @@ class Warehouse(Node):
         self.end_inventory = end_inventory
         self.end_inventory_bias_cost = end_inventory_bias_cost
         self.demand = demand
+        self.open_fixed_cost = open_fixed_cost
         # self.demand_sku = demand_sku
         self.demand_sku = None
         self.unfulfill_sku_unit_cost = unfulfill_sku_unit_cost

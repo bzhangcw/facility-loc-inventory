@@ -39,12 +39,7 @@ class Param:
             # required=True,
         )
 
-        parser.add_argument(
-            "--T",
-            type=int,
-            default=7,
-            help='time horizon'
-        )
+        parser.add_argument("--T", type=int, default=7, help="time horizon")
 
         parser.add_argument(
             "--backend",
@@ -105,7 +100,7 @@ class Param:
             help="""
             for debugging only, 
                 check the cost functions of CG
-            """
+            """,
         )
 
         ##############################
@@ -120,7 +115,7 @@ class Param:
              - a config that specify
              - using the same config you can choose different size by
                 `pick_instance` 
-            """
+            """,
         )
 
         parser.add_argument(
@@ -139,7 +134,6 @@ class Param:
                 in principle, pricing should be solved as MIP only.
             """,
         )
-
 
         ##############################
         # 2. fixed cost
@@ -185,7 +179,7 @@ class Param:
         parser.add_argument(
             "--backorder_sku_unit_cost",
             type=float,
-            default=20,
+            default=200,
         )
         ##############################
         # 3. geometric restrictions

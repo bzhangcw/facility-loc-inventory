@@ -20,7 +20,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-   
+
     utils.configuration(arg.conf_label, arg)
 
     datapath = arg.fpath
@@ -60,6 +60,5 @@ if __name__ == "__main__":
     #     model.model.setParam("Threads", 8)
     #     model.model.setParam("TimeLimit", 3600)
     #     model.model.setParam("Crossover", 0)
-        
+
     utils.visualize_timers()
-    
