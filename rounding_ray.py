@@ -23,15 +23,15 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.conf_label = 3
+    arg.conf_label = 1
     arg.pick_instance = 5
     arg.backorder = 0
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
     # arg.fpath = "data/data_1219/"
-    # arg.fpath = "data/data_0inv/"
+    arg.fpath = "data/data_0inv/"
     # arg.fpath = 'data/_history_/'
-    arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
+    # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
     datapath = arg.fpath
     arg.new_data = 0
     arg.pricing_relaxation = 0
@@ -79,19 +79,19 @@ if __name__ == "__main__":
     print(f"save mps name {dnp_mps_name}")
     model.model.write(dnp_mps_name)
     variables = model.model.getVars()
-    print('-----------MIP------------')
-    model.model.solve()
+    # print('-----------MIP------------')
+    # model.model.solve()
     # # print('------Cost Information--------')
     # # print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
     # # print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
     # # print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
-    # for v in variables:
-    #     if v.getType() == COPT.BINARY:
-    #         v.setType(COPT.CONTINUOUS)
-    # print('-----------LP------------')
-    # model.model.solve()
-    # model.get_solution('sol/')
-    # print('write')
+    for v in variables:
+        if v.getType() == COPT.BINARY:
+            v.setType(COPT.CONTINUOUS)
+    print('-----------LP------------')
+    model.model.solve()
+    model.get_solution('sol/')
+    print('write')
 
     # print("----------NCG------------")
     # arg.DNP = 0
