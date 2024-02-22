@@ -22,23 +22,23 @@ class DNPSlim(DNP):
     """
 
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        full_sku_list: List[SKU] = None,
-        env_name: str = "DNP_env",
-        model_name: str = "DNP",
-        used_edge_capacity: dict = None,
-        used_warehouse_capacity: dict = None,
-        used_plant_capacity: dict = None,
-        logging: int = 0,
-        gap: float = 1e-4,
-        threads: int = 12,
-        limit: int = 7200,
-        cg: bool = True,
-        customer_list: List[Customer] = None,
-        env=None,
-        solver="COPT",
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            full_sku_list: List[SKU] = None,
+            env_name: str = "DNP_env",
+            model_name: str = "DNP",
+            used_edge_capacity: dict = None,
+            used_warehouse_capacity: dict = None,
+            used_plant_capacity: dict = None,
+            logging: int = 0,
+            gap: float = 1e-4,
+            threads: int = 12,
+            limit: int = 7200,
+            cg: bool = True,
+            customer_list: List[Customer] = None,
+            env=None,
+            solver="COPT",
     ) -> None:
         self.backend = solver.upper()
         if solver == "COPT":
@@ -695,8 +695,8 @@ class DNPSlim(DNP):
 
                 if node.inventory_capacity < np.inf:
                     left_capacity = (
-                        node.inventory_capacity
-                        - self.used_warehouse_capacity.get(t).get(node, 0)
+                            node.inventory_capacity
+                            - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
 
                     bound = (
@@ -773,8 +773,8 @@ class DNPSlim(DNP):
             return obj
         for t, edge in tuple(dual_index["transportation_capacity"].keys()):
             obj -= dualvar[
-                dual_index["transportation_capacity"][(t, edge)]
-            ] * self.variables["sku_flow"].sum(t, edge, "*")
+                       dual_index["transportation_capacity"][(t, edge)]
+                   ] * self.variables["sku_flow"].sum(t, edge, "*")
 
         for t, node in tuple(dual_index["node_capacity"].keys()):
             if node.type == const.PLANT:
@@ -830,17 +830,17 @@ class DNPSlim(DNP):
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 for k in sku_list:
                     if (
-                        node.production_sku_unit_cost is not None
-                        and k in node.production_sku_unit_cost.index.to_list()
+                            node.production_sku_unit_cost is not None
+                            and k in node.production_sku_unit_cost.index.to_list()
                     ):
                         node_producing_cost += (
-                            node.production_sku_unit_cost[k]
-                            * self.variables["sku_production"][t, node, k]
+                                node.production_sku_unit_cost[k]
+                                * self.variables["sku_production"][t, node, k]
                         )
                     else:
                         node_producing_cost += (
-                            self.arg.production_sku_unit_cost
-                            * self.variables["sku_production"][t, node, k]
+                                self.arg.production_sku_unit_cost
+                                * self.variables["sku_production"][t, node, k]
                         )
 
                 producing_cost = producing_cost + node_producing_cost
@@ -862,8 +862,8 @@ class DNPSlim(DNP):
                         holding_sku_unit_cost = self.arg.holding_sku_unit_cost
 
                     node_holding_cost += (
-                        holding_sku_unit_cost
-                        * self.variables["sku_inventory"][t, node, k]
+                            holding_sku_unit_cost
+                            * self.variables["sku_inventory"][t, node, k]
                     )
 
                 holding_cost = holding_cost + node_holding_cost
@@ -885,17 +885,17 @@ class DNPSlim(DNP):
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
+                        edge.transportation_sku_unit_cost is not None
+                        and k in edge.transportation_sku_unit_cost
                 ):
                     transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
                 edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"][t, edge, k]
+                        edge_transportation_cost
+                        + transportation_sku_unit_cost
+                        * self.variables["sku_flow"][t, edge, k]
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -929,7 +929,7 @@ class DNPSlim(DNP):
             node_fixed_node_cost = 0.0
             for t in range(self.T):
                 node_fixed_node_cost += (
-                    this_node_fixed_cost * self.variables["open"][(t, node)]
+                        this_node_fixed_cost * self.variables["open"][(t, node)]
                 )
 
             fixed_node_cost += node_fixed_node_cost
@@ -948,8 +948,8 @@ class DNPSlim(DNP):
                 edge.transportation_fixed_cost = 10
             for t in range(self.T):
                 edge_fixed_edge_cost = (
-                    edge.transportation_fixed_cost
-                    * self.variables["select_edge"][(t, edge)]
+                        edge.transportation_fixed_cost
+                        * self.variables["select_edge"][(t, edge)]
                 )
 
             fixed_edge_cost = fixed_edge_cost + edge_fixed_edge_cost

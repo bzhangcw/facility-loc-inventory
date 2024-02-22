@@ -409,9 +409,9 @@ def dump_cfg_tofname(cfg):
     #         + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     # )
     return (
-        cfg["data_dir"].split("/")[1]
-        + "-"
-        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+            cfg["data_dir"].split("/")[1]
+            + "-"
+            + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     )
 
 
@@ -499,8 +499,8 @@ class TimerContext:
         return self
 
     def __exit__(
-        self,
-        *arg,
+            self,
+            *arg,
     ):
         self.end = time.time()
         self.interval = self.end - self.start

@@ -105,7 +105,6 @@ for i in range(nkind):
     constr = mCutOpt.addConstr(slack_demand[i] <= 0, name="demand{}".format(i))
     constrs["demand"][i] = constr
 
-
 # # # Minimize total rolls cut
 obj = vcut.sum("*") - slack_demand.sum("*")
 mCutOpt.setObjective(obj, COPT.MINIMIZE)

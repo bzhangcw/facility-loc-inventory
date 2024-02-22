@@ -126,7 +126,7 @@ def milp_sequential(self):
     def chunks(lst, n):
         """yield successive n-sized chunks from lst."""
         for i in range(0, len(lst), n):
-            yield lst[i : i + n]
+            yield lst[i: i + n]
 
     ckid = 0
     for ck in tqdm(list(chunks(_keys_col, CG_SEQUENTIAL_BSIZE)), ncols=90, leave=True):

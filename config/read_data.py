@@ -8,12 +8,12 @@ loc = np.array([0, 0])
 
 
 def read_data(
-    data_dir,
-    sku_num=np.inf,
-    plant_num=np.inf,
-    warehouse_num=np.inf,
-    customer_num=np.inf,
-    one_period=False,
+        data_dir,
+        sku_num=np.inf,
+        plant_num=np.inf,
+        warehouse_num=np.inf,
+        customer_num=np.inf,
+        one_period=False,
 ):
     """
     > The function reads the data from the excel file and constructs the corresponding objects
@@ -75,10 +75,10 @@ def read_data(
         [
             node_df.query("id.str.startswith('P')", engine="python").iloc[:plant_num],
             node_df.query("id.str.startswith('T')", engine="python").iloc[
-                :warehouse_num
+            :warehouse_num
             ],
             node_df.query("id.str.startswith('C')", engine="python").iloc[
-                :customer_num
+            :customer_num
             ],
         ]
     )
@@ -86,19 +86,19 @@ def read_data(
     # TODO: can do better to drop nodes and skus
     edge_df = edge_df[
         edge_df["from"].isin(node_df["id"]) & edge_df["to"].isin(node_df["id"])
-    ]  # empty
+        ]  # empty
     node_sku_df = node_sku_df[
         node_sku_df["id"].isin(node_df["id"]) & node_sku_df["sku"].isin(sku_df["id"])
-    ]
+        ]
     edge_sku_df = edge_sku_df[
         edge_sku_df["start_id"].isin(node_df["id"])
         & edge_sku_df["end_id"].isin(node_df["id"])
         & edge_sku_df["sku"].isin(sku_df["id"])
-    ]
+        ]
     node_sku_time_df = node_sku_time_df[
         node_sku_time_df["id"].isin(node_df["id"])
         & node_sku_time_df["sku"].isin(sku_df["id"])
-    ]
+        ]
     # ==================== construct sku ============================
     sku_dict = {}
     for i in list(sku_df.index):

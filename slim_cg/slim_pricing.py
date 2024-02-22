@@ -40,13 +40,13 @@ class PricingWorker:
     """
 
     def __init__(
-        self,
-        cus_list,
-        arg,
-        bool_covering,
-        bool_edge_lb,
-        bool_node_lb,
-        solver="COPT",
+            self,
+            cus_list,
+            arg,
+            bool_covering,
+            bool_edge_lb,
+            bool_node_lb,
+            solver="COPT",
     ):
         self.arg = arg
         self.cus_list = cus_list
@@ -127,14 +127,14 @@ class PricingWorker:
             self.DNP_dict[customer].update_objective(customer, dual_packs)
 
     def update_objective_all_new(
-        self,
-        iter,
-        broadcast_mat,
-        broadcast_nodes,
-        broadcast_cols,
-        broadcast_keys,
-        dual_ws,
-        dual_exists_customers,
+            self,
+            iter,
+            broadcast_mat,
+            broadcast_nodes,
+            broadcast_cols,
+            broadcast_keys,
+            dual_ws,
+            dual_exists_customers,
     ):
         for customer in self.cus_list:
             if customer in self.skipped:
@@ -198,16 +198,16 @@ class Pricing(object):
     """
 
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        model_name: str = "PricingDelivery",
-        bool_dp: bool = False,
-        gap: float = 1e-4,
-        threads: int = None,
-        limit: int = 3600,
-        customer: Customer = None,
-        solver: str = "COPT",
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            model_name: str = "PricingDelivery",
+            bool_dp: bool = False,
+            gap: float = 1e-4,
+            threads: int = None,
+            limit: int = 3600,
+            customer: Customer = None,
+            solver: str = "COPT",
     ) -> None:
         self.backend = solver.upper()
         self.solver_name = solver.upper()
@@ -751,28 +751,28 @@ class Pricing(object):
             ) = edge.get_edge_sku_list_with_transportation_cost(t, self.sku_list)
             for k in sku_list_with_fixed_transportation_cost:
                 if (
-                    edge.transportation_sku_fixed_cost is not None
-                    and k in edge.transportation_sku_fixed_cost
+                        edge.transportation_sku_fixed_cost is not None
+                        and k in edge.transportation_sku_fixed_cost
                 ):
                     edge_transportation_cost = (
-                        edge_transportation_cost
-                        + edge.transportation_sku_fixed_cost[k]
-                        * self.variables["sku_select_edge"].get((t, edge, k), 0)
+                            edge_transportation_cost
+                            + edge.transportation_sku_fixed_cost[k]
+                            * self.variables["sku_select_edge"].get((t, edge, k), 0)
                     )
 
             for k in sku_list_with_unit_transportation_cost:
                 if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
+                        edge.transportation_sku_unit_cost is not None
+                        and k in edge.transportation_sku_unit_cost
                 ):
                     transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
                 else:
                     transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
 
                 edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"].get((t, edge, k), 0)
+                        edge_transportation_cost
+                        + transportation_sku_unit_cost
+                        * self.variables["sku_flow"].get((t, edge, k), 0)
                 )
 
             transportation_cost = transportation_cost + edge_transportation_cost
@@ -785,8 +785,8 @@ class Pricing(object):
         backlogged_demand_cost = 0.0
         for k in self.sku_list:
             backlogged_demand_cost += (
-                self.arg.unfulfill_sku_unit_cost
-                * self.variables["sku_backorder"][(t, k)]
+                    self.arg.unfulfill_sku_unit_cost
+                    * self.variables["sku_backorder"][(t, k)]
             )
         self.obj["backlogged_demand_cost"][t] = backlogged_demand_cost
         return backlogged_demand_cost
@@ -825,7 +825,7 @@ class Pricing(object):
             node_fixed_node_cost = 0.0
             for t in range(self.T):
                 node_fixed_node_cost += (
-                    this_node_fixed_cost * self.variables["open"][(t, node)]
+                        this_node_fixed_cost * self.variables["open"][(t, node)]
                 )
 
             fixed_node_cost += node_fixed_node_cost
@@ -837,8 +837,8 @@ class Pricing(object):
         fixed_edge_cost = 0.0
         for edge in self._iterate_edges():
             fixed_edge_cost += (
-                edge.transportation_fixed_cost
-                * self.variables["select_edge"][(t, edge)]
+                    edge.transportation_fixed_cost
+                    * self.variables["select_edge"][(t, edge)]
             )
         self.obj["edge_fixed_cost"][(t)] = fixed_edge_cost
         return fixed_edge_cost
@@ -898,7 +898,7 @@ class Pricing(object):
                     else:
                         period_transportation_cost = z
                     transportation_cost = (
-                        period_transportation_cost + transportation_cost
+                            period_transportation_cost + transportation_cost
                     )
                 _vals["transportation_cost"] = transportation_cost
             else:
@@ -915,7 +915,7 @@ class Pricing(object):
                         period_unfulfilled_demand_cost = z
                     # print(t,z)
                     unfulfilled_demand_cost = (
-                        unfulfilled_demand_cost + period_unfulfilled_demand_cost
+                            unfulfilled_demand_cost + period_unfulfilled_demand_cost
                     )
                     _vals["unfulfilled_demand_cost"][t] = period_unfulfilled_demand_cost
             else:

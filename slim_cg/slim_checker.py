@@ -27,14 +27,14 @@ def check_cost_cg(self):
                     # print("transportation_cost", self.columns[customer][0]['transportation_cost'])
                     # print("unfulfilled_demand_cost", self.columns[customer][0]['unfulfilled_demand_cost'])
                     transportation_cost_from_customer += (
-                        v.x * self.columns[customer][col_num]["transportation_cost"]
+                            v.x * self.columns[customer][col_num]["transportation_cost"]
                     )
                     for t in range(self.arg.T):
                         unfulfilled_cost_from_customer[t] += (
-                            v.x
-                            * self.columns[customer][col_num][
-                                "unfulfilled_demand_cost"
-                            ][t]
+                                v.x
+                                * self.columns[customer][col_num][
+                                    "unfulfilled_demand_cost"
+                                ][t]
                         )
     print("tr_pricing", transportation_cost_from_customer)
     print(

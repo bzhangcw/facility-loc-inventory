@@ -288,6 +288,24 @@ class Param:
             default=4,
         )
 
+        parser.add_argument(
+            "--num_skus",
+            type=int,
+            default=500,
+        )
+
+        parser.add_argument(
+            "--num_periods",
+            type=int,
+            default=30,
+        )
+
+        parser.add_argument(
+            "--demand_type",
+            type=int,
+            default=1,
+        )
+
         return parser
 
 

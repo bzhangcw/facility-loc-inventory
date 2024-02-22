@@ -332,10 +332,10 @@ def solve_alm(self):
         mvz = MVar.fromlist(z)
         var_feas_z = mvz - _var_Xls
         zobj = (
-            +(p / 2 + 1e-5) * (mvz @ mvz)
-            + (p / 2 + 1e-5) * (_var_Xls @ _var_Xls)
-            - p * (mvz @ _var_Xls)
-            + sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
+                +(p / 2 + 1e-5) * (mvz @ mvz)
+                + (p / 2 + 1e-5) * (_var_Xls @ _var_Xls)
+                - p * (mvz @ _var_Xls)
+                + sum(beta[idb] @ self.var_lmbda[idb] for idb in clst)
         )
 
     while k <= _alm_default_conf.max_iter:
@@ -358,10 +358,10 @@ def solve_alm(self):
         _eps_feas_rel = _eps_feas / (sum(_Xls) + 1e-1)
 
         fk = (
-            lp_oracle.original_obj.getValue()
-            + eta @ _feas
-            + _feas @ _feas * p / 2
-            + sum(beta[idb] @ lmbd[idb] for idb in clst)
+                lp_oracle.original_obj.getValue()
+                + eta @ _feas
+                + _feas @ _feas * p / 2
+                + sum(beta[idb] @ lmbd[idb] for idb in clst)
         )
         print(
             f"-- k: {k}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, f: {fk: .6e}"
@@ -540,16 +540,16 @@ def solve_prox_alm(self):
                 # augmented lagrangian
                 # trial step
                 _lk = (
-                    block_z_lp_oracle.original_obj.getValue()
-                    + eta @ _feas
-                    + _feas @ _feas * p / 2
-                    + sum(beta[idb] @ lmbd[idb] for idb in clst)
+                        block_z_lp_oracle.original_obj.getValue()
+                        + eta @ _feas
+                        + _feas @ _feas * p / 2
+                        + sum(beta[idb] @ lmbd[idb] for idb in clst)
                 )
 
                 if lk - _lk >= 1e2 * _eps_fp:
                     bool_acc = True
                 print(
-                    f"-- k/i/c: {k,j,cc}, |x-x'|: {_eps_fp:.1e}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, ff: {_lk:.6e}, f: {lk: .6e} => {bool_acc}"
+                    f"-- k/i/c: {k, j, cc}, |x-x'|: {_eps_fp:.1e}, |z-Xλ|/ε: {_eps_feas: .1e}/{_eps_feas_rel: .1e}, ff: {_lk:.6e}, f: {lk: .6e} => {bool_acc}"
                 )
                 if bool_acc:
                     tau /= 1.5

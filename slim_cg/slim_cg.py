@@ -26,19 +26,19 @@ CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 class NetworkColumnGenerationSlim(object):
     def __init__(
-        self,
-        arg: argparse.Namespace,
-        network: nx.DiGraph,
-        customer_list: List[Customer],
-        full_sku_list: List[SKU] = None,
-        max_iter=500,
-        init_primal=None,
-        init_sweeping=True,
-        init_dual=None,
-        init_ray=False,
-        num_workers=8,
-        num_cpus=8,
-        solver="COPT",
+            self,
+            arg: argparse.Namespace,
+            network: nx.DiGraph,
+            customer_list: List[Customer],
+            full_sku_list: List[SKU] = None,
+            max_iter=500,
+            init_primal=None,
+            init_sweeping=True,
+            init_dual=None,
+            init_ray=False,
+            num_workers=8,
+            num_cpus=8,
+            solver="COPT",
     ) -> None:
         if solver == "COPT":
             self.solver_name = "COPT"
@@ -137,7 +137,7 @@ class NetworkColumnGenerationSlim(object):
         cus_per_worker = int(np.ceil(self.cus_num / self.num_workers))
         for customer, n in zip(self.customer_list, range(self.cus_num)):
             if n % cus_per_worker == 0:
-                cus_list = self.customer_list[n : min(n + cus_per_worker, self.cus_num)]
+                cus_list = self.customer_list[n: min(n + cus_per_worker, self.cus_num)]
                 worker = PricingWorker.remote(
                     cus_list,
                     self.arg,
@@ -151,8 +151,8 @@ class NetworkColumnGenerationSlim(object):
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-        self,
-        customer: Customer,
+            self,
+            customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -284,7 +284,7 @@ class NetworkColumnGenerationSlim(object):
         for v in range(t + 1):
             for k in self.full_sku_list:
                 backlogged_demand_cost += (
-                    self.arg.unfulfill_sku_unit_cost * customer.demand.get((v, k), 0)
+                        self.arg.unfulfill_sku_unit_cost * customer.demand.get((v, k), 0)
                 )
         return backlogged_demand_cost
 
@@ -338,7 +338,7 @@ class NetworkColumnGenerationSlim(object):
                     self.update_rmp_by_cols()
 
                 with utils.TimerContext(
-                    self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
+                        self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
                 ):
                     self.rmp_model.write(
                         f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
@@ -370,8 +370,8 @@ class NetworkColumnGenerationSlim(object):
                     dual_packs = sla.fetch_dual_info(self) if self.iter >= 1 else None
 
                 improved = (
-                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
-                ) > 1e-2
+                                   eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
+                           ) > 1e-2
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -406,12 +406,12 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
                     if self.init_ray:
                         for worker_id, worker in tqdm(
-                            enumerate(self.worker_list), ncols=80, leave=False
+                                enumerate(self.worker_list), ncols=80, leave=False
                         ):
                             worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
                             with utils.TimerContext(
-                                self.iter, f"update pricing", logging=worker_id < 1
+                                    self.iter, f"update pricing", logging=worker_id < 1
                             ):
                                 # worker.update_objective_all.remote(dual_pack_this)
                                 worker.update_objective_all_new.remote(
@@ -429,7 +429,7 @@ class NetworkColumnGenerationSlim(object):
                             worker.solve_all.remote()
                     else:
                         for col_ind, customer in tqdm(
-                            enumerate(self.customer_list), ncols=80, leave=False
+                                enumerate(self.customer_list), ncols=80, leave=False
                         ):
                             oracle: Pricing = self.oracles[customer]
                             oracle.model.reset()
@@ -442,7 +442,7 @@ class NetworkColumnGenerationSlim(object):
                             else:
                                 dual_pack_this = None
                             with utils.TimerContext(
-                                self.iter, f"update pricing", logging=col_ind < 1
+                                    self.iter, f"update pricing", logging=col_ind < 1
                             ):
                                 oracle.update_objective(
                                     customer, dual_packs=dual_pack_this
@@ -494,9 +494,9 @@ class NetworkColumnGenerationSlim(object):
                         _status = new_cols[col_ind]["status"]
                         self.red_cost[self.iter, col_ind] = _redcost
                         added = (
-                            (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
-                            or dual_packs is None
-                        ) or added
+                                        (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
+                                        or dual_packs is None
+                                ) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
 
@@ -515,19 +515,19 @@ class NetworkColumnGenerationSlim(object):
                 lp_objective = self.rmp_model.objval
 
                 bool_terminate = (
-                    (not improved) or (not added) or self.iter >= self.max_iter
+                        (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
                 if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
-                        bool_terminate
+                            bool_terminate
                     ):
                         choice = self.arg.cg_method_mip_heuristic
                         func = slp.PrimalMethod.select(choice)
                         _fname = func.__name__ if func is not None else "none"
                         with utils.TimerContext(
-                            self.iter,
-                            f"{_fname}",
+                                self.iter,
+                                f"{_fname}",
                         ):
                             if func is None:
                                 pass
@@ -680,7 +680,7 @@ class NetworkColumnGenerationSlim(object):
         )
 
         with open(
-            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:

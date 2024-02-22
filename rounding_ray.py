@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from coptpy import COPT
 from gurobipy import GRB
-
+from config.instance_generator import *
 import const
 import utils
 from config.network import construct_network
@@ -24,21 +24,19 @@ if __name__ == "__main__":
     param = Param()
     arg = param.arg
     arg.conf_label = 1
-    arg.pick_instance = 5
+    arg.pick_instance = 12
     arg.backorder = 0
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
+    arg.fpath = "data/data_generate/"
     # arg.fpath = "data/data_1219/"
-    arg.fpath = "data/data_0inv/"
+    # arg.fpath = "data/data_0inv/"
     # arg.fpath = 'data/_history_/'
     # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
     datapath = arg.fpath
-    arg.new_data = 0
     arg.pricing_relaxation = 0
     arg.T = 7
     arg.cg_mip_recover = 1
-    # arg.backorder = 0
-    # 随机生成的新数据从pick_instance = 12 开始 全规模的是15
     # arg.pick_instance = 15
     print(
         json.dumps(
@@ -48,10 +46,12 @@ if __name__ == "__main__":
         )
     )
     # dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
-    if arg.new_data:
-        dnp_mps_name = f"new_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
-    else:
+    if "history" in datapath:
+        arg.new_data = 0
         dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    else:
+        arg.new_data = 1
+        dnp_mps_name = f"new_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,

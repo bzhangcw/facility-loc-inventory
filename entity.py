@@ -78,18 +78,18 @@ class Plant(Node):
     """
 
     def __init__(
-        self,
-        idx: str,
-        location: np.ndarray,
-        production_capacity: float,
-        producible_sku: List[SKU],
-        production_lb: float = np.inf,
-        production_sku_rate: "pd.Series[SKU, float]" = None,
-        production_sku_capacity: "pd.Series[SKU, float]" = None,
-        production_fixed_cost: float = 0.0,
-        production_sku_fixed_cost: "pd.Series[SKU, float]" = None,
-        production_sku_unit_cost: "pd.Series[SKU, float]" = None,
-        open_fixed_cost: float = 0.0,
+            self,
+            idx: str,
+            location: np.ndarray,
+            production_capacity: float,
+            producible_sku: List[SKU],
+            production_lb: float = np.inf,
+            production_sku_rate: "pd.Series[SKU, float]" = None,
+            production_sku_capacity: "pd.Series[SKU, float]" = None,
+            production_fixed_cost: float = 0.0,
+            production_sku_fixed_cost: "pd.Series[SKU, float]" = None,
+            production_sku_unit_cost: "pd.Series[SKU, float]" = None,
+            open_fixed_cost: float = 0.0,
     ) -> None:
         super().__init__(idx, location)
         self.production_capacity = production_capacity
@@ -142,23 +142,23 @@ class Warehouse(Node):
     """
 
     def __init__(
-        self,
-        idx: str,
-        location: np.ndarray,
-        inventory_capacity: float,
-        inventory_lb: float = np.inf,
-        if_current: bool = False,
-        inventory_sku_capacity: "pd.Series[SKU, float]" = None,
-        holding_fixed_cost: float = 0.0,
-        holding_sku_unit_cost: "pd.Series[SKU, float]" = None,
-        backorder_sku_unit_cost: "pd.Series[SKU, float]" = None,
-        initial_inventory: "pd.Series[SKU, float]" = None,
-        end_inventory: "pd.Series[SKU, float]" = None,
-        end_inventory_bias_cost: float = 0.0,
-        demand: "pd.Series[(int, SKU), float]" = None,
-        demand_sku: "pd.Series[int, List[SKU]]" = None,
-        open_fixed_cost: float = 0.0,
-        unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
+            self,
+            idx: str,
+            location: np.ndarray,
+            inventory_capacity: float,
+            inventory_lb: float = np.inf,
+            if_current: bool = False,
+            inventory_sku_capacity: "pd.Series[SKU, float]" = None,
+            holding_fixed_cost: float = 0.0,
+            holding_sku_unit_cost: "pd.Series[SKU, float]" = None,
+            backorder_sku_unit_cost: "pd.Series[SKU, float]" = None,
+            initial_inventory: "pd.Series[SKU, float]" = None,
+            end_inventory: "pd.Series[SKU, float]" = None,
+            end_inventory_bias_cost: float = 0.0,
+            demand: "pd.Series[(int, SKU), float]" = None,
+            demand_sku: "pd.Series[int, List[SKU]]" = None,
+            open_fixed_cost: float = 0.0,
+            unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
     ) -> None:
         super().__init__(idx, location)
         self.inventory_capacity = inventory_capacity
@@ -235,12 +235,12 @@ class Customer(Node):
     """
 
     def __init__(
-        self,
-        idx: str,
-        location: np.ndarray,
-        demand: "pd.Series[(int, SKU), float]",
-        demand_sku: "pd.Series[int, List[SKU]]",
-        unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
+            self,
+            idx: str,
+            location: np.ndarray,
+            demand: "pd.Series[(int, SKU), float]",
+            demand_sku: "pd.Series[int, List[SKU]]",
+            unfulfill_sku_unit_cost: "pd.Series[(int, SKU), float]" = None,
     ) -> None:
         super().__init__(idx, location)
         self.demand = demand
@@ -303,17 +303,17 @@ class Edge:
     """
 
     def __init__(
-        self,
-        idx: str,
-        start: Node,
-        end: Node,
-        capacity: float,
-        variable_lb: float = np.inf,
-        cp_variable_lb: float = np.inf,
-        distance: float = None,
-        transportation_fixed_cost: float = None,
-        transportation_sku_fixed_cost: "pd.Series[SKU, float]" = None,
-        transportation_sku_unit_cost: "pd.Series[SKU, float]" = None,
+            self,
+            idx: str,
+            start: Node,
+            end: Node,
+            capacity: float,
+            variable_lb: float = np.inf,
+            cp_variable_lb: float = np.inf,
+            distance: float = None,
+            transportation_fixed_cost: float = None,
+            transportation_sku_fixed_cost: "pd.Series[SKU, float]" = None,
+            transportation_sku_unit_cost: "pd.Series[SKU, float]" = None,
     ) -> None:
         self.idx = idx
         self.start = start
@@ -387,7 +387,7 @@ class Edge:
         return sku_list
 
     def get_edge_sku_list_with_transportation_cost(
-        self, t: int, full_sku_list: List[SKU]
+            self, t: int, full_sku_list: List[SKU]
     ):
         sku_list = self.get_edge_sku_list(t, full_sku_list)
 
