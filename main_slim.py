@@ -24,14 +24,7 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.conf_label = 1
-    arg.pick_instance = 5
-    # arg.fpath = "data/data_random/"
-    # arg.fpath = "data/data_1219/"
-    arg.fpath = "data/data_0inv/"
-    # arg.fpath = 'data/_history_/'
-    # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
-    arg.new_data = 1
+
     utils.configuration(arg.conf_label, arg)
     datapath = arg.fpath
 
@@ -52,6 +45,7 @@ if __name__ == "__main__":
         node_list,
         *_,
     ) = utils.scale(arg.pick_instance, datapath, arg)
+
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
 

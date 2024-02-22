@@ -88,10 +88,10 @@ if __name__ == "__main__":
     for v in variables:
         if v.getType() == COPT.BINARY:
             v.setType(COPT.CONTINUOUS)
-    print('-----------LP------------')
+    print("-----------LP------------")
     model.model.solve()
-    model.get_solution('sol/')
-    print('write')
+    model.get_solution("sol/")
+    print("write")
 
     # print("----------NCG------------")
     # arg.DNP = 0

@@ -361,7 +361,7 @@ def add_attr(edge_list, node_list, arg, const):
     if arg.new_data:
         data_dir = arg.fpath
     else:
-        data_dir = 'data/_history_/'
+        data_dir = "data/_history_/"
     for e in edge_list:
         e.variable_lb = 0
     if arg.capacity == 1:
@@ -409,9 +409,9 @@ def dump_cfg_tofname(cfg):
     #         + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     # )
     return (
-            cfg["data_dir"].split("/")[1]
-            + "-"
-            + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+        cfg["data_dir"].split("/")[1]
+        + "-"
+        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     )
 
 
@@ -456,6 +456,8 @@ def get_data_from_cfg(cfg, arg):
         logger.info(f"dumping a temporary cache @{fp}")
         with open(fp, "wb") as _fo:
             pickle.dump(package, _fo)
+    logger.info(f"setting arg.sku_list...")
+    arg.sku_list = package[0]
     return package
 
 
@@ -497,8 +499,8 @@ class TimerContext:
         return self
 
     def __exit__(
-            self,
-            *arg,
+        self,
+        *arg,
     ):
         self.end = time.time()
         self.interval = self.end - self.start

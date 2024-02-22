@@ -30,7 +30,7 @@ if __name__ == "__main__":
     # arg.fpath = 'data/_history_/'
     # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
     datapath = arg.fpath
-    if 'history' in datapath:
+    if "history" in datapath:
         arg.new_data = 0
         dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     else:
