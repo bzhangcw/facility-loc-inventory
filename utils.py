@@ -5,7 +5,7 @@ import sys
 import time
 from collections import defaultdict
 from typing import List
-
+from config.instance_generator import *
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -314,9 +314,9 @@ def scale(pick_instance, datapath, arg):
         cfg = dict(
             data_dir=datapath,
             sku_num=500,
-            plant_num=200,
-            warehouse_num=500,
-            customer_num=100,
+            plant_num=20,
+            warehouse_num=50,
+            customer_num=200,
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
@@ -324,13 +324,23 @@ def scale(pick_instance, datapath, arg):
         cfg = dict(
             data_dir=datapath,
             sku_num=500,
-            plant_num=200,
-            warehouse_num=1000,
-            customer_num=1000,
+            plant_num=50,
+            warehouse_num=100,
+            customer_num=300,
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
     elif pick_instance == 15:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=500,
+            plant_num=50,
+            warehouse_num=200,
+            customer_num=500,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 16:
         cfg = dict(
             data_dir=datapath,
             sku_num=500,
@@ -342,33 +352,37 @@ def scale(pick_instance, datapath, arg):
         )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
-    package = get_data_from_cfg(cfg)
+    package = get_data_from_cfg(cfg, arg)
 
     return package
 
 
 def add_attr(edge_list, node_list, arg, const):
+    if arg.new_data:
+        data_dir = arg.fpath
+    else:
+        data_dir = 'data/_history_/'
     for e in edge_list:
         e.variable_lb = 0
     if arg.capacity == 1:
-        capacity_path = arg.fpath + "capacity.csv"
+        capacity_path = data_dir + "capacity.csv"
         cap = pd.read_csv(capacity_path).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
             e.capacity = cap["qty"].get(e.idx, 1e4)
     if arg.edge_lb == 1:
-        lb_end_path = arg.fpath + "lb_end.csv"
+        lb_end_path = data_dir + "lb_end.csv"
         lb_end = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
                 e.variable_lb = lb_end["lb"].get(e.idx, 0)
-        lb_end_path = arg.fpath + "lb_inter.csv"
+        lb_end_path = data_dir + "lb_inter.csv"
         lb_inter = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
                 e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
     if arg.node_lb == 1:
-        lb_node_path = arg.fpath + "lb_node.csv"
+        lb_node_path = data_dir + "lb_node.csv"
         lb_df = pd.read_csv(lb_node_path).set_index("id")
         for n in node_list:
             if n.type == const.WAREHOUSE:
@@ -395,13 +409,13 @@ def dump_cfg_tofname(cfg):
     #         + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     # )
     return (
-        cfg["data_dir"].split("/")[1]
-        + "-"
-        + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
+            cfg["data_dir"].split("/")[1]
+            + "-"
+            + "-".join([str(cfg[k]) for k in keys if k != "data_dir"])
     )
 
 
-def get_data_from_cfg(cfg):
+def get_data_from_cfg(cfg, arg):
     sig = dump_cfg_tofname(cfg)
     fp = f"{CONF.DEFAULT_SOL_PATH}/{sig}.pk"
     if os.path.exists(fp):
@@ -411,16 +425,22 @@ def get_data_from_cfg(cfg):
     else:
         logger.info("current data has not been generated before")
         logger.info(f"creating a temporary cache @{fp}")
-        (
-            sku_list,
-            plant_list,
-            warehouse_list,
-            customer_list,
-            edge_list,
-        ) = generate_instance(**cfg)
-        # sku_list, plant_list, warehouse_list, customer_list, edge_list = read_data(
-        #     **cfg
-        # )
+        if arg.new_data:
+            (
+                sku_list,
+                plant_list,
+                warehouse_list,
+                customer_list,
+                edge_list,
+            ) = generate_instance(**cfg)
+        else:
+            (
+                sku_list,
+                plant_list,
+                warehouse_list,
+                customer_list,
+                edge_list,
+            ) = read_data(**cfg)
 
         node_list = plant_list + warehouse_list + customer_list
         network = construct_network(node_list, edge_list, sku_list)
@@ -477,8 +497,8 @@ class TimerContext:
         return self
 
     def __exit__(
-        self,
-        *arg,
+            self,
+            *arg,
     ):
         self.end = time.time()
         self.interval = self.end - self.start

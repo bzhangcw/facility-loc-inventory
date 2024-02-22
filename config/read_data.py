@@ -38,7 +38,7 @@ def read_data(
     customer_list = []
     edge_list = []
     nodes_dict = {}
-    # data_dir = data_dir + "data_0401_0inv.xlsx"
+    # data_dir = data_dir +'data_0401_0inv.xlsx'
     # ==================== load all data ============================
     sku_df = pd.read_excel(data_dir, sheet_name="0-sku")
     node_df = pd.read_excel(data_dir, sheet_name="1-node")

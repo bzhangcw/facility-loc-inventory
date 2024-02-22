@@ -35,6 +35,7 @@ def generate_instance(
     data_sku = data_dir + 'sku.csv'
 
     node_df = pd.read_csv(data_node+'facility.csv')
+    node_df = node_df.dropna(subset=['id'])
     plant_df = node_df.query("id.str.startswith('P')", engine="python")
     warehouse_df = node_df.query("id.str.startswith('T')", engine="python")
     customer_df = pd.read_csv(data_node+'customer.csv')

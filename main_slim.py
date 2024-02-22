@@ -24,6 +24,14 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
+    arg.conf_label = 1
+    arg.pick_instance = 5
+    # arg.fpath = "data/data_random/"
+    # arg.fpath = "data/data_1219/"
+    arg.fpath = "data/data_0inv/"
+    # arg.fpath = 'data/_history_/'
+    # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
+    arg.new_data = 1
     utils.configuration(arg.conf_label, arg)
     datapath = arg.fpath
 

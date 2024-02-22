@@ -1063,16 +1063,12 @@ class DNP:
 
         for node in self.network.nodes:
             if node.type == const.PLANT:
-                if (node.production_fixed_cost is not None) & (
-                    len(node.production_fixed_cost) != 0
-                ):
+                if node.production_fixed_cost is not None:
                     this_node_fixed_cost = node.production_fixed_cost
                 else:
                     this_node_fixed_cost = self.arg.plant_fixed_cost
             elif node.type == const.WAREHOUSE:
-                if (node.holding_fixed_cost is not None) & (
-                    len(node.holding_fixed_cost) != 0
-                ):
+                if node.holding_fixed_cost is not None:
                     this_node_fixed_cost = node.holding_fixed_cost
                 else:
                     this_node_fixed_cost = self.arg.warehouse_fixed_cost

@@ -2,6 +2,25 @@
 # conf_label: 1/2/3/5/6/8
 # data_now:1219
 # backorder : 0
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 5 --backorder 0
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 7 --backorder 0
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 8 --backorder 0
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 5 --backorder 0
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 7 --backorder 0
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 8 --backorder 0
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 5 --backorder 0
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 7 --backorder 0
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 8 --backorder 0
+
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 5 --backorder 1
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 7 --backorder 1
+python main_generate_mps.py --fpath "data/data_random/" --conf_label 5 --T 7 --pick_instance 8 --backorder 1
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 5 --backorder 1
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 7 --backorder 1
+python main_generate_mps.py --fpath "data/data_0inv/" --conf_label 5 --T 7 --pick_instance 8 --backorder 1
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 5 --backorder 1
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 7 --backorder 1
+python main_generate_mps.py --fpath 'data/_history_/data_0401_0inv.xlsx' --conf_label 5 --T 7 --pick_instance 8 --backorder 1
 
 ##python main_generate_mps.py --conf_label 1 --T 7 --pick_instance 5 --backorder 1
 ##gzip allinone_data_0401_0inv_7_1@5@1.mps
@@ -41,9 +60,6 @@
 #gzip allinone_data_0401_0inv_7_6@5@1.mps
 #gzip allinone_data_0401_0inv_7_6@7@1.mps
 #gzip allinone_data_0401_0inv_7_6@8@1.mps
-python test_generate_mps.py --conf_label 8 --T 7 --pick_instance 5 --backorder 1
-python test_generate_mps.py --conf_label 8 --T 7 --pick_instance 7 --backorder 1
-python test_generate_mps.py --conf_label 8 --T 7 --pick_instance 8 --backorder 1
 #python main_generate_mps.py --conf_label 8 --T 7 --pick_instance 9 --backorder 1
 
 #gzip allinone_data_0401_V4_1219_7_8@5@1.mps
@@ -63,6 +79,6 @@ python test_generate_mps.py --conf_label 8 --T 7 --pick_instance 8 --backorder 1
 #gzip allinone_data_0401_V4_1219_7_6@5@1.mps
 #gzip allinone_data_0401_V4_1219_7_6@7@1.mps
 #gzip allinone_data_0401_V4_1219_7_6@8@1.mps
-gzip allinone_data_0401_V4_1219_7_8@5@1.mps
-gzip allinone_data_0401_V4_1219_7_8@7@1.mps
-gzip allinone_data_0401_V4_1219_7_8@8@1.mps
+#gzip allinone_data_0401_V4_1219_7_8@5@1.mps
+#gzip allinone_data_0401_V4_1219_7_8@7@1.mps
+#gzip allinone_data_0401_V4_1219_7_8@8@1.mps
