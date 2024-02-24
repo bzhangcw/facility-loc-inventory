@@ -169,7 +169,7 @@ def generate_instance(
                 new_list = list(sorted_dict.keys())[:500]
                 for warehouse in new_list:
                     rand = random.randint(0, 480)
-                    lengg = random.randint(0, 20)
+                    lengg = random.randint(0, 10)
                     for sku in sku_list[rand:rand + lengg]:
                         unit_cost = random.random() * customer_distance[warehouse] / 100000
                         edges_w_c.append(
@@ -177,7 +177,9 @@ def generate_instance(
             else:
                 # 全链接
                 for warehouse in warehouse_list:
-                    for sku in sku_list:
+                    rand = random.randint(0, 480)
+                    lengg = random.randint(0, 20)
+                    for sku in sku_list[rand:rand + lengg]:
                         unit_cost = random.random() * geodesic(warehouse.location,
                                                                customer.location).kilometers / 100000
                         edges_w_c.append(
@@ -201,7 +203,9 @@ def generate_instance(
                         edges_p_w.append({'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
             else:
                 for warehouse in warehouse_list:
-                    for sku in sku_list:
+                    rand = random.randint(0, 480)
+                    lengg = random.randint(0, 20)
+                    for sku in sku_list[rand:rand + lengg]:
                         unit_cost = random.random() * geodesic(warehouse.location, plant.location).kilometers / 100000
                         edges_p_w.append(
                             {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
@@ -219,7 +223,9 @@ def generate_instance(
                 count = count + 1
             if count == 2:
                 distance = geodesic(i[0].location, i[1].location).kilometers
-                for sku in sku_list:
+                rand = random.randint(0, 480)
+                lengg = random.randint(0, 20)
+                for sku in sku_list[rand:rand + lengg]:
                     unit_cost = random.randint(1, 2) * distance / 1000
                     edges_t_t.append({'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
         edges_w_w_df = pd.DataFrame(edges_t_t)
@@ -304,4 +310,10 @@ def generate_attr(data_dir):
     _w_w_df.drop(columns=['unit_cost'], axis=0, inplace=True)
     _w_w_dir = data_dir + 'lb_inter.csv'
     _w_w_df.to_csv(_w_w_dir, index=False)
+    data_node_dir = data_dir + 'node_info/facility.csv'
+    data_node = pd.read_csv(data_node_dir)
+    data_node['lb'] = data_node['Capacity'] * random.random()
+    node_lb_dir = data_dir + 'lb_node.csv'
+    data = data_node[['id','lb']]
+    data.to_csv(node_lb_dir, index=False)
     print('Generate over')

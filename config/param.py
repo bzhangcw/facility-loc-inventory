@@ -306,6 +306,30 @@ class Param:
             default=1,
         )
 
+        parser.add_argument(
+            "--capacity_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--node_lb_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--lb_end_ratio",
+            type=int,
+            default=10,
+        )
+
+        parser.add_argument(
+            "--lb_inter_ratio",
+            type=int,
+            default=100,
+        )
+
         return parser
 
 

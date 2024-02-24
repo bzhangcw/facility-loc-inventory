@@ -23,11 +23,19 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.conf_label = 1
-    arg.pick_instance = 12
+    arg.conf_label = 7
+    arg.pick_instance = 8
     arg.backorder = 0
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
+    # arg.cardinality_limit = 1000
+    # arg.distance_limit = 10000
+    # arg.in_upper_ratio = 0.0004
+    arg.capacity_ratio = 0.5
+    # arg.lb_end_ratio = 50
+    arg.lb_inter_ratio = 10
+    # arg.node_lb_ratio = 100
+
     arg.fpath = "data/data_generate/"
     # arg.fpath = "data/data_1219/"
     # arg.fpath = "data/data_0inv/"
@@ -90,6 +98,36 @@ if __name__ == "__main__":
             v.setType(COPT.CONTINUOUS)
     print("-----------LP------------")
     model.model.solve()
+    dual_value = model.model.getDuals()
+    dual_index = model.dual_index_for_RMP
+
+    for t, edge in tuple(dual_index["transportation_capacity"].keys()):
+        print('capacity',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
+
+    for t, node in tuple(dual_index["node_capacity"].keys()):
+        if node.type == const.PLANT:
+            print('production',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
+        elif node.type == const.WAREHOUSE:
+            print('warehouse',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
+
+    for t, edge in tuple(dual_index["transportation_variable_lb"].keys()):
+        print('transportation_lb',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
+
+    for t, node in tuple(dual_index["production_variable_lb"].keys()):
+        print('production_variable_lb',t,edge,dual_value[dual_index["production_variable_lb"][(t, node)]])
+
+    for t, node in tuple(dual_index["holding_variable_lb"].keys()):
+        print('holding_variable_lb',t,edge,dual_value[dual_index["holding_variable_lb"][(t, node)]])
+
+    for t, node in tuple(dual_index["in_upper"].keys()):
+        print('in_upper',t,node,dual_value[dual_index["in_upper"][(t, node)]])
+
+    for t, node in tuple(dual_index["cardinality"].keys()):
+        print("cardinality",t,node,dual_value[dual_index["cardinality"][(t, node)]])
+
+    for t, node in tuple(dual_index["distance"].keys()):
+        print("distance",t,node,dual_value[dual_index["distance"][(t, node)]])
+
     model.get_solution("sol/")
     print("write")
 
@@ -113,22 +151,22 @@ if __name__ == "__main__":
 
     # np_cg.run()
     # np_cg.get_solution("new_sol_1/")
-    print("----------NCS------------")
-    # init_ray = arg.use_ray
-    arg.DNP = 0
-    init_ray = True
-    num_workers = 22
-    num_cpus = 22
-    np_cg = NCS(
-        arg,
-        network,
-        customer_list,
-        sku_list,
-        max_iter=arg.cg_itermax,
-        init_ray=init_ray,
-        num_workers=num_workers,
-        num_cpus=num_cpus,
-        solver=solver,
-    )
-    with utils.TimerContext(0, "column generation main routine"):
-        np_cg.run()
+    # print("----------NCS------------")
+    # # init_ray = arg.use_ray
+    # arg.DNP = 0
+    # init_ray = True
+    # num_workers = 22
+    # num_cpus = 22
+    # np_cg = NCS(
+    #     arg,
+    #     network,
+    #     customer_list,
+    #     sku_list,
+    #     max_iter=arg.cg_itermax,
+    #     init_ray=init_ray,
+    #     num_workers=num_workers,
+    #     num_cpus=num_cpus,
+    #     solver=solver,
+    # )
+    # with utils.TimerContext(0, "column generation main routine"):
+    #     np_cg.run()

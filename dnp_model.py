@@ -231,6 +231,8 @@ class DNP:
             "production_variable_lb": dict(),
             "holding_variable_lb": dict(),
             "in_upper": dict(),
+            "cardinality": dict(),
+            "distance":dict()
         }
         self.index_for_dual_var = 0  # void bugs of index out of range
         # for remote
@@ -719,7 +721,7 @@ class DNP:
                 # else:
                 #     print(edge,flow_sum)
                 self.dual_index_for_RMP["transportation_capacity"][
-                    edge
+                    (t, edge)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -738,7 +740,7 @@ class DNP:
                     >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
                 self.dual_index_for_RMP["transportation_variable_lb"][
-                    edge
+                   (t, edge)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -756,7 +758,7 @@ class DNP:
                         name=f"node_plant_lb{t, node}",
                     )
                 self.dual_index_for_RMP["production_variable_lb"][
-                    node
+                    (t, node)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
             if node.type == const.WAREHOUSE:
@@ -770,7 +772,7 @@ class DNP:
                         name=f"node_warehouse_lb{t, node}",
                     )
                     self.dual_index_for_RMP["holding_variable_lb"][
-                        node
+                       (t, node)
                     ] = self.index_for_dual_var
                     self.index_for_dual_var += 1
         return
@@ -792,7 +794,7 @@ class DNP:
                     node_sum <= bound * left_capacity,
                     name=f"node_capacity{t, node}",
                 )
-                self.dual_index_for_RMP["node_capacity"][node] = self.index_for_dual_var
+                self.dual_index_for_RMP["node_capacity"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
 
         return
@@ -818,7 +820,7 @@ class DNP:
                     self.constrs["holding_capacity"][(t, node)] = constr
 
                     self.dual_index_for_RMP["node_capacity"][
-                        node
+                        (t, node)
                     ] = self.index_for_dual_var
                     self.index_for_dual_var += 1
 
@@ -832,7 +834,7 @@ class DNP:
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
                     inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
                 )
-                self.dual_index_for_RMP["in_upper"][node] = self.index_for_dual_var
+                self.dual_index_for_RMP["in_upper"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
 
@@ -843,6 +845,7 @@ class DNP:
                 used_edge = self.variables["select_edge"].sum(t, in_edges)
                 constr = self.model.addConstr(used_edge <= self.arg.cardinality_limit)
                 self.constrs["cardinality"][(t, node)] = constr
+                self.dual_index_for_RMP["cardinality"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
 
@@ -858,8 +861,9 @@ class DNP:
                         )
                 constr = self.model.addConstr(used_distance <= self.arg.distance_limit)
                 self.constrs["distance"][(t, node)] = constr
+                self.dual_index_for_RMP["distance"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
-        return
+                return
 
     def get_original_objective(self):
         obj = 0.0

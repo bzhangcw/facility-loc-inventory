@@ -22,7 +22,15 @@ if __name__ == "__main__":
     arg = param.arg
     # arg.conf_label = 3
     # arg.pick_instance = 5
-    # arg.backorder = 0
+    arg.backorder = 1
+    arg.cardinality_limit = 10
+    arg.distance_limit = 1000000
+    arg.in_upper_ratio = 0.0000004
+    arg.capacity_ratio = 0.000001
+    arg.lb_end_ratio = 50000
+    arg.lb_inter_ratio = 100000
+    arg.node_lb_ratio = 1000
+
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
     # arg.fpath = "data/data_1219/"

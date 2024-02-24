@@ -33,11 +33,23 @@ elif arg.demand_type == 2:
         for customer in customers:
             for sku in skus:
                 if int(sku[-4:]) % 4 == 0:
-                    demand = random.randint(300, 600) if period % 3 == 0 else random.randint(50, 150)
+                    demand = random.randint(100, 600) if period % 3 == 0 else random.randint(50, 150)
                 elif int(sku[-4:]) % 5 == 0:
-                    demand = random.randint(1, 50) if period % 2 == 0 else random.randint(100, 200)
+                    demand = random.randint(1, 500) if period % 2 == 0 else random.randint(100, 200)
                 else:
-                    demand = random.randint(50, 200)
+                    demand = random.randint(50, 20000)
+                demand_data.append([customer, sku, demand, period])
+
+elif arg.demand_type == 3:
+    for period in range(num_periods):
+        for customer in customers:
+            for sku in skus:
+                if int(sku[-4:]) % 4 == 0:
+                    demand = random.randint(100, 60000) if period % 3 == 0 else random.randint(50, 150)
+                elif int(sku[-4:]) % 5 == 0:
+                    demand = random.randint(1, 5000) if period % 2 == 0 else random.randint(100, 2000)
+                else:
+                    demand = random.randint(50, 20000)
                 demand_data.append([customer, sku, demand, period])
 
 demand_df = pd.DataFrame(demand_data, columns=["id", "sku", "demand", "time"])

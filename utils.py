@@ -369,26 +369,26 @@ def add_attr(edge_list, node_list, arg, const):
         cap = pd.read_csv(capacity_path).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
-            e.capacity = cap["qty"].get(e.idx, 1e4)
+            e.capacity = cap["qty"].get(e.idx, 1e4)*arg.capacity_ratio
     if arg.edge_lb == 1:
         lb_end_path = data_dir + "lb_end.csv"
         lb_end = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
-                e.variable_lb = lb_end["lb"].get(e.idx, 0)
+                e.variable_lb = lb_end["lb"].get(e.idx, 0)*arg.lb_end_ratio
         lb_end_path = data_dir + "lb_inter.csv"
         lb_inter = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
-                e.variable_lb = lb_inter["lb"].get(e.idx, 0) / 10
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0)*arg.lb_inter_ratio
     if arg.node_lb == 1:
         lb_node_path = data_dir + "lb_node.csv"
         lb_df = pd.read_csv(lb_node_path).set_index("id")
         for n in node_list:
             if n.type == const.WAREHOUSE:
-                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)
+                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)*arg.node_lb_ratio
             if n.type == const.PLANT:
-                n.production_lb = lb_df["lb"].get(n.idx, np.inf)
+                n.production_lb = lb_df["lb"].get(n.idx, np.inf)*arg.node_lb_ratio
 
 
 def dump_cfg_tofname(cfg):
@@ -425,37 +425,37 @@ def get_data_from_cfg(cfg, arg):
     else:
         logger.info("current data has not been generated before")
         logger.info(f"creating a temporary cache @{fp}")
-        if arg.new_data:
-            (
-                sku_list,
-                plant_list,
-                warehouse_list,
-                customer_list,
-                edge_list,
-            ) = generate_instance(**cfg)
-        else:
-            (
-                sku_list,
-                plant_list,
-                warehouse_list,
-                customer_list,
-                edge_list,
-            ) = read_data(**cfg)
-
-        node_list = plant_list + warehouse_list + customer_list
-        network = construct_network(node_list, edge_list, sku_list)
-        package = (
+    if arg.new_data:
+        (
             sku_list,
             plant_list,
             warehouse_list,
             customer_list,
             edge_list,
-            network,
-            node_list,
-        )
-        logger.info(f"dumping a temporary cache @{fp}")
-        with open(fp, "wb") as _fo:
-            pickle.dump(package, _fo)
+        ) = generate_instance(**cfg)
+    else:
+        (
+            sku_list,
+            plant_list,
+            warehouse_list,
+            customer_list,
+            edge_list,
+        ) = read_data(**cfg)
+
+    node_list = plant_list + warehouse_list + customer_list
+    network = construct_network(node_list, edge_list, sku_list)
+    package = (
+        sku_list,
+        plant_list,
+        warehouse_list,
+        customer_list,
+        edge_list,
+        network,
+        node_list,
+    )
+    logger.info(f"dumping a temporary cache @{fp}")
+    with open(fp, "wb") as _fo:
+        pickle.dump(package, _fo)
     logger.info(f"setting arg.sku_list...")
     arg.sku_list = package[0]
     return package
