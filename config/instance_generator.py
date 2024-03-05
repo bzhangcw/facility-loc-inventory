@@ -5,6 +5,7 @@ import numpy as np
 from geopy.distance import geodesic
 import random
 import const
+import os
 from more_itertools import chunked
 
 loc = np.array([0, 0])
@@ -98,7 +99,7 @@ def generate_instance(
             idx=dc_id,
             location=loc,
             inventory_capacity=capacity,
-            holding_sku_unit_cost=holding_cost,
+            holding_sku_unit_cost=holding_cost*5,
             open_fixed_cost=open_cost,
         )
         warehouse_list.append(this_warehouse)
@@ -150,7 +151,7 @@ def generate_instance(
             idx=plant_id,
             location=loc,
             production_capacity=capacity,
-            production_sku_unit_cost=production_cost,
+            production_sku_unit_cost=production_cost*5,
             open_fixed_cost=open_cost,
             producible_sku=sku_list
         )
@@ -158,92 +159,99 @@ def generate_instance(
         nodes_dict[plant_id] = this_plant
 
     if ('random' in data_dir) or ('generate' in data_dir):
-        edges_w_c = []
-        for customer in customer_list:
-            if warehouse_num > 1000:
-                customer_distance = {}
-                for warehouse in warehouse_list:
-                    distance = geodesic(warehouse.location, customer.location).kilometers
-                    customer_distance[warehouse] = distance
-                sorted_dict = dict(sorted(customer_distance.items(), key=lambda item: item[1]))
-                new_list = list(sorted_dict.keys())[:500]
-                for warehouse in new_list:
-                    rand = random.randint(0, 480)
-                    lengg = random.randint(0, 10)
-                    for sku in sku_list[rand:rand + lengg]:
-                        unit_cost = random.random() * customer_distance[warehouse] / 100000
-                        edges_w_c.append(
-                            {'start_id': warehouse, 'end_id': customer, 'sku': sku, 'unit_cost': unit_cost})
-            else:
-                # 全链接
-                for warehouse in warehouse_list:
-                    rand = random.randint(0, 480)
-                    lengg = random.randint(0, 20)
-                    for sku in sku_list[rand:rand + lengg]:
-                        unit_cost = random.random() * geodesic(warehouse.location,
-                                                               customer.location).kilometers / 100000
-                        edges_w_c.append(
-                            {'start_id': warehouse.idx, 'end_id': customer.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
-
-        edges_w_c_df = pd.DataFrame(edges_w_c)
-        edges_p_w = []
-        for plant in plant_list:
-            if warehouse_num > 1000:
-                plant_distance = {}
-                for warehouse in warehouse_list:
-                    distance = geodesic(warehouse.location, plant.location).kilometers
-                    plant_distance[warehouse] = distance
-                sorted_dict = dict(sorted(plant_distance.items(), key=lambda item: item[1]))
-                new_list = list(sorted_dict.keys())[:500]
-                for warehouse in new_list:
-                    rand = random.randint(0, 480)
-                    leng = random.randint(0, 10)
-                    for sku in sku_list[rand:rand + leng]:
-                        unit_cost = random.random() * plant_distance[warehouse] / 100000
-                        edges_p_w.append({'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
-            else:
-                for warehouse in warehouse_list:
-                    rand = random.randint(0, 480)
-                    lengg = random.randint(0, 20)
-                    for sku in sku_list[rand:rand + lengg]:
-                        unit_cost = random.random() * geodesic(warehouse.location, plant.location).kilometers / 100000
-                        edges_p_w.append(
-                            {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
-        edges_p_w_df = pd.DataFrame(edges_p_w)
-        edges_t_t = []
-        result = list(chunked(warehouse_list, 2))
-        # rand_result = random.randint(0,2000)
-        if warehouse_num > 1000:
-            index = random.randint(0, 2000)
-        else:
-            index = 10
-        for i in result[0:index]:
-            count = 0
-            for item in i:
-                count = count + 1
-            if count == 2:
-                distance = geodesic(i[0].location, i[1].location).kilometers
-                rand = random.randint(0, 480)
-                lengg = random.randint(0, 20)
-                for sku in sku_list[rand:rand + lengg]:
-                    unit_cost = random.randint(1, 2) * distance / 1000
-                    edges_t_t.append({'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
-        edges_w_w_df = pd.DataFrame(edges_t_t)
         data_w_c = data_dir + 'edge_sku_info/edges_w_c.csv'
         data_w_w = data_dir + 'edge_sku_info/edges_w_w.csv'
         data_p_w = data_dir + 'edge_sku_info/edges_p_w.csv'
-        edges_w_c_df.to_csv(data_w_c, index=False)
-        edges_w_w_df.to_csv(data_w_w, index=False)
-        edges_p_w_df.to_csv(data_p_w, index=False)
-        # data_w_c = data_dir + 'edge_sku_info/edges_w_c.csv'
-        # edges_w_c_df = pd.read_csv(data_w_c)
-        # data_w_w = data_dir + 'edge_sku_info/edges_w_w.csv'
-        # edges_w_w_df = pd.read_csv(data_w_w)
-        # data_p_w = data_dir + 'edge_sku_info/edges_p_w.csv'
-        # edges_p_w_df = pd.read_csv(data_p_w)
-        edge_sku_df = pd.concat([edges_w_c_df, edges_w_w_df, edges_p_w_df]).dropna()
-        print('capacity')
-        generate_attr(data_dir)
+        folder_path = data_dir + 'edge_sku_info/'
+        if len(os.listdir(folder_path)) == 0:
+            edges_w_c = []
+            for customer in customer_list:
+                if warehouse_num > 1000:
+                    customer_distance = {}
+                    for warehouse in warehouse_list:
+                        distance = geodesic(warehouse.location, customer.location).kilometers
+                        customer_distance[warehouse] = distance
+                    sorted_dict = dict(sorted(customer_distance.items(), key=lambda item: item[1]))
+                    new_list = list(sorted_dict.keys())[:500]
+                    for warehouse in new_list:
+                        rand = random.randint(0, 480)
+                        lengg = random.randint(0, 10)
+                        for sku in sku_list[rand:rand + lengg]:
+                            unit_cost = random.random() * customer_distance[warehouse] / 100000*5
+                            edges_w_c.append(
+                                {'start_id': warehouse, 'end_id': customer, 'sku': sku, 'unit_cost': unit_cost})
+                else:
+                    # 全链接
+                    for warehouse in warehouse_list:
+                        rand = random.randint(0, 480)
+                        lengg = random.randint(0, 20)
+                        for sku in sku_list[rand:rand + lengg]:
+                            unit_cost = random.random() * geodesic(warehouse.location,
+                                                                customer.location).kilometers / 100000*5
+                            edges_w_c.append(
+                                {'start_id': warehouse.idx, 'end_id': customer.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+
+            edges_w_c_df = pd.DataFrame(edges_w_c)
+            edges_p_w = []
+            for plant in plant_list:
+                if warehouse_num > 1000:
+                    plant_distance = {}
+                    for warehouse in warehouse_list:
+                        distance = geodesic(warehouse.location, plant.location).kilometers
+                        plant_distance[warehouse] = distance
+                    sorted_dict = dict(sorted(plant_distance.items(), key=lambda item: item[1]))
+                    new_list = list(sorted_dict.keys())[:500]
+                    for warehouse in new_list:
+                        rand = random.randint(0, 480)
+                        leng = random.randint(0, 10)
+                        for sku in sku_list[rand:rand + leng]:
+                            unit_cost = random.random() * plant_distance[warehouse] / 100000*5
+                            edges_p_w.append({'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
+                else:
+                    for warehouse in warehouse_list:
+                        rand = random.randint(0, 480)
+                        lengg = random.randint(0, 20)
+                        for sku in sku_list[rand:rand + lengg]:
+                            unit_cost = random.random() * geodesic(warehouse.location, plant.location).kilometers / 100000*5
+                            edges_p_w.append(
+                                {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+            edges_p_w_df = pd.DataFrame(edges_p_w)
+            edges_t_t = []
+            result = list(chunked(warehouse_list, 2))
+            # rand_result = random.randint(0,2000)
+            if warehouse_num > 1000:
+                index = random.randint(0, 2000)
+                result = result[0:index]
+
+            for i in result:
+                count = 0
+                for item in i:
+                    count = count + 1
+                if count == 2:
+                    distance = geodesic(i[0].location, i[1].location).kilometers
+                    rand = random.randint(0, 480)
+                    lengg = random.randint(0, 20)
+                    for sku in sku_list[rand:rand + lengg]:
+                        unit_cost = random.randint(1, 2) * distance / 1000*5
+                        edges_t_t.append({'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+            edges_w_w_df = pd.DataFrame(edges_t_t)
+            edges_w_c_df.to_csv(data_w_c, index=False)
+            edges_w_w_df.to_csv(data_w_w, index=False)
+            edges_p_w_df.to_csv(data_p_w, index=False)
+            # data_w_c = data_dir + 'edge_sku_info/edges_w_c.csv'
+            # edges_w_c_df = pd.read_csv(data_w_c)
+            # data_w_w = data_dir + 'edge_sku_info/edges_w_w.csv'
+            # edges_w_w_df = pd.read_csv(data_w_w)
+            # data_p_w = data_dir + 'edge_sku_info/edges_p_w.csv'
+            # edges_p_w_df = pd.read_csv(data_p_w)
+            edge_sku_df = pd.concat([edges_w_c_df, edges_w_w_df, edges_p_w_df]).dropna()
+            print('capacity')
+            generate_attr(data_dir)
+        else:
+            edges_w_c_df = pd.read_csv(data_w_c)
+            edges_w_w_df = pd.read_csv(data_w_w)
+            edges_p_w_df = pd.read_csv(data_p_w)
+            edge_sku_df = pd.concat([edges_w_c_df, edges_w_w_df, edges_p_w_df]).dropna()
     else:
         data_edge = data_dir + 'edge_sku_info.csv'
         edge_sku_df = pd.read_csv(data_edge)
@@ -271,7 +279,7 @@ def generate_instance(
             end=end,
             capacity=capacity,
             variable_lb=np.inf,
-            transportation_sku_unit_cost=unit_cost,
+            transportation_sku_unit_cost=unit_cost*5,
         )
         edge_list.append(this_edge)
 

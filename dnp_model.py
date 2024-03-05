@@ -785,7 +785,7 @@ class DNP:
             node_sum = self.variables["sku_production"].sum(t, node, "*")
             # capacity constraint
             if node.production_capacity < np.inf:
-                left_capacity = node.production_capacity - self.used_plant_capacity.get(
+                left_capacity = node.production_capacity*self.arg.capacity_node_ratio - self.used_plant_capacity.get(
                     node, 0
                 )
                 bound = self.variables["open"][t, node] if self.bool_covering else 1.0
@@ -806,7 +806,7 @@ class DNP:
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
                     left_capacity = (
-                            node.inventory_capacity
+                            node.inventory_capacity*self.arg.capacity_node_ratio
                             - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
                     bound = (
@@ -832,7 +832,7 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
+                    inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
                 )
                 self.dual_index_for_RMP["in_upper"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1

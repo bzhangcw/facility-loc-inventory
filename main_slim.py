@@ -24,9 +24,26 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-    arg.conf_label = 1
-    arg.pick_instance = 12
+    # arg.conf_label = 1
+    # arg.pick_instance = 12
+    # arg.backorder = 0
+    arg.backorder_sku_unit_cost=5000
+    arg.capacity_node_ratio=100
+    arg.capacity_ratio= 100
+    arg.cardinality_limit= 30
+    arg.distance_limit=5000
+    arg.holding_sku_unit_cost=1
+    arg.in_upper_ratio= 0.24
+    arg.lb_end_ratio=0.1
+    arg.lb_inter_ratio=0.1
+    arg.node_lb_ratio= 0.1
+    arg.unfulfill_sku_unit_cost= 5000
+    arg.conf_label = 7
+    arg.pick_instance = 8
     arg.backorder = 0
+    arg.transportation_sku_unit_cost = 1
+    arg.T = 7
+    arg.DNP = 0
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
     arg.fpath = "data/data_generate/"
@@ -44,6 +61,12 @@ if __name__ == "__main__":
             sort_keys=True,
         )
     )
+    if "history" in datapath:
+        arg.new_data = 0
+        dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    else:
+        arg.new_data = 1
+        dnp_mps_name = f"new_guro_V4_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,
@@ -54,11 +77,22 @@ if __name__ == "__main__":
         node_list,
         *_,
     ) = utils.scale(arg.pick_instance, datapath, arg)
-
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    arg.DNP = 0
+    pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
+    print("----------DNP Model------------")
+    arg.DNP = 1
+    arg.sku_list = sku_list
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 7200)
+    model.model.setParam("LpMethod", 2)
+    model.model.setParam("Crossover", 0)
+    print(f"save mps name {dnp_mps_name}")
+    model.model.write(dnp_mps_name)
     print("----------NCS------------")
     init_ray = True
     num_workers = min(os.cpu_count(), 24)

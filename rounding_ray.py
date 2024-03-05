@@ -23,17 +23,48 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
+
+    # arg.backorder_sku_unit_cost=20000000
+    # arg.capacity_node_ratio=100000000000
+    # arg.capacity_ratio= 100000000000
+    # arg.cardinality_limit= 3000000
+    # arg.distance_limit=5000000000
+    # arg.holding_sku_unit_cost=1
+    # arg.in_upper_ratio= 0.54
+    # arg.lb_end_ratio=1e-09
+    # arg.lb_inter_ratio=1e-09
+    # arg.node_lb_ratio= 0.1
+    # arg.unfulfill_sku_unit_cost= 50000000
+    # arg.conf_label = 7
+    # arg.pick_instance = 8
+    # arg.backorder = 0
+
+    arg.backorder_sku_unit_cost=5000
+    arg.capacity_node_ratio=100
+    arg.capacity_ratio= 100
+    arg.cardinality_limit= 30
+    arg.distance_limit=5000
+    arg.holding_sku_unit_cost=1
+    arg.in_upper_ratio= 0.24
+    arg.lb_end_ratio=0.1
+    arg.lb_inter_ratio=0.1
+    arg.node_lb_ratio= 0.1
+    arg.unfulfill_sku_unit_cost= 5000
     arg.conf_label = 7
     arg.pick_instance = 8
     arg.backorder = 0
+    arg.transportation_sku_unit_cost = 1
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
     # arg.cardinality_limit = 1000
     # arg.distance_limit = 10000
     # arg.in_upper_ratio = 0.0004
-    arg.capacity_ratio = 0.5
-    # arg.lb_end_ratio = 50
-    arg.lb_inter_ratio = 10
+    # arg.capacity_ratio = 100000000000
+    # arg.capacity_node_ratio = 100000000000
+    # arg.lb_end_ratio = 0.000000001
+    # arg.lb_inter_ratio = 0.000000001
+    # arg.cardinality_limit = 3000000
+    # arg.distance_limit = 5000000000
     # arg.node_lb_ratio = 100
 
     arg.fpath = "data/data_generate/"
@@ -44,6 +75,7 @@ if __name__ == "__main__":
     datapath = arg.fpath
     arg.pricing_relaxation = 0
     arg.T = 7
+    
     arg.cg_mip_recover = 1
     # arg.pick_instance = 15
     print(
@@ -59,7 +91,7 @@ if __name__ == "__main__":
         dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     else:
         arg.new_data = 1
-        dnp_mps_name = f"new_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+        dnp_mps_name = f"new_guro_V2_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,
@@ -72,7 +104,7 @@ if __name__ == "__main__":
     ) = utils.scale(arg.pick_instance, datapath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
+    pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
     print("----------DNP Model------------")
     arg.DNP = 1
@@ -86,50 +118,50 @@ if __name__ == "__main__":
     model.model.setParam("Crossover", 0)
     print(f"save mps name {dnp_mps_name}")
     model.model.write(dnp_mps_name)
-    variables = model.model.getVars()
-    # print('-----------MIP------------')
-    # model.model.solve()
-    # # print('------Cost Information--------')
-    # # print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
-    # # print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
-    # # print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
-    for v in variables:
-        if v.getType() == COPT.BINARY:
-            v.setType(COPT.CONTINUOUS)
-    print("-----------LP------------")
-    model.model.solve()
-    dual_value = model.model.getDuals()
-    dual_index = model.dual_index_for_RMP
-
-    for t, edge in tuple(dual_index["transportation_capacity"].keys()):
-        print('capacity',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
-
-    for t, node in tuple(dual_index["node_capacity"].keys()):
-        if node.type == const.PLANT:
-            print('production',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
-        elif node.type == const.WAREHOUSE:
-            print('warehouse',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
-
-    for t, edge in tuple(dual_index["transportation_variable_lb"].keys()):
-        print('transportation_lb',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
-
-    for t, node in tuple(dual_index["production_variable_lb"].keys()):
-        print('production_variable_lb',t,edge,dual_value[dual_index["production_variable_lb"][(t, node)]])
-
-    for t, node in tuple(dual_index["holding_variable_lb"].keys()):
-        print('holding_variable_lb',t,edge,dual_value[dual_index["holding_variable_lb"][(t, node)]])
-
-    for t, node in tuple(dual_index["in_upper"].keys()):
-        print('in_upper',t,node,dual_value[dual_index["in_upper"][(t, node)]])
-
-    for t, node in tuple(dual_index["cardinality"].keys()):
-        print("cardinality",t,node,dual_value[dual_index["cardinality"][(t, node)]])
-
-    for t, node in tuple(dual_index["distance"].keys()):
-        print("distance",t,node,dual_value[dual_index["distance"][(t, node)]])
-
     model.get_solution("sol/")
     print("write")
+    # variables = model.model.getVars()
+    # print('-----------MIP------------')
+    # # model.model.solve()
+    
+    # # for v in variables:
+    # #     if v.getType() == COPT.BINARY:
+    # #         v.setType(COPT.CONTINUOUS)
+    # # print("-----------LP------------")
+    # model.model.solve()
+    # print('------Cost Information--------')
+    # print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
+    # print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
+    # print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
+
+    # dual_value = model.model.getDuals()
+    # dual_index = model.dual_index_for_RMP
+    # for t, edge in tuple(dual_index["transportation_capacity"].keys()):
+    #     print('capacity',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
+
+    # for t, node in tuple(dual_index["node_capacity"].keys()):
+    #     if node.type == const.PLANT:
+    #         print('production',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
+    #     elif node.type == const.WAREHOUSE:
+    #         print('warehouse',t,node,dual_value[dual_index["node_capacity"][(t, node)]])
+
+    # for t, edge in tuple(dual_index["transportation_variable_lb"].keys()):
+    #     print('transportation_lb',t,edge,dual_value[dual_index["transportation_capacity"][(t, edge)]])
+
+    # for t, node in tuple(dual_index["production_variable_lb"].keys()):
+    #     print('production_variable_lb',t,edge,dual_value[dual_index["production_variable_lb"][(t, node)]])
+
+    # for t, node in tuple(dual_index["holding_variable_lb"].keys()):
+    #     print('holding_variable_lb',t,edge,dual_value[dual_index["holding_variable_lb"][(t, node)]])
+
+    # for t, node in tuple(dual_index["in_upper"].keys()):
+    #     print('in_upper',t,node,dual_value[dual_index["in_upper"][(t, node)]])
+
+    # for t, node in tuple(dual_index["cardinality"].keys()):
+    #     print("cardinality",t,node,dual_value[dual_index["cardinality"][(t, node)]])
+
+    # for t, node in tuple(dual_index["distance"].keys()):
+    #     print("distance",t,node,dual_value[dual_index["distance"][(t, node)]])
 
     # print("----------NCG------------")
     # arg.DNP = 0
