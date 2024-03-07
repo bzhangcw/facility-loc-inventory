@@ -54,6 +54,9 @@ if __name__ == "__main__":
     arg.pick_instance = 8
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
+
+    arg.template_choose = 'us'
+    arg.demand_type = 1
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
     # arg.cardinality_limit = 1000

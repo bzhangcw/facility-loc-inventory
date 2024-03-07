@@ -18,6 +18,10 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
+        parser.add_argument(
+            "--template_choose",
+            type=str,
+        )
 
         parser.add_argument(
             "--fpath",

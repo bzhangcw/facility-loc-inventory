@@ -38,16 +38,16 @@ if __name__ == "__main__":
     arg.lb_inter_ratio=0.1
     arg.node_lb_ratio= 0.1
     arg.unfulfill_sku_unit_cost= 5000
-    arg.conf_label = 7
+    arg.conf_label = 1
     arg.pick_instance = 8
     arg.backorder = 0
-    arg.transportation_sku_unit_cost = 1
+    arg.transportation_sku_unit_cost = 10
     arg.T = 7
-    arg.DNP = 0
     utils.configuration(arg.conf_label, arg)
-    # arg.fpath = "data/data_random/"
-    arg.fpath = "data/data_generate/"
-    # arg.fpath = "data/data_1219/"
+    arg.fpath = "data/data_random/"
+    # arg.fpath = "data/data_generate/"
+    # arg.fpath = "data/cases/data_1219/"
+    # arg.fpath = "data/cases/data_1118/"
     # arg.fpath = "data/data_0inv/"
     # arg.fpath = 'data/_history_/'
     # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
@@ -82,6 +82,7 @@ if __name__ == "__main__":
     pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
     print("----------DNP Model------------")
+    
     arg.DNP = 1
     arg.sku_list = sku_list
     model = DNP(arg, network)
@@ -93,12 +94,17 @@ if __name__ == "__main__":
     model.model.setParam("Crossover", 0)
     print(f"save mps name {dnp_mps_name}")
     model.model.write(dnp_mps_name)
+    model.model.solve()
+    print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
+    print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
+    print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
     print("----------NCS------------")
     init_ray = True
     num_workers = min(os.cpu_count(), 24)
     num_cpus = min(os.cpu_count(), 24)
     utils.logger.info(f"detecting up to {os.cpu_count()} cores")
     utils.logger.info(f"using     up to {num_cpus} cores")
+    arg.DNP = 0
     np_cg = NCS(
         arg,
         network,

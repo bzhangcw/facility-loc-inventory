@@ -365,7 +365,7 @@ def add_attr(edge_list, node_list, arg, const):
     for e in edge_list:
         e.variable_lb = 0
     if arg.capacity == 1:
-        capacity_path = data_dir + "capacity.csv"
+        capacity_path = data_dir + "edge_capacity.csv"
         cap = pd.read_csv(capacity_path).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
