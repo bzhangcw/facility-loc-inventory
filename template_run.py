@@ -49,8 +49,10 @@ if __name__ == "__main__":
         )
     )
     arg.new_data = 1
-    arg.num_periods = 30
-    arg.template_choose = 'us'
+    arg.num_periods = 20
+    arg.template_choose = 'sechina'
+    arg.demand_type = 3
+    # 1/2 is infeasible
     if arg.template_choose == 'sechina':
         data_dir = 'data/template/sechina/'
     elif arg.template_choose == 'us':
@@ -72,7 +74,7 @@ if __name__ == "__main__":
     ) = utils.scale(arg.pick_instance, datapath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
+    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
     print("----------DNP Model------------")
     
