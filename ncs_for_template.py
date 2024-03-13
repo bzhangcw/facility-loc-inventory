@@ -40,6 +40,10 @@ if __name__ == "__main__":
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
+    arg.terminate_condition = 0
+    arg.new_data = 1
+    arg.num_periods = 20
+    arg.fpath = 'data/us_generate_202403122258/'
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(
@@ -48,21 +52,7 @@ if __name__ == "__main__":
             sort_keys=True,
         )
     )
-    arg.new_data = 1
-    arg.num_periods = 20
-    arg.terminate_condition = 1e-4
-    # arg.template_choose = 'sechina'
-    arg.demand_type = 3
-    # 1/2 is infeasible
-    if arg.template_choose == 'sechina':
-        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/sechina/'
-    elif arg.template_choose == 'us':
-        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/us/'
 
-    datapath = template_generate(data_dir,arg.num_periods,arg.demand_type)
-    arg.fpath = datapath
-    print(datapath)
-    dnp_mps_name = f"new_guro_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,
@@ -72,25 +62,10 @@ if __name__ == "__main__":
         network,
         node_list,
         *_,
-    ) = utils.scale(arg.pick_instance, datapath, arg)
+    ) = utils.scale(arg.pick_instance, arg.fpath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
-    print("----------DNP Model------------")
-    
-    # arg.DNP = 1
-    # arg.sku_list = sku_list
-    # model = DNP(arg, network)
-    # model.modeling()
-    # model.model.setParam("Logging", 1)
-    # model.model.setParam("Threads", 8)
-    # model.model.setParam("TimeLimit", 7200)
-    # model.model.setParam("LpMethod", 2)
-    # model.model.setParam("Crossover", 0)
-    # print(f"save mps name {dnp_mps_name}")
-    # model.model.write(dnp_mps_name)
-    # model.solve()
     print("----------NCS------------")
     init_ray = True
     num_workers = min(os.cpu_count(), 24)

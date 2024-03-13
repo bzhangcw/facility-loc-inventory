@@ -50,8 +50,8 @@ class Param:
 
         parser.add_argument(
             "--terminate_condition",
-            type=int,
-            default=1e-2,
+            type=float,
+            # default=1e-2,
             # required=True,
         )
         parser.add_argument(
