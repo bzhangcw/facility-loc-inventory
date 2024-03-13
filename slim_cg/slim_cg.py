@@ -371,7 +371,7 @@ class NetworkColumnGenerationSlim(object):
 
                 improved = (
                                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
-                           ) > 1e-2
+                           ) > self.arg.terminate_condition
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time

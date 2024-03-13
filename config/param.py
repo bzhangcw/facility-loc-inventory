@@ -49,6 +49,12 @@ class Param:
         )
 
         parser.add_argument(
+            "--terminate_condition",
+            type=int,
+            default=1e-2,
+            # required=True,
+        )
+        parser.add_argument(
             "--T",
             type=int,
             default=7,

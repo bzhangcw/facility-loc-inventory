@@ -343,9 +343,10 @@ class Edge:
         :param full_sku_list: full possible SKU list
         """
         if self.end.type == const.CUSTOMER:
-            sku_list_end = list()
-            if self.end.has_demand(t):
-                sku_list_end = self.end.demand_sku[t]
+            # sku_list_end = list()
+            # if self.end.has_demand(t):
+            #     sku_list_end = self.end.demand_sku[t]
+            sku_list_end = self.end.demand_sku.get(t, [])
             sku_list = list(set(full_sku_list).intersection(set(sku_list_end)))
         else:
             sku_list = full_sku_list

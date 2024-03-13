@@ -50,13 +50,14 @@ if __name__ == "__main__":
     )
     arg.new_data = 1
     arg.num_periods = 20
-    arg.template_choose = 'sechina'
-    arg.demand_type = 3
+    arg.terminate_condition = 1e-4
+    # arg.template_choose = 'sechina'
+    # arg.demand_type = 3
     # 1/2 is infeasible
     if arg.template_choose == 'sechina':
-        data_dir = 'data/template/sechina/'
+        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/sechina/'
     elif arg.template_choose == 'us':
-        data_dir = 'data/template/us/'
+        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/us/'
 
     datapath = template_generate(data_dir,arg.num_periods,arg.demand_type)
     arg.fpath = datapath
