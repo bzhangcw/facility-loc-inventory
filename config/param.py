@@ -18,6 +18,10 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
+        parser.add_argument(
+            "--template_choose",
+            type=str,
+        )
 
         parser.add_argument(
             "--fpath",
@@ -44,6 +48,12 @@ class Param:
             # required=True,
         )
 
+        parser.add_argument(
+            "--terminate_condition",
+            type=float,
+            # default=1e-2,
+            # required=True,
+        )
         parser.add_argument(
             "--T",
             type=int,
@@ -308,6 +318,12 @@ class Param:
 
         parser.add_argument(
             "--capacity_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--capacity_node_ratio",
             type=int,
             default=0.1,
         )
