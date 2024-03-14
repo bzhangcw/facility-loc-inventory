@@ -2,11 +2,9 @@ import math
 from typing import List
 
 import networkx as nx
-import numpy as np
-import pandas as pd
 
 import const as const
-from entity import SKU, Customer, Edge, Node, Plant, Warehouse
+from entity import SKU, Edge, Node
 
 
 def construct_network(

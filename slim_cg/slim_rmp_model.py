@@ -1,10 +1,8 @@
 import collections
-import datetime
 
 from gurobipy import GRB
 from scipy import sparse
 
-import utils
 from dnp_model import *
 from entity import *
 from solver_wrapper import CoptWrapper, GurobiWrapper

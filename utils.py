@@ -1,14 +1,8 @@
 import logging.handlers
-import os
 import pickle
-import sys
 import time
-from collections import defaultdict
-from typing import List
-from config.instance_generator import *
+
 import networkx as nx
-import numpy as np
-import pandas as pd
 from tqdm import tqdm
 
 from config.instance_generator import *
@@ -369,26 +363,26 @@ def add_attr(edge_list, node_list, arg, const):
         cap = pd.read_csv(capacity_path).set_index("id")
         for e in edge_list:
             # e.capacity = cap["qty"].get(e.idx, np.inf)
-            e.capacity = cap["qty"].get(e.idx, 1e4)*arg.capacity_ratio
+            e.capacity = cap["qty"].get(e.idx, 1e4) * arg.capacity_ratio
     if arg.edge_lb == 1:
         lb_end_path = data_dir + "lb_end.csv"
         lb_end = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_end["lb"]:
-                e.variable_lb = lb_end["lb"].get(e.idx, 0)*arg.lb_end_ratio
+                e.variable_lb = lb_end["lb"].get(e.idx, 0) * arg.lb_end_ratio
         lb_end_path = data_dir + "lb_inter.csv"
         lb_inter = pd.read_csv(lb_end_path).set_index("id")
         for e in edge_list:
             if e.idx in lb_inter["lb"]:
-                e.variable_lb = lb_inter["lb"].get(e.idx, 0)*arg.lb_inter_ratio
+                e.variable_lb = lb_inter["lb"].get(e.idx, 0) * arg.lb_inter_ratio
     if arg.node_lb == 1:
         lb_node_path = data_dir + "lb_node.csv"
         lb_df = pd.read_csv(lb_node_path).set_index("id")
         for n in node_list:
             if n.type == const.WAREHOUSE:
-                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf)*arg.node_lb_ratio
+                n.inventory_lb = lb_df["lb"].get(n.idx, np.inf) * arg.node_lb_ratio
             if n.type == const.PLANT:
-                n.production_lb = lb_df["lb"].get(n.idx, np.inf)*arg.node_lb_ratio
+                n.production_lb = lb_df["lb"].get(n.idx, np.inf) * arg.node_lb_ratio
 
 
 def dump_cfg_tofname(cfg):
