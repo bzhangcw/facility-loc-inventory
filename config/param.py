@@ -51,7 +51,7 @@ class Param:
         parser.add_argument(
             "--terminate_condition",
             type=float,
-            # default=1e-2,
+            default=1e-2,
             # required=True,
         )
         parser.add_argument(

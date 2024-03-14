@@ -39,12 +39,14 @@ if __name__ == "__main__":
     arg.node_lb_ratio= 0.1
     arg.unfulfill_sku_unit_cost= 5000
     arg.conf_label = 1
-    arg.pick_instance = 8
+    arg.pick_instance = 2
     arg.backorder = 0
+    arg.terminate_condition = 0.01
     arg.transportation_sku_unit_cost = 10
     arg.T = 7
     utils.configuration(arg.conf_label, arg)
-    arg.fpath = "data/data_random/"
+    arg.fpath = 'data/cases/data_0inv/'
+
     # arg.fpath = "data/data_generate/"
     # arg.fpath = "data/cases/data_1219/"
     # arg.fpath = "data/cases/data_1118/"
@@ -79,25 +81,25 @@ if __name__ == "__main__":
     ) = utils.scale(arg.pick_instance, datapath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
+    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
-    print("----------DNP Model------------")
-    
-    arg.DNP = 1
-    arg.sku_list = sku_list
-    model = DNP(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.model.setParam("Threads", 8)
-    model.model.setParam("TimeLimit", 7200)
-    model.model.setParam("LpMethod", 2)
-    model.model.setParam("Crossover", 0)
-    print(f"save mps name {dnp_mps_name}")
-    model.model.write(dnp_mps_name)
-    model.model.solve()
-    print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
-    print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
-    print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
+    # print("----------DNP Model------------")
+    #
+    # arg.DNP = 1
+    # arg.sku_list = sku_list
+    # model = DNP(arg, network)
+    # model.modeling()
+    # model.model.setParam("Logging", 1)
+    # model.model.setParam("Threads", 8)
+    # model.model.setParam("TimeLimit", 7200)
+    # model.model.setParam("LpMethod", 2)
+    # model.model.setParam("Crossover", 0)
+    # print(f"save mps name {dnp_mps_name}")
+    # model.model.write(dnp_mps_name)
+    # model.model.solve()
+    # print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
+    # print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
+    # print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
     print("----------NCS------------")
     init_ray = True
     num_workers = min(os.cpu_count(), 24)
