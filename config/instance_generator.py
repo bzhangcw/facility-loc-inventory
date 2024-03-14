@@ -1,10 +1,16 @@
-import pandas as pd
 from entity import *
-from config.param import Param
 import numpy as np
 from geopy.distance import geodesic
 from more_itertools import chunked
 import os
+import os
+
+import numpy as np
+from geopy.distance import geodesic
+from more_itertools import chunked
+
+from entity import *
+
 loc = np.array([0, 0])
 import pandas as pd
 
@@ -96,7 +102,7 @@ def generate_instance(
             idx=dc_id,
             location=loc,
             inventory_capacity=capacity,
-            holding_sku_unit_cost=holding_cost*5,
+            holding_sku_unit_cost=holding_cost,
             open_fixed_cost=open_cost,
         )
         warehouse_list.append(this_warehouse)
@@ -148,7 +154,7 @@ def generate_instance(
             idx=plant_id,
             location=loc,
             production_capacity=capacity,
-            production_sku_unit_cost=production_cost*5,
+            production_sku_unit_cost=production_cost,
             open_fixed_cost=open_cost,
             producible_sku=sku_list
         )
@@ -174,7 +180,7 @@ def generate_instance(
                         # rand = np.random.randint(0, 480)
                         # lengg = np.random.randint(0, 10)
                         for sku in sku_list:
-                            unit_cost = np.random.random() * customer_distance[warehouse] / 100000*5
+                            unit_cost = np.random.random() * customer_distance[warehouse] / 100000
                             edges_w_c.append(
                                 {'start_id': warehouse, 'end_id': customer, 'sku': sku, 'unit_cost': unit_cost})
                 else:
@@ -184,9 +190,10 @@ def generate_instance(
                         # lengg = np.random.randint(0, 20)
                         for sku in sku_list:
                             unit_cost = np.random.random() * geodesic(warehouse.location,
-                                                                customer.location).kilometers / 100000*5
+                                                                      customer.location).kilometers / 100000
                             edges_w_c.append(
-                                {'start_id': warehouse.idx, 'end_id': customer.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+                                {'start_id': warehouse.idx, 'end_id': customer.idx, 'sku': sku.idx,
+                                 'unit_cost': unit_cost})
 
             edges_w_c_df = pd.DataFrame(edges_w_c)
             edges_p_w = []
@@ -202,16 +209,19 @@ def generate_instance(
                         # rand = np.random.randint(0, 480)
                         # leng = np.random.randint(0, 10)
                         for sku in sku_list:
-                            unit_cost = np.random.random() * plant_distance[warehouse] / 100000*5
-                            edges_p_w.append({'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
+                            unit_cost = np.random.random() * plant_distance[warehouse] / 100000
+                            edges_p_w.append(
+                                {'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
                 else:
                     for warehouse in warehouse_list:
                         # rand = np.random.randint(0, 480)
                         # lengg = np.random.randint(0, 20)
                         for sku in sku_list:
-                            unit_cost = np.random.random() * geodesic(warehouse.location, plant.location).kilometers / 100000*5
+                            unit_cost = np.random.random() * geodesic(warehouse.location,
+                                                                      plant.location).kilometers / 100000
                             edges_p_w.append(
-                                {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+                                {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx,
+                                 'unit_cost': unit_cost})
             edges_p_w_df = pd.DataFrame(edges_p_w)
             edges_t_t = []
             result = list(chunked(warehouse_list, 2))
@@ -229,8 +239,9 @@ def generate_instance(
                     # rand = np.random.randint(0, 480)
                     # lengg = np.random.randint(0, 20)
                     for sku in sku_list:
-                        unit_cost = np.random.randint(1, 2) * distance / 1000*5
-                        edges_t_t.append({'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
+                        unit_cost = np.random.randint(1, 2) * distance / 1000
+                        edges_t_t.append(
+                            {'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
             edges_w_w_df = pd.DataFrame(edges_t_t)
             edges_w_c_df.to_csv(data_w_c, index=False)
             edges_w_w_df.to_csv(data_w_w, index=False)
@@ -270,7 +281,7 @@ def generate_instance(
             end=end,
             capacity=capacity,
             variable_lb=np.inf,
-            transportation_sku_unit_cost=unit_cost*5,
+            transportation_sku_unit_cost=unit_cost,
         )
         edge_list.append(this_edge)
 
@@ -289,15 +300,15 @@ def generate_attr(data_dir):
 
     data_w_c = data_dir + 'edge_sku_info/edges_w_c.csv'
     edges_w_c_df = pd.read_csv(data_w_c)
-    random_number_1 = np.random.randint(1000,20000,len(edges_w_c_df['unit_cost']))
+    random_number_1 = np.random.randint(1000, 20000, len(edges_w_c_df['unit_cost']))
     edges_w_c_df['qty'] = edges_w_c_df['unit_cost'] * random_number_1
     data_w_w = data_dir + 'edge_sku_info/edges_w_w.csv'
     edges_w_w_df = pd.read_csv(data_w_w)
-    random_number_2 = np.random.randint(5000,30000,len(edges_w_w_df['unit_cost']))
+    random_number_2 = np.random.randint(5000, 30000, len(edges_w_w_df['unit_cost']))
     edges_w_w_df['qty'] = edges_w_w_df['unit_cost'] * random_number_2
     data_p_w = data_dir + 'edge_sku_info/edges_p_w.csv'
     edges_p_w_df = pd.read_csv(data_p_w)
-    random_number_3 = np.random.randint(50000,100000,len(edges_p_w_df['unit_cost']))
+    random_number_3 = np.random.randint(50000, 100000, len(edges_p_w_df['unit_cost']))
     edges_p_w_df['qty'] = edges_p_w_df['unit_cost'] * random_number_3
     edge_sku_df = pd.concat([edges_w_c_df, edges_w_w_df, edges_p_w_df]).dropna()
     df = generate_id(edge_sku_df)
@@ -306,22 +317,22 @@ def generate_attr(data_dir):
     capacity_dir = data_dir + 'edge_capacity.csv'
     df.to_csv(capacity_dir, index=False)
     _w_c_df = generate_id(edges_w_c_df)
-    random_number_4 = np.random.randint(100, 2000,len(_w_c_df['unit_cost']))
+    random_number_4 = np.random.randint(100, 2000, len(_w_c_df['unit_cost']))
     _w_c_df.loc[:, 'lb'] = _w_c_df.loc[:, 'unit_cost'] * random_number_4
     _w_c_df.drop(columns=['unit_cost'], axis=0, inplace=True)
     _w_c_dir = data_dir + 'lb_end.csv'
     _w_c_df.to_csv(_w_c_dir, index=False)
     _w_w_df = generate_id(edges_w_w_df)
-    random_number_5 = np.random.randint(200, 400,len(_w_w_df['unit_cost']))
+    random_number_5 = np.random.randint(200, 400, len(_w_w_df['unit_cost']))
     _w_w_df.loc[:, 'lb'] = _w_w_df.loc[:, 'unit_cost'] * random_number_5
     _w_w_df.drop(columns=['unit_cost'], axis=0, inplace=True)
     _w_w_dir = data_dir + 'lb_inter.csv'
     _w_w_df.to_csv(_w_w_dir, index=False)
     data_node_dir = data_dir + 'node_info/facility.csv'
     data_node = pd.read_csv(data_node_dir)
-    random_number_6 = np.random.randint(10, 40,len(data_node['Capacity']))
-    data_node['lb'] = data_node['Capacity'] * random_number_6/1000
+    random_number_6 = np.random.randint(10, 40, len(data_node['Capacity']))
+    data_node['lb'] = data_node['Capacity'] * random_number_6 / 1000
     node_lb_dir = data_dir + 'lb_node.csv'
-    data = data_node[['id','lb']]
+    data = data_node[['id', 'lb']]
     data.to_csv(node_lb_dir, index=False)
     print('Generate over')

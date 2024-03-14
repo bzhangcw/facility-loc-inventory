@@ -2,7 +2,6 @@ from enum import IntEnum
 
 import pandas as pd
 from coptpy import COPT
-from gurobipy import tuplelist
 from tqdm import tqdm
 
 import utils

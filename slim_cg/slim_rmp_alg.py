@@ -1,10 +1,8 @@
 from enum import IntEnum
 
-import numpy as np
 import scipy.sparse as scisp
 from gurobipy import *
 
-import utils
 from slim_cg.slim_rmp_model import *
 
 CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))

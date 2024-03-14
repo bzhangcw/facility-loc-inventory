@@ -785,7 +785,7 @@ class DNP:
             node_sum = self.variables["sku_production"].sum(t, node, "*")
             # capacity constraint
             if node.production_capacity < np.inf:
-                left_capacity = node.production_capacity*self.arg.capacity_node_ratio - self.used_plant_capacity.get(
+                left_capacity = node.production_capacity* self.arg.capacity_node_ratio - self.used_plant_capacity.get(
                     node, 0
                 )
                 bound = self.variables["open"][t, node] if self.bool_covering else 1.0
