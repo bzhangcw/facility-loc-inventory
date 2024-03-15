@@ -1,11 +1,8 @@
-import pickle
+from instance_generator import *
 import shutil
-from datetime import datetime
-
+import pickle
 import folium
-
-from config.instance_generator import *
-
+from datetime import datetime
 
 def template_generate(data_dir, num_periods, demand_type):
     demand_data = []
@@ -27,24 +24,22 @@ def template_generate(data_dir, num_periods, demand_type):
             for customer in customer_list:
                 for sku in sku_list:
                     if int(sku[-4:]) % 3 == 0:
-                        demand = int(np.random.normal(400, 20)) if period % 3 == 0 else int(np.random.normal(50, 10))
+                        demand = int(np.random.normal(400, 5)) if period % 3 == 0 else int(np.random.normal(100,10))
                     elif int(sku[-4:]) % 2 == 0:
-                        demand = np.random.randint(1, 100)
+                        demand = np.random.randint(1, 800)
                     else:
-                        demand = int(np.random.normal(2000, 50)) if period % 10 == 0 else int(np.random.normal(100, 25))
+                        demand = np.random.randint(200, 2000) if period % 10 == 0 else int(np.random.normal(100,2))
                     demand_data.append([customer, sku, demand, period])
     elif demand_type == 2:
         for period in range(num_periods):
             for customer in customer_list:
                 for sku in sku_list:
-                    if int(sku[-4:]) % 4 == 0:
-                        demand = np.random.randint(1000, 2000) if period % 8 == 0 else np.random.randint(100, 300)
-                    elif int(sku[-4:]) % 3 == 0:
-                        demand = int(np.random.normal(200, 50))
+                    if int(sku[-4:]) % 3 == 0:
+                        demand = int(np.random.normal(2000, 10)) if period % 8 == 0 else np.random.randint(10, 300)
                     elif int(sku[-4:]) % 2 == 0:
-                        demand = np.random.randint(1, 1000)
+                        demand = np.random.randint(1, 400)
                     else:
-                        demand = int(np.random.normal(500, 20)) if period % 15 == 0 else int(np.random.normal(20, 1))
+                        demand = int(np.random.normal(1000, 20)) if period % 15 == 0 else int(np.random.normal(100, 1))
                     demand_data.append([customer, sku, demand, period])
 
     elif demand_type == 3:

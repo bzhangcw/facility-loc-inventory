@@ -4,8 +4,6 @@ import logging
 import os
 from typing import *
 from typing import List
-
-# import gurobipy as gp
 import coptpy
 import coptpy as cp
 import networkx as nx
@@ -14,7 +12,6 @@ import pandas as pd
 import ray
 from coptpy import COPT
 from tqdm import tqdm
-
 import const as const
 import dnp_model
 import ncg.cg_col_helper as cg_col_helper

@@ -3,12 +3,9 @@ import json
 import logging
 import os
 from typing import *
-
 import ray
 from coptpy import COPT
-from gurobipy import GRB
 from tqdm import tqdm
-
 import slim_cg.slim_mip_heur as slp
 import slim_cg.slim_rmp_alg as sla
 import utils

@@ -1,16 +1,8 @@
-from entity import *
 import numpy as np
 from geopy.distance import geodesic
 from more_itertools import chunked
 import os
-import os
-
-import numpy as np
-from geopy.distance import geodesic
-from more_itertools import chunked
-
 from entity import *
-
 loc = np.array([0, 0])
 import pandas as pd
 
@@ -165,8 +157,7 @@ def generate_instance(
         data_w_c = data_dir + 'edge_sku_info/edges_w_c.csv'
         data_w_w = data_dir + 'edge_sku_info/edges_w_w.csv'
         data_p_w = data_dir + 'edge_sku_info/edges_p_w.csv'
-        folder_path = data_dir + 'edge_sku_info/'
-        if not any(os.listdir(folder_path)):
+        if not os.path.exists(data_p_w):
             edges_w_c = []
             for customer in customer_list:
                 if warehouse_num > 1000:

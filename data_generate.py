@@ -1,9 +1,9 @@
 import random
-
 import numpy as np
 import pandas as pd
-
 from config.param import Param
+from geopy.distance import geodesic
+from more_itertools import chunked
 
 loc = np.array([0, 0])
 np.random.seed(0)

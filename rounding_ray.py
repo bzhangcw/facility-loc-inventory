@@ -1,19 +1,9 @@
-import json
 from ncg.np_cg import *
-import gurobipy as gp
-import numpy as np
-import pandas as pd
-from coptpy import COPT
-from gurobipy import GRB
-from config.instance_generator import *
 import const
 import utils
 from config.network import construct_network
 from config.param import Param
 from dnp_model import DNP
-from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
-from slim_cg.slim_rmp_model import DNPSlim
-from config.instance_generator import generate_instance
 
 """
 Run following command in the command line of Turing when using Ray:
@@ -23,22 +13,6 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-
-    # arg.backorder_sku_unit_cost=20000000
-    # arg.capacity_node_ratio=100000000000
-    # arg.capacity_ratio= 100000000000
-    # arg.cardinality_limit= 3000000
-    # arg.distance_limit=5000000000
-    # arg.holding_sku_unit_cost=1
-    # arg.in_upper_ratio= 0.54
-    # arg.lb_end_ratio=1e-09
-    # arg.lb_inter_ratio=1e-09
-    # arg.node_lb_ratio= 0.1
-    # arg.unfulfill_sku_unit_cost= 50000000
-    # arg.conf_label = 7
-    # arg.pick_instance = 8
-    # arg.backorder = 0
-
     arg.backorder_sku_unit_cost = 5000
     arg.capacity_node_ratio = 100
     arg.capacity_ratio = 100
@@ -54,22 +28,10 @@ if __name__ == "__main__":
     arg.pick_instance = 8
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
-
     arg.template_choose = 'us'
     arg.demand_type = 1
     utils.configuration(arg.conf_label, arg)
     # arg.fpath = "data/data_random/"
-    # arg.cardinality_limit = 1000
-    # arg.distance_limit = 10000
-    # arg.in_upper_ratio = 0.0004
-    # arg.capacity_ratio = 100000000000
-    # arg.capacity_node_ratio = 100000000000
-    # arg.lb_end_ratio = 0.000000001
-    # arg.lb_inter_ratio = 0.000000001
-    # arg.cardinality_limit = 3000000
-    # arg.distance_limit = 5000000000
-    # arg.node_lb_ratio = 100
-
     arg.fpath = "data/data_generate/"
     # arg.fpath = "data/data_1219/"
     # arg.fpath = "data/data_0inv/"

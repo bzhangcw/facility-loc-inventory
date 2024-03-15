@@ -1,8 +1,6 @@
 import collections
-
 from gurobipy import GRB
 from scipy import sparse
-
 from dnp_model import *
 from entity import *
 from solver_wrapper import CoptWrapper, GurobiWrapper

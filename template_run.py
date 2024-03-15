@@ -1,7 +1,8 @@
 from ncg.np_cg import *
 from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
 from template_generate import *
-
+from config.param import *
+from config.network import *
 """
 Run following command in the command line of Turing when using Ray:
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
@@ -21,8 +22,8 @@ if __name__ == "__main__":
     arg.lb_inter_ratio = 1
     arg.node_lb_ratio = 1
     arg.unfulfill_sku_unit_cost = 5000
-    arg.conf_label = 7
-    arg.pick_instance = 8
+    arg.conf_label = 1
+    arg.pick_instance = 1
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
@@ -37,13 +38,12 @@ if __name__ == "__main__":
     arg.new_data = 1
     arg.num_periods = 20
     arg.terminate_condition = 1e-4
-    # arg.template_choose = 'sechina'
-    arg.demand_type = 3
-    # 1/2 is infeasible
+    # arg.template_choose = 'us'
+    # arg.demand_type = 1
     if arg.template_choose == 'sechina':
-        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/sechina/'
+        data_dir = 'data/template/sechina/'
     elif arg.template_choose == 'us':
-        data_dir = '/home/chuwen/cora/facility-loc-inventory-template/data/template/us/'
+        data_dir = 'data/template/us/'
 
     datapath = template_generate(data_dir, arg.num_periods, arg.demand_type)
     arg.fpath = datapath

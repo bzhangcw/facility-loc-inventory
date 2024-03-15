@@ -1,5 +1,4 @@
 from enum import IntEnum
-
 import pandas as pd
 from coptpy import COPT
 from tqdm import tqdm

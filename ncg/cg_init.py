@@ -1,12 +1,10 @@
 """
 utilities for initialize first columns in CG framework
 """
-
 import ray
 from coptpy import COPT
-
 import dnp_model
-from entity import Customer
+from entity import Customer, Plant
 
 
 def init_cols_from_dual_feas_sol(self, dual_vars):

@@ -1,3 +1,5 @@
+from config.network import construct_network
+from config.param import Param
 from ncg.np_cg import *
 from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
 
@@ -25,7 +27,7 @@ if __name__ == "__main__":
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
-    arg.terminate_condition = 1e-10
+    arg.terminate_condition = 1e-4
     arg.new_data = 1
     arg.num_periods = 20
     # arg.fpath = 'data/us_generate_202403122258/'
