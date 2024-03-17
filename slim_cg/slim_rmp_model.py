@@ -6,7 +6,8 @@ from entity import *
 from solver_wrapper import CoptWrapper, GurobiWrapper
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
-
+import utils
+import datetime
 CG_RMP_LOGGING = int(os.environ.get("CG_RMP_LOGGING", 1))
 CG_ANONYMOUS = int(os.environ.get("CG_ANONYMOUS", 0))
 

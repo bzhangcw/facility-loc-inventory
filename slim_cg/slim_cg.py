@@ -8,7 +8,6 @@ from coptpy import COPT
 from tqdm import tqdm
 import slim_cg.slim_mip_heur as slp
 import slim_cg.slim_rmp_alg as sla
-import utils
 from config.network import *
 from entity import SKU, Customer
 from slim_cg.slim_checker import check_cost_cg
@@ -16,6 +15,8 @@ from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
 from slim_cg.slim_rmp_model import DNPSlim
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
+
+import utils
 
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
@@ -515,7 +516,8 @@ class NetworkColumnGenerationSlim(object):
                         (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
-                if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
+                # if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
+                if self.arg.cg_mip_recover:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
                             bool_terminate
                     ):

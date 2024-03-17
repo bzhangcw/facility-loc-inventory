@@ -1,7 +1,14 @@
+import json
+import os
+from template_generate import *
+import const
+import utils
 from config.network import construct_network
 from config.param import Param
+from dnp_model import DNP
 from ncg.np_cg import *
 from slim_cg.slim_cg import NetworkColumnGenerationSlim as NCS
+from slim_cg.slim_rmp_model import DNPSlim
 
 """
 Run following command in the command line of Turing when using Ray:
@@ -30,7 +37,10 @@ if __name__ == "__main__":
     arg.terminate_condition = 1e-4
     arg.new_data = 1
     arg.num_periods = 20
-    # arg.fpath = 'data/us_generate_202403122258/'
+    arg.fpath = 'data/sechina_202403151136/'
+    arg.cg_mip_recover = True
+    arg.cg_rmp_mip_iter = 20
+    arg.cg_method_mip_heuristic = 0
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(

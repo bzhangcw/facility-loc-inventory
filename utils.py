@@ -5,13 +5,11 @@ import sys
 import time
 from collections import defaultdict
 from typing import List
-from config.instance_generator import *
+from instance_generator import *
 import networkx as nx
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
-from instance_generator import *
 from config.network import construct_network
 from config.read_data import read_data
 from entity import Edge, Node
