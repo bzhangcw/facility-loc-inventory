@@ -94,7 +94,7 @@ def generate_instance(
             idx=dc_id,
             location=loc,
             inventory_capacity=capacity,
-            holding_sku_unit_cost=holding_cost,
+            holding_sku_unit_cost=holding_cost*5,
             open_fixed_cost=open_cost,
         )
         warehouse_list.append(this_warehouse)
@@ -146,7 +146,7 @@ def generate_instance(
             idx=plant_id,
             location=loc,
             production_capacity=capacity,
-            production_sku_unit_cost=production_cost,
+            production_sku_unit_cost=production_cost*5,
             open_fixed_cost=open_cost,
             producible_sku=sku_list
         )
@@ -171,7 +171,7 @@ def generate_instance(
                         # rand = np.random.randint(0, 480)
                         # lengg = np.random.randint(0, 10)
                         for sku in sku_list:
-                            unit_cost = np.random.random() * customer_distance[warehouse] / 100000
+                            unit_cost = np.random.random() * customer_distance[warehouse] / 100000*5
                             edges_w_c.append(
                                 {'start_id': warehouse, 'end_id': customer, 'sku': sku, 'unit_cost': unit_cost})
                 else:
@@ -181,7 +181,7 @@ def generate_instance(
                         # lengg = np.random.randint(0, 20)
                         for sku in sku_list:
                             unit_cost = np.random.random() * geodesic(warehouse.location,
-                                                                      customer.location).kilometers / 100000
+                                                                customer.location).kilometers / 100000*5
                             edges_w_c.append(
                                 {'start_id': warehouse.idx, 'end_id': customer.idx, 'sku': sku.idx,
                                  'unit_cost': unit_cost})
@@ -200,16 +200,15 @@ def generate_instance(
                         # rand = np.random.randint(0, 480)
                         # leng = np.random.randint(0, 10)
                         for sku in sku_list:
-                            unit_cost = np.random.random() * plant_distance[warehouse] / 100000
-                            edges_p_w.append(
-                                {'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
+                            unit_cost = np.random.random() * plant_distance[warehouse] / 100000*5
+                            edges_p_w.append({'start_id': plant, 'end_id': warehouse, 'sku': sku, 'unit_cost': unit_cost})
                 else:
                     for warehouse in warehouse_list:
                         # rand = np.random.randint(0, 480)
                         # lengg = np.random.randint(0, 20)
                         for sku in sku_list:
                             unit_cost = np.random.random() * geodesic(warehouse.location,
-                                                                      plant.location).kilometers / 100000
+                                                                      plant.location).kilometers / 100000*5
                             edges_p_w.append(
                                 {'start_id': plant.idx, 'end_id': warehouse.idx, 'sku': sku.idx,
                                  'unit_cost': unit_cost})
@@ -230,7 +229,7 @@ def generate_instance(
                     # rand = np.random.randint(0, 480)
                     # lengg = np.random.randint(0, 20)
                     for sku in sku_list:
-                        unit_cost = np.random.randint(1, 2) * distance / 1000
+                        unit_cost = np.random.randint(1, 2) * distance / 1000*5
                         edges_t_t.append(
                             {'start_id': i[0].idx, 'end_id': i[1].idx, 'sku': sku.idx, 'unit_cost': unit_cost})
             edges_w_w_df = pd.DataFrame(edges_t_t)
@@ -272,7 +271,7 @@ def generate_instance(
             end=end,
             capacity=capacity,
             variable_lb=np.inf,
-            transportation_sku_unit_cost=unit_cost,
+            transportation_sku_unit_cost=unit_cost*5,
         )
         edge_list.append(this_edge)
 
