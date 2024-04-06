@@ -24,19 +24,22 @@ CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
 
 class NetworkColumnGenerationSlim(object):
     def __init__(
-            self,
-            arg: argparse.Namespace,
-            network: nx.DiGraph,
-            customer_list: List[Customer],
-            full_sku_list: List[SKU] = None,
-            max_iter=500,
-            init_primal=None,
-            init_sweeping=True,
-            init_dual=None,
-            init_ray=False,
-            num_workers=8,
-            num_cpus=8,
-            solver="COPT",
+        self,
+        arg: argparse.Namespace,
+        network: nx.DiGraph,
+        customer_list: List[Customer],
+        full_sku_list: List[SKU] = None,
+        max_iter=500,
+        init_primal=None,
+        init_sweeping=True,
+        init_dual=None,
+        init_ray=False,
+        num_workers=8,
+        num_cpus=8,
+        solver="COPT",
+        if_del_col=False,
+        del_col_freq=3,
+        del_col_stra=1,
     ) -> None:
         if solver == "COPT":
             self.solver_name = "COPT"
@@ -64,6 +67,10 @@ class NetworkColumnGenerationSlim(object):
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
+        self.columns_status = (
+            {}
+        )  # Dict[customer, List[0/1]], 1 for active, 0 for inactive
+        self.columns_to_del = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.obj = dict()
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, Optional[ray.actor.ActorHandle, Pricing]] = {}
@@ -105,6 +112,16 @@ class NetworkColumnGenerationSlim(object):
             ray.init(num_cpus=num_cpus)
         self.skip_customers = set()
 
+        self.col_weight_history = {cus.idx: {} for cus in self.customer_list}
+
+        # parameters for deleting columns
+        self.if_del_col = if_del_col
+        self.del_col_freq = del_col_freq
+        self.del_col_stra = del_col_stra
+        print(
+            f"if_del_col: {self.if_del_col}, del_col_freq: {self.del_col_freq}, del_col_stra: {self.del_col_stra}"
+        )
+
     def get_subgraph(self):
         """
         Get a subgraph for each customer from the original graph
@@ -135,7 +152,7 @@ class NetworkColumnGenerationSlim(object):
         cus_per_worker = int(np.ceil(self.cus_num / self.num_workers))
         for customer, n in zip(self.customer_list, range(self.cus_num)):
             if n % cus_per_worker == 0:
-                cus_list = self.customer_list[n: min(n + cus_per_worker, self.cus_num)]
+                cus_list = self.customer_list[n : min(n + cus_per_worker, self.cus_num)]
                 worker = PricingWorker.remote(
                     cus_list,
                     self.arg,
@@ -149,8 +166,8 @@ class NetworkColumnGenerationSlim(object):
             self.worker_cus_dict[customer] = cus_worker_id
 
     def construct_oracle(
-            self,
-            customer: Customer,
+        self,
+        customer: Customer,
     ):
         """
         Construct oracles for each customer
@@ -282,9 +299,29 @@ class NetworkColumnGenerationSlim(object):
         for v in range(t + 1):
             for k in self.full_sku_list:
                 backlogged_demand_cost += (
-                        self.arg.unfulfill_sku_unit_cost * customer.demand.get((v, k), 0)
+                    self.arg.unfulfill_sku_unit_cost * customer.demand.get((v, k), 0)
                 )
         return backlogged_demand_cost
+
+    def update_col_status(self):
+
+        if self.del_col_stra == 1:
+            # delete columns getting a 0 weight in any iteration
+            for customer in self.customer_list:
+                # for number in range(self.iter - 1):
+                self.columns_to_del[customer] = []
+                for number in range(self.iter):
+                    if self.columns_status[customer][number] == 1:
+                        lambda_c_n = self.solver.getVarValue(
+                            self.rmp_oracle.variables["column_weights"][
+                                customer, number
+                            ]
+                        )
+                        if lambda_c_n < 1e-6:
+                            self.columns_status[customer][number] = 0
+                            self.columns_to_del[customer].append(number)
+        else:
+            raise NotImplementedError
 
     def run(self):
         """
@@ -324,6 +361,7 @@ class NetworkColumnGenerationSlim(object):
                 init_col = self.init_column(customer, var_keys[i])
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
+                self.columns_status[customer] = [1]
 
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
@@ -333,14 +371,20 @@ class NetworkColumnGenerationSlim(object):
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"update_rmp"):
+                    if (
+                        self.if_del_col
+                        and self.iter % self.del_col_freq == 0
+                        and self.iter >= 1
+                    ):
+                        self.update_col_status()
                     self.update_rmp_by_cols()
 
                 with utils.TimerContext(
-                        self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
+                    self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
                 ):
-                    self.rmp_model.write(
-                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
-                    )
+                    # self.rmp_model.write(
+                    #     f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
+                    # )
                     self.solve_rmp()
                     self._logger.info(
                         f"rmp solving finished: {self.rmp_model.status}@{self.iter}"
@@ -368,8 +412,8 @@ class NetworkColumnGenerationSlim(object):
                     dual_packs = sla.fetch_dual_info(self) if self.iter >= 1 else None
 
                 improved = (
-                                   eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
-                           ) > self.arg.terminate_condition
+                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
+                ) > self.arg.terminate_condition
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -404,12 +448,12 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
                     if self.init_ray:
                         for worker_id, worker in tqdm(
-                                enumerate(self.worker_list), ncols=80, leave=False
+                            enumerate(self.worker_list), ncols=80, leave=False
                         ):
                             worker.set_scope.remote(self.skip_customers)
                             worker.model_reset_all.remote()
                             with utils.TimerContext(
-                                    self.iter, f"update pricing", logging=worker_id < 1
+                                self.iter, f"update pricing", logging=worker_id < 1
                             ):
                                 # worker.update_objective_all.remote(dual_pack_this)
                                 worker.update_objective_all_new.remote(
@@ -427,7 +471,7 @@ class NetworkColumnGenerationSlim(object):
                             worker.solve_all.remote()
                     else:
                         for col_ind, customer in tqdm(
-                                enumerate(self.customer_list), ncols=80, leave=False
+                            enumerate(self.customer_list), ncols=80, leave=False
                         ):
                             oracle: Pricing = self.oracles[customer]
                             oracle.model.reset()
@@ -440,7 +484,7 @@ class NetworkColumnGenerationSlim(object):
                             else:
                                 dual_pack_this = None
                             with utils.TimerContext(
-                                    self.iter, f"update pricing", logging=col_ind < 1
+                                self.iter, f"update pricing", logging=col_ind < 1
                             ):
                                 oracle.update_objective(
                                     customer, dual_packs=dual_pack_this
@@ -492,11 +536,12 @@ class NetworkColumnGenerationSlim(object):
                         _status = new_cols[col_ind]["status"]
                         self.red_cost[self.iter, col_ind] = _redcost
                         added = (
-                                        (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
-                                        or dual_packs is None
-                                ) or added
+                            (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
+                            or dual_packs is None
+                        ) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
+                        self.columns_status[customer].append(1)
 
                         if _status == self.solver_constant.INTERRUPTED:
                             bool_early_stop = True
@@ -513,20 +558,20 @@ class NetworkColumnGenerationSlim(object):
                 lp_objective = self.rmp_model.objval
 
                 bool_terminate = (
-                        (not improved) or (not added) or self.iter >= self.max_iter
+                    (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
                 # if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
                 if self.arg.cg_mip_recover:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
-                            bool_terminate
+                        bool_terminate
                     ):
                         choice = self.arg.cg_method_mip_heuristic
                         func = slp.PrimalMethod.select(choice)
                         _fname = func.__name__ if func is not None else "none"
                         with utils.TimerContext(
-                                self.iter,
-                                f"{_fname}",
+                            self.iter,
+                            f"{_fname}",
                         ):
                             if func is None:
                                 pass
@@ -537,6 +582,10 @@ class NetworkColumnGenerationSlim(object):
                                     _this_log_line
                                     + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
                                 )
+
+                # for debugging
+                # self.get_col_weight("./out/", self.iter)
+                self.get_col_weight_his()
 
                 if self.arg.check_cost_cg:
                     # cost checker
@@ -658,9 +707,12 @@ class NetworkColumnGenerationSlim(object):
                     cus_col_value.loc[number, customer.idx] = self.columns[customer][
                         number
                     ]["beta"]
-                    cus_col_weights.loc[number, customer.idx] = self.solver.getVarValue(
-                        self.variables["column_weights"][customer, number]
-                    )
+                    if self.columns_status[customer][number] == 1:
+                        cus_col_weights.loc[number, customer.idx] = (
+                            self.solver.getVarValue(
+                                self.variables["column_weights"][customer, number]
+                            )
+                        )
                 else:
                     cus_col_value.loc[number, customer.idx] = 0
                     cus_col_weights.loc[number, customer.idx] = 0
@@ -679,12 +731,74 @@ class NetworkColumnGenerationSlim(object):
         )
 
         with open(
-                os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
+            os.path.join(data_dir, "cus" + str(num_cus) + "_details.json"), "w"
         ) as f:
             for customer in self.customer_list:
                 for col in self.columns[customer]:
                     f.write(json.dumps(col, skipkeys=True))
                     f.write("\n")
+
+    def get_col_weight(self, data_dir: str = "./", iter: int = 0):
+        self.variables["column_weights"] = self.rmp_oracle.variables["column_weights"]
+        cus_col_weights = pd.DataFrame(
+            index=range(self.iter + 1), columns=[c.idx for c in self.customer_list]
+        )
+
+        for customer in self.customer_list:
+            # for number in range(self.num_cols):
+            for number in range(self.iter - 1):
+                number = number + 1
+                if self.columns[customer][number] != {}:
+                    if self.columns_status[customer][number] == 1:
+                        cus_col_weights.loc[number, customer.idx] = (
+                            self.solver.getVarValue(
+                                self.variables["column_weights"][customer, number]
+                            )
+                        )
+                else:
+                    cus_col_weights.loc[number, customer.idx] = 0
+        num_cus = len(self.customer_list)
+        cus_col_weights.to_csv(
+            os.path.join(
+                data_dir,
+                "cus" + str(num_cus) + "_col_weight_iter_" + str(iter) + ".csv",
+            ),
+            index=False,
+        )
+
+    def get_col_weight_his(self):
+        """
+        I have an assumption that columns may have preference level between each other
+        Specifically, those columns set as 0 weight may not be used in the future,
+        i.e. with 0 weight, or at least not high weight
+        So I want to check the columns' weight to see if it is true
+        """
+        for customer in self.customer_list:
+            # for number in range(self.num_cols):
+            for number in range(self.iter - 1):
+                # number = number + 1
+                if number not in self.col_weight_history[customer.idx]:
+                    self.col_weight_history[customer.idx][number] = []
+                if self.columns_status[customer][number] == 1:
+                    self.col_weight_history[customer.idx][number].append(
+                        self.solver.getVarValue(
+                            self.rmp_oracle.variables["column_weights"][
+                                customer, number
+                            ]
+                        )
+                    )
+
+    def watch_col_weight(self):
+
+        zero_weight_col_used = {cus.idx: 0 for cus in self.customer_list}
+        for cus in self.customer_list:
+            for col_idx, col_weight in self.col_weight_history[cus.idx].items():
+                if np.mean(col_weight) > 0 and np.min(col_weight) == 0:
+                    zero_weight_col_used[cus.idx] += 1
+
+        # write zero_weight_col_used to csv file
+        df = pd.DataFrame(zero_weight_col_used, index=[0])
+        df.to_csv("./out/zero_weight_col_used.csv", index=False)
 
 
 if __name__ == "__main__":

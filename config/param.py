@@ -54,12 +54,7 @@ class Param:
             default=1e-2,
             # required=True,
         )
-        parser.add_argument(
-            "--T",
-            type=int,
-            default=7,
-            help='time horizon'
-        )
+        parser.add_argument("--T", type=int, default=7, help="time horizon")
 
         parser.add_argument(
             "--backend",
@@ -120,7 +115,7 @@ class Param:
             help="""
             for debugging only, 
                 check the cost functions of CG
-            """
+            """,
         )
 
         ##############################
@@ -135,7 +130,7 @@ class Param:
              - a config that specify
              - using the same config you can choose different size by
                 `pick_instance` 
-            """
+            """,
         )
 
         parser.add_argument(
@@ -344,6 +339,25 @@ class Param:
             "--lb_inter_ratio",
             type=int,
             default=100,
+        )
+
+        # control deleteing columns
+        parser.add_argument(
+            "--if_del_col",
+            type=bool,
+            default=False,
+        )
+
+        parser.add_argument(
+            "--del_col_freq",
+            type=int,
+            default=3,
+        )
+
+        parser.add_argument(
+            "--del_col_stra",
+            type=int,
+            default=1,
         )
 
         return parser

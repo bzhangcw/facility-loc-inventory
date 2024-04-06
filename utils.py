@@ -348,6 +348,107 @@ def scale(pick_instance, datapath, arg):
             # customer_num=10,
             one_period=(True if arg.T == 1 else False),
         )
+
+    elif pick_instance == 17:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=50,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 18:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=100,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 19:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=150,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 20:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=200,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 21:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=250,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 22:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=300,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 23:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=350,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 24:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=400,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 25:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=450,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
+    elif pick_instance == 26:
+        cfg = dict(
+            data_dir=datapath,
+            sku_num=141,
+            plant_num=23,
+            warehouse_num=28,
+            customer_num=500,
+            # customer_num=10,
+            one_period=(True if arg.T == 1 else False),
+        )
     else:
         cfg = dict(data_dir=datapath, one_period=True)
     package = get_data_from_cfg(cfg, arg)

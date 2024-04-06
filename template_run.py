@@ -35,11 +35,19 @@ if __name__ == "__main__":
     arg.lb_inter_ratio = 1
     arg.node_lb_ratio = 1
     arg.unfulfill_sku_unit_cost = 5000
-    arg.conf_label = 1
-    arg.pick_instance = 1
+    arg.conf_label = 8
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
+    # arg.terminate_condition = 1e-5
+    arg.terminate_condition = 0.0
+    arg.new_data = 1
+    arg.num_periods = 20
+    # arg.cg_mip_recover = True
+    # arg.cg_rmp_mip_iter = 20
+    # arg.cg_method_mip_heuristic = 0
+    # arg.pick_instance = 3 #run about 1 min for debugging
+    arg.pick_instance = 7
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(
@@ -48,20 +56,10 @@ if __name__ == "__main__":
             sort_keys=True,
         )
     )
-    arg.new_data = 1
-    arg.num_periods = 20
-    arg.terminate_condition = 1e-4
-    # arg.template_choose = 'us'
-    # arg.demand_type = 1
-    if arg.template_choose == 'sechina':
-        data_dir = 'data/template/sechina/'
-    elif arg.template_choose == 'us':
-        data_dir = 'data/template/us/'
+    # arg.fpath = "data/us_generate_202403122342/"  # easy
+    arg.fpath = "data/us_generate_202403151725/"  # hard
 
-    datapath = template_generate(data_dir, arg.num_periods, arg.demand_type)
-    arg.fpath = datapath
-    print(datapath)
-    dnp_mps_name = f"new_guro_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    dnp_mps_name = f"mps/new_guro_{arg.fpath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.cus_num}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,
@@ -71,15 +69,14 @@ if __name__ == "__main__":
         network,
         node_list,
         *_,
-    ) = utils.scale(arg.pick_instance, datapath, arg)
+    ) = utils.scale(arg.pick_instance, arg.fpath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
     print("----------DNP Model------------")
 
-    # arg.DNP = 1
-    # arg.sku_list = sku_list
+    arg.DNP = 1
+    arg.sku_list = sku_list
     # model = DNP(arg, network)
     # model.modeling()
     # model.model.setParam("Logging", 1)
@@ -91,6 +88,7 @@ if __name__ == "__main__":
     # model.model.write(dnp_mps_name)
     # model.solve()
     print("----------NCS------------")
+    arg.DNP = 0
     init_ray = True
     num_workers = min(os.cpu_count(), 24)
     num_cpus = min(os.cpu_count(), 24)
@@ -110,3 +108,5 @@ if __name__ == "__main__":
     )
     with utils.TimerContext(0, "column generation main routine"):
         np_cg.run()
+        # np_cg.get_solution(data_dir="./out/")
+        # np_cg.watch_col_weight()
