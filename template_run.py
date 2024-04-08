@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # arg.cg_rmp_mip_iter = 20
     # arg.cg_method_mip_heuristic = 0
     # arg.pick_instance = 3 #run about 1 min for debugging
-    arg.pick_instance = 7
+    arg.pick_instance = 8
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(

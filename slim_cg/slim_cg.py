@@ -8,6 +8,7 @@ from coptpy import COPT
 from tqdm import tqdm
 import slim_cg.slim_mip_heur as slp
 import slim_cg.slim_rmp_alg as sla
+import slim_cg.slim_col_alg as slc
 from config.network import *
 from entity import SKU, Customer
 from slim_cg.slim_checker import check_cost_cg
@@ -37,9 +38,6 @@ class NetworkColumnGenerationSlim(object):
         num_workers=8,
         num_cpus=8,
         solver="COPT",
-        if_del_col=False,
-        del_col_freq=3,
-        del_col_stra=1,
     ) -> None:
         if solver == "COPT":
             self.solver_name = "COPT"
@@ -115,10 +113,10 @@ class NetworkColumnGenerationSlim(object):
         self.col_weight_history = {cus.idx: {} for cus in self.customer_list}
 
         # parameters for deleting columns
-        self.if_del_col = if_del_col
-        self.del_col_freq = del_col_freq
-        self.del_col_stra = del_col_stra
-        print(
+        self.if_del_col = self.arg.if_del_col
+        self.del_col_freq = self.arg.del_col_freq
+        self.del_col_stra = self.arg.del_col_stra
+        self._logger.info(
             f"if_del_col: {self.if_del_col}, del_col_freq: {self.del_col_freq}, del_col_stra: {self.del_col_stra}"
         )
 
@@ -304,7 +302,6 @@ class NetworkColumnGenerationSlim(object):
         return backlogged_demand_cost
 
     def update_col_status(self):
-
         if self.del_col_stra == 1:
             # delete columns getting a 0 weight in any iteration
             for customer in self.customer_list:
@@ -370,29 +367,43 @@ class NetworkColumnGenerationSlim(object):
         while True:
             try:
                 bool_early_stop = False
+
                 with utils.TimerContext(self.iter, f"update_rmp"):
+                    # this is the block to update rmp after
+                    #   pricing problems in the end of each iterate.
                     if (
                         self.if_del_col
                         and self.iter % self.del_col_freq == 0
                         and self.iter >= 1
                     ):
+                        # update column status if deleting is used
                         self.update_col_status()
+                    # update the rmp by columns
                     self.update_rmp_by_cols()
+
+                with utils.TimerContext(self.iter, f"generate-extra-cols"):
+                    # use this functional block to generate extra cols
+                    # !!! this must be placed after `update_rmp`
+                    # beyond those from pricing
+                    # update the rmp by columns
+                    # !!!`self.update_rmp_by_cols()` is contained,
+                    # do not invoke again
+                    slc.add_extra_columns(self)
 
                 with utils.TimerContext(
                     self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
                 ):
-                    # self.rmp_model.write(
-                    #     f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
-                    # )
+                    if CG_EXTRA_DEBUGGING:
+                        self.rmp_model.write(
+                            f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
+                        )
                     self.solve_rmp()
                     self._logger.info(
-                        f"rmp solving finished: {self.rmp_model.status}@{self.iter}"
+                        f"rmp solving finished: {self.rmp_model.status} @ iteration:{self.iter}"
                     )
 
-                eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
-                # if self.rmp_model.status != self.solver_constant.OPTIMAL:
-                #     print(self.rmp_model.status, iter)
+                eps_fixed_point = abs(_obj_last_iterate - self.rmp_objval)
+
                 if self.rmp_status == self.solver_constant.INFEASIBLE:
                     self._logger.info("RMP is infeasible")
                     self.rmp_model.write(
@@ -409,10 +420,12 @@ class NetworkColumnGenerationSlim(object):
                     )
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    dual_packs = sla.fetch_dual_info(self) if self.iter >= 1 else None
+                    dual_packs = sla.fetch_dual_info(
+                        self
+                    )  # if self.iter >= 1 else None
 
                 improved = (
-                    eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
+                    eps_fixed_point / (abs(self.rmp_objval) + 1e-3)
                 ) > self.arg.terminate_condition
                 added = False
                 # pre-sort dual variables,
@@ -505,7 +518,7 @@ class NetworkColumnGenerationSlim(object):
                                 self._logger.info("oracle is infeasible")
                                 oracle.model.computeIIS()
                                 oracle.model.write("oracle{}.iis".format(customer))
-                                print("iis written")
+                                self._logger.info("iis written")
 
                 with utils.TimerContext(self.iter, f"generating_columns"):
                     if self.init_ray:
@@ -552,12 +565,17 @@ class NetworkColumnGenerationSlim(object):
                     # modify for parallel
 
                 self.iter += 1
-                _this_log_line = f"k: {self.iter:5d} / {self.max_iter:d} f: {self.rmp_objval:.6e}, eps_df: {eps_fixed_point:.2e}, c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
+                _this_log_line = (
+                    f"k: {self.iter:5d} / {self.max_iter:d} "
+                    f"f: {self.rmp_objval:.6e}, "
+                    f"eps_df: {eps_fixed_point:.2e}/{100*min(10.0, eps_fixed_point/(self.rmp_objval+1e-3)):.1f}%, "
+                    f"c': {np.min(self.red_cost[self.iter - 1, :]):.4e},"
+                )
 
                 self._logger.info(_this_log_line)
-                lp_objective = self.rmp_model.objval
+                lp_objective = self.rmp_objval
 
-                bool_terminate = (
+                bool_terminate = self.iter > 1 and (
                     (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
@@ -598,7 +616,7 @@ class NetworkColumnGenerationSlim(object):
                     self._logger.info("early terminated")
                     break
 
-                _obj_last_iterate = self.rmp_model.objval
+                _obj_last_iterate = self.rmp_objval
 
             except KeyboardInterrupt as _unused_e:
                 self._logger.info("early terminated")
@@ -608,56 +626,56 @@ class NetworkColumnGenerationSlim(object):
         # todo
         # self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
-    def init_rmp_by_cols(self):
-        """
-        update the RMP with new columns
-        """
-        if not self.bool_rmp_update_initialized:
-            # sku_flow
-            self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
-            self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
-            # lambda
-            self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
-            for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
-                edges = self.rmp_oracle.cg_downstream[node]
-                for ee in edges:
-                    c = ee.end
-                    self.delievery_cons_idx[c].append(v)
-
-            for c, v in self.rmp_oracle.cg_binding_constrs_ws.items():
-                self.ws_cons_idx[c] = v
-                # v.lb = 1.0
-                # v.ub = 1.0
-                self.solver.setEqualConstr(v, 1.0)
-
-        for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
-            edges = self.rmp_oracle.cg_downstream[node]
-            for ee in edges:
-                c = ee.end
-                this_col = self.columns[c][-1]
-                self.delievery_cons_coef[c].append(
-                    -this_col["sku_flow"].get((t, ee, k), 0)
-                )
-
-        for c in self.customer_list:
-            _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
-            _cons_coef = [*self.delievery_cons_coef[c], 1]
-            col_idxs = list(zip(_cons_idx, _cons_coef))
-            try:
-                new_col = self.solver.addColumn(_cons_idx, _cons_coef)
-                self.rmp_oracle.variables["column_weights"][
-                    c, self.columns[c].__len__() - 1
-                ] = self.rmp_model.addVar(
-                    obj=self.columns[c][-1]["beta"],
-                    name=f"lambda_{c.idx}_{len(self.columns[c])}",
-                    lb=0.0,
-                    ub=1.0,
-                    vtype=self.solver_constant.CONTINUOUS,
-                    column=new_col,
-                )
-            except Exception as e:
-                print(f"failed at {c}\n\t{col_idxs}")
-                raise e
+    # def init_rmp_by_cols(self):
+    #     """
+    #     update the RMP with new columns
+    #     """
+    #     if not self.bool_rmp_update_initialized:
+    #         # sku_flow
+    #         self.delievery_cons_idx = {customer: [] for customer in self.customer_list}
+    #         self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
+    #         # lambda
+    #         self.ws_cons_idx = {customer: 0 for customer in self.customer_list}
+    #         for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
+    #             edges = self.rmp_oracle.cg_downstream[node]
+    #             for ee in edges:
+    #                 c = ee.end
+    #                 self.delievery_cons_idx[c].append(v)
+    #
+    #         for c, v in self.rmp_oracle.cg_binding_constrs_ws.items():
+    #             self.ws_cons_idx[c] = v
+    #             # v.lb = 1.0
+    #             # v.ub = 1.0
+    #             self.solver.setEqualConstr(v, 1.0)
+    #
+    #     for (node, k, t), v in self.rmp_oracle.cg_binding_constrs.items():
+    #         edges = self.rmp_oracle.cg_downstream[node]
+    #         for ee in edges:
+    #             c = ee.end
+    #             this_col = self.columns[c][-1]
+    #             self.delievery_cons_coef[c].append(
+    #                 -this_col["sku_flow"].get((t, ee, k), 0)
+    #             )
+    #
+    #     for c in self.customer_list:
+    #         _cons_idx = [*self.delievery_cons_idx[c], self.ws_cons_idx[c]]
+    #         _cons_coef = [*self.delievery_cons_coef[c], 1]
+    #         col_idxs = list(zip(_cons_idx, _cons_coef))
+    #         try:
+    #             new_col = self.solver.addColumn(_cons_idx, _cons_coef)
+    #             self.rmp_oracle.variables["column_weights"][
+    #                 c, self.columns[c].__len__() - 1
+    #             ] = self.rmp_model.addVar(
+    #                 obj=self.columns[c][-1]["beta"],
+    #                 name=f"lambda_{c.idx}_{len(self.columns[c])}",
+    #                 lb=0.0,
+    #                 ub=1.0,
+    #                 vtype=self.solver_constant.CONTINUOUS,
+    #                 column=new_col,
+    #             )
+    #         except Exception as e:
+    #             print(f"failed at {c}\n\t{col_idxs}")
+    #             raise e
 
     def update_rmp_by_cols(self):
         if not self.bool_rmp_update_initialized:
@@ -708,10 +726,10 @@ class NetworkColumnGenerationSlim(object):
                         number
                     ]["beta"]
                     if self.columns_status[customer][number] == 1:
-                        cus_col_weights.loc[number, customer.idx] = (
-                            self.solver.getVarValue(
-                                self.variables["column_weights"][customer, number]
-                            )
+                        cus_col_weights.loc[
+                            number, customer.idx
+                        ] = self.solver.getVarValue(
+                            self.variables["column_weights"][customer, number]
                         )
                 else:
                     cus_col_value.loc[number, customer.idx] = 0
@@ -750,10 +768,10 @@ class NetworkColumnGenerationSlim(object):
                 number = number + 1
                 if self.columns[customer][number] != {}:
                     if self.columns_status[customer][number] == 1:
-                        cus_col_weights.loc[number, customer.idx] = (
-                            self.solver.getVarValue(
-                                self.variables["column_weights"][customer, number]
-                            )
+                        cus_col_weights.loc[
+                            number, customer.idx
+                        ] = self.solver.getVarValue(
+                            self.variables["column_weights"][customer, number]
                         )
                 else:
                     cus_col_weights.loc[number, customer.idx] = 0
@@ -789,7 +807,6 @@ class NetworkColumnGenerationSlim(object):
                     )
 
     def watch_col_weight(self):
-
         zero_weight_col_used = {cus.idx: 0 for cus in self.customer_list}
         for cus in self.customer_list:
             for col_idx, col_weight in self.col_weight_history[cus.idx].items():

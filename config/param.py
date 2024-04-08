@@ -344,8 +344,8 @@ class Param:
         # control deleteing columns
         parser.add_argument(
             "--if_del_col",
-            type=bool,
-            default=False,
+            type=int,
+
         )
 
         parser.add_argument(

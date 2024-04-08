@@ -11,6 +11,7 @@ CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
 CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 0))
 CG_RMP_USE_WS_TOL = int(os.environ.get("CG_RMP_USE_WS_TOL", 1e8))
+CG_RMP_USE_PROMOTE = int(os.environ.get("CG_RMP_USE_PROMOTE", 0))
 
 
 class RMPAlg(IntEnum):
@@ -50,7 +51,7 @@ def cleanup(self):
         self._logger.info(f"removed initial skeleton")
 
     if CG_RMP_METHOD != RMPAlg.Direct:
-        # remove cg bindings constraints
+        # relax the cg bindings constraints
         self._logger.info(f"remove the binding blocks in RMP LP blocks")
         for k, v in self.rmp_oracle.cg_binding_constrs.items():
             self.rmp_model.remove(v)
@@ -96,6 +97,8 @@ def update(self):
 
 
 def update_coefficients(self):
+    # collect the most recent column to
+    #   self.delivery_cons_...
     self.delievery_cons_coef = {customer: [] for customer in self.customer_list}
     self.delievery_cons_rows = {customer: [] for customer in self.customer_list}
 
@@ -105,7 +108,9 @@ def update_coefficients(self):
             c = ee.end
             this_col = self.columns[c][-1]
             _val = -this_col["sku_flow"].get((t, ee, k), 0)
-            self.delievery_cons_coef[c].append(_val if abs(_val) > 1e-4 else 0)
+            self.delievery_cons_coef[c].append(
+                round(_val, 3) if abs(_val) > 1e-4 else 0
+            )
             self.delievery_cons_rows[c].append(row)
 
 
@@ -120,6 +125,18 @@ def fetch_dual_info(self):
 # direct method
 #############################################################################################
 def solve_direct(self):
+    # promote delivery
+    if CG_RMP_USE_PROMOTE:
+        self._logger.info(f"solving direct using CG_RMP_USE_PROMOTE mode")
+        dlv = self.rmp_oracle.variables["sku_delivery"]
+        val_promote = -1e3
+        if self.iter <= 1:
+            for _, v in dlv.items():
+                v.setAttr("obj", val_promote)
+        else:
+            for _, v in dlv.items():
+                v.setAttr("obj", 0.0)
+
     if CG_RMP_USE_WS and self.iter > 0:
         if CG_RMP_WS_OPTION == 0:
             _ws_v = self.rmp_vbasis_init
@@ -149,6 +166,10 @@ def solve_direct(self):
 
     self.solver.solve()
     self.rmp_objval = self.rmp_model.objval
+    if CG_RMP_USE_PROMOTE:
+        if self.iter <= 1:
+            self.rmp_objval -= val_promote * sum(v.x for _, v in dlv.items())
+
     if CG_RMP_USE_WS:
         self.rmp_model.setParam("LPWarmStart", 2)
         # Get the variable basis status
