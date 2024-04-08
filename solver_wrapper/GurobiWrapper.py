@@ -27,7 +27,7 @@ class GurobiWrapper(SolverWrapper):
         self.model.optimize()
 
     def addVars(
-        self, *indices, lb=None, ub=None, obj=None, vtype=None, nameprefix=None
+            self, *indices, lb=None, ub=None, obj=None, vtype=None, nameprefix=None
     ):
         vars_arg_dict = {
             "lb": lb,

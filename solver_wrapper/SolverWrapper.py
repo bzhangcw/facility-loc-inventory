@@ -25,7 +25,7 @@ class SolverWrapper:
 
     @abstractmethod
     def addVars(
-        self, *indices, lb=None, ub=None, obj=None, vtype=None, nameprefix=None
+            self, *indices, lb=None, ub=None, obj=None, vtype=None, nameprefix=None
     ):
         pass
 

@@ -20,11 +20,30 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
-   
-    utils.configuration(arg.conf_label, arg)
+    # arg.conf_label = 3
+    # arg.pick_instance = 5
+    arg.backorder = 1
+    arg.cardinality_limit = 10
+    arg.distance_limit = 1000000
+    arg.in_upper_ratio = 0.0000004
+    arg.capacity_ratio = 0.000001
+    arg.lb_end_ratio = 50000
+    arg.lb_inter_ratio = 100000
+    arg.node_lb_ratio = 1000
 
+    utils.configuration(arg.conf_label, arg)
+    # arg.fpath = "data/data_random/"
+    # arg.fpath = "data/data_1219/"
+    # arg.fpath = "data/data_0inv/"
+    # arg.fpath = 'data/_history_/'
+    # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
     datapath = arg.fpath
-    dnp_mps_name = f"allinone_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    if "history" in datapath:
+        arg.new_data = 0
+        dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    else:
+        arg.new_data = 1
+        dnp_mps_name = f"new_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     print(f"save mps name {dnp_mps_name}")
     (
         sku_list,
@@ -60,6 +79,5 @@ if __name__ == "__main__":
     #     model.model.setParam("Threads", 8)
     #     model.model.setParam("TimeLimit", 3600)
     #     model.model.setParam("Crossover", 0)
-        
+
     utils.visualize_timers()
-    

@@ -43,6 +43,7 @@ if __name__ == "__main__":
         node_list,
         *_,
     ) = utils.scale(arg.pick_instance, datapath, arg)
+
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
 

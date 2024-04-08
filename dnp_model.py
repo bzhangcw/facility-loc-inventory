@@ -231,6 +231,8 @@ class DNP:
             "production_variable_lb": dict(),
             "holding_variable_lb": dict(),
             "in_upper": dict(),
+            "cardinality": dict(),
+            "distance":dict()
         }
         self.index_for_dual_var = 0  # void bugs of index out of range
         # for remote
@@ -719,7 +721,7 @@ class DNP:
                 # else:
                 #     print(edge,flow_sum)
                 self.dual_index_for_RMP["transportation_capacity"][
-                    edge
+                    (t, edge)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -738,7 +740,7 @@ class DNP:
                     >= edge.variable_lb * self.variables["select_edge"][t, edge]
                 )
                 self.dual_index_for_RMP["transportation_variable_lb"][
-                    edge
+                   (t, edge)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -756,7 +758,7 @@ class DNP:
                         name=f"node_plant_lb{t, node}",
                     )
                 self.dual_index_for_RMP["production_variable_lb"][
-                    node
+                    (t, node)
                 ] = self.index_for_dual_var
                 self.index_for_dual_var += 1
             if node.type == const.WAREHOUSE:
@@ -770,7 +772,7 @@ class DNP:
                         name=f"node_warehouse_lb{t, node}",
                     )
                     self.dual_index_for_RMP["holding_variable_lb"][
-                        node
+                       (t, node)
                     ] = self.index_for_dual_var
                     self.index_for_dual_var += 1
         return
@@ -783,7 +785,7 @@ class DNP:
             node_sum = self.variables["sku_production"].sum(t, node, "*")
             # capacity constraint
             if node.production_capacity < np.inf:
-                left_capacity = node.production_capacity - self.used_plant_capacity.get(
+                left_capacity = node.production_capacity* self.arg.capacity_node_ratio - self.used_plant_capacity.get(
                     node, 0
                 )
                 bound = self.variables["open"][t, node] if self.bool_covering else 1.0
@@ -792,7 +794,7 @@ class DNP:
                     node_sum <= bound * left_capacity,
                     name=f"node_capacity{t, node}",
                 )
-                self.dual_index_for_RMP["node_capacity"][node] = self.index_for_dual_var
+                self.dual_index_for_RMP["node_capacity"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
 
         return
@@ -804,7 +806,7 @@ class DNP:
                 # capacity constraint
                 if node.inventory_capacity < np.inf:
                     left_capacity = (
-                            node.inventory_capacity
+                            node.inventory_capacity*self.arg.capacity_node_ratio
                             - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
                     bound = (
@@ -818,7 +820,7 @@ class DNP:
                     self.constrs["holding_capacity"][(t, node)] = constr
 
                     self.dual_index_for_RMP["node_capacity"][
-                        node
+                        (t, node)
                     ] = self.index_for_dual_var
                     self.index_for_dual_var += 1
 
@@ -830,9 +832,9 @@ class DNP:
                 in_edges = get_in_edges(self.network, node)
                 inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
+                    inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
                 )
-                self.dual_index_for_RMP["in_upper"][node] = self.index_for_dual_var
+                self.dual_index_for_RMP["in_upper"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
 
@@ -843,6 +845,7 @@ class DNP:
                 used_edge = self.variables["select_edge"].sum(t, in_edges)
                 constr = self.model.addConstr(used_edge <= self.arg.cardinality_limit)
                 self.constrs["cardinality"][(t, node)] = constr
+                self.dual_index_for_RMP["cardinality"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
 
@@ -858,15 +861,42 @@ class DNP:
                         )
                 constr = self.model.addConstr(used_distance <= self.arg.distance_limit)
                 self.constrs["distance"][(t, node)] = constr
+                self.dual_index_for_RMP["distance"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
-        return
+                return
 
     def get_original_objective(self):
-        obj = 0.0
+        # flatten cost
+        # (t, e, k)
+#         for (t,e,k),v in self.variables["sku_flow"].items():
+#             table_transportation = {}
+#             edge = self.network.edges[e]["object"]
+#             # (
+#             #     _,
+#             #     sku_list_with_unit_transportation_cost,
+#             # ) = edge.get_edge_sku_list_with_transportation_cost(
+#             #     t, self.full_sku_list
+#             # )
+
+#             for k in self.full_sku_list:
+#                 if (
+#                         edge.transportation_sku_unit_cost is not None
+#                         and k in edge.transportation_sku_unit_cost
+#                 ):
+#                     transportation_sku_unit_cost = (
+#                         edge.transportation_sku_unit_cost[k]
+#                     )
+#                 else:
+#                     transportation_sku_unit_cost = (
+#                         self.arg.transportation_sku_unit_cost
+#                     )
+#             table_transportation[(t,e,k)] = transportation_sku_unit_cost 
+#             _transportation_df = pd.DataFrame(table_transportation)
+        obj = self.cal_sku_transportation_cost()
         for t in range(self.T):
             # obj = obj + self.cal_sku_producing_cost(t)
             obj = obj + self.cal_sku_holding_cost(t)
-            obj = obj + self.cal_sku_transportation_cost(t)
+            
             if self.arg.backorder:
                 obj = obj + self.cal_sku_backlogged_demand_cost(t)
             else:
@@ -976,7 +1006,10 @@ class DNP:
                 node_holding_cost = 0.0
                 for k in sku_list:
                     if node.holding_sku_unit_cost is not None:
-                        holding_sku_unit_cost = node.holding_sku_unit_cost[k]
+                        if len(node.holding_sku_unit_cost) != 0:
+                            holding_sku_unit_cost = node.holding_sku_unit_cost[k]
+                        else:
+                            holding_sku_unit_cost = self.arg.holding_sku_unit_cost
                     else:
                         holding_sku_unit_cost = self.arg.holding_sku_unit_cost
 
@@ -991,29 +1024,57 @@ class DNP:
 
         return holding_cost
 
-    def cal_sku_transportation_cost(self, t: int):
-        def get_unit_cost():
-            for e in self.network.edges:
-                edge = self.network.edges[e]["object"]
-                (
-                    _,
-                    sku_list_with_unit_transportation_cost,
-                ) = edge.get_edge_sku_list_with_transportation_cost(t, self.full_sku_list)
+#     def cal_sku_transportation_cost(self, cost):
+#         # def get_unit_cost():
+#         #     for e in self.network.edges:
+#         #         edge = self.network.edges[e]["object"]
+#         #         (
+#         #             _,
+#         #             sku_list_with_unit_transportation_cost,
+#         #         ) = edge.get_edge_sku_list_with_transportation_cost(
+#         #             t, self.full_sku_list
+#         #         )
 
-                for k in sku_list_with_unit_transportation_cost:
-                    if (
-                            edge.transportation_sku_unit_cost is not None
-                            and k in edge.transportation_sku_unit_cost
-                    ):
-                        transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
-                    else:
-                        transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
-                    yield edge, k, transportation_sku_unit_cost
+#         #         for k in sku_list_with_unit_transportation_cost:
+#         #             if (
+#         #                     edge.transportation_sku_unit_cost is not None
+#         #                     and k in edge.transportation_sku_unit_cost
+#         #             ):
+#         #                 transportation_sku_unit_cost = (
+#         #                     edge.transportation_sku_unit_cost[k]
+#         #                 )
+#         #             else:
+#         #                 transportation_sku_unit_cost = (
+#         #                     self.arg.transportation_sku_unit_cost
+#         #                 )
+#         #             yield edge, k, transportation_sku_unit_cost
 
-        tr_cost = sum(cost * self.variables["sku_flow"][t, edge, k] for edge, k, cost in get_unit_cost())
-        self.obj["transportation_cost"][t] = tr_cost
+#         tr_cost = sum(
+#             cost[t,e,k] * v
+#             for (t,e,k),v in self.variables["sku_flow"].items()
+#         )
+#         self.obj["transportation_cost"] = tr_cost
 
-        return tr_cost
+#         return tr_cost
+    
+    def cal_sku_transportation_cost(self):
+        transportation_cost = 0
+        for (t,edge,k),v in self.variables["sku_flow"].items():
+            if (
+                    edge.transportation_sku_unit_cost is not None
+                    and k in edge.transportation_sku_unit_cost
+            ):
+                transportation_sku_unit_cost = (
+                    edge.transportation_sku_unit_cost[k]
+                )
+            else:
+                transportation_sku_unit_cost = (
+                    self.arg.transportation_sku_unit_cost
+                )
+            transportation_cost += transportation_sku_unit_cost* v
+        self.obj["transportation_cost"] = transportation_cost
+
+        return transportation_cost
 
     def cal_sku_backlogged_demand_cost(self, t: int):
         backlogged_demand_cost = 0.0
@@ -1113,8 +1174,12 @@ class DNP:
             index=range(len(self.variables["sku_inventory"])),
             columns=["node", "type", "sku", "t", "qty"],
         )
+        if self.arg.backorder:
+            temp = self.variables["sku_backorder"]
+        else:
+            temp = self.variables["sku_slack"]
         node_sku_t_demand_slack = pd.DataFrame(
-            index=range(len(self.variables["sku_demand_slack"])),
+            index=range(len(temp)),
             columns=["node", "type", "sku", "t", "demand", "slack", "fulfill"],
         )
 
@@ -1201,8 +1266,14 @@ class DNP:
                 # for t in node.demand_sku.index:
                 for t in t_list:
                     for k in node.demand_sku[t]:
-                        slack = self.variables["sku_demand_slack"][(t, node, k)].x
+                        # for k in self.full_sku_list:
+                        # demand_list = node.demand[t].keys().to_list()
+                        # print(k,demand_list,k.idx in demand_list)
+                        # if k.idx in demand_list:
                         demand = node.demand[t, k]
+                        # print("DEMAND",demand)
+                        # if demand > 0 :
+                        slack = temp[(t, node, k)].x
                         if preserve_zeros or slack != 0 or demand != 0:
                             node_sku_t_demand_slack.iloc[demand_slack_index] = {
                                 "node": node.idx,

@@ -6,7 +6,6 @@ from typing import Any, Dict, Tuple
 
 import ray
 from coptpy import COPT
-
 import dnp_model
 import ncg.cg_col_helper as cg_col_helper
 from entity import Customer, Plant

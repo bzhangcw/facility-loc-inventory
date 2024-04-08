@@ -70,6 +70,8 @@ def heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand):
 
 
 nbr = heuristic(rollsize_dict, nkind, ninitpat, rollwidth, rolldemand)
+
+
 # for iter in range(100):
 #     print(iter)
 #     heuristic(rollsize_dict, nkind, ninitpat, rollwidth)

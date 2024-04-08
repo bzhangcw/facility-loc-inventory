@@ -3,15 +3,11 @@ import json
 import logging
 import os
 from typing import *
-
 import ray
 from coptpy import COPT
-from gurobipy import GRB
 from tqdm import tqdm
-
 import slim_cg.slim_mip_heur as slp
 import slim_cg.slim_rmp_alg as sla
-import utils
 from config.network import *
 from entity import SKU, Customer
 from slim_cg.slim_checker import check_cost_cg
@@ -19,6 +15,8 @@ from slim_cg.slim_pricing import CG_SUBP_LOGGING, Pricing, PricingWorker
 from slim_cg.slim_rmp_model import DNPSlim
 from solver_wrapper.CoptConstant import CoptConstant
 from solver_wrapper.GurobiConstant import GurobiConstant
+
+import utils
 
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
 CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
@@ -38,9 +36,11 @@ class NetworkColumnGenerationSlim(object):
         init_ray=False,
         num_workers=8,
         num_cpus=8,
-        solver="COPT",
+        solver="COPT"
+        # if_del_col=False,
+        # del_col_freq=3,
+        # del_col_stra=1,
     ) -> None:
-
         if solver == "COPT":
             self.solver_name = "COPT"
             self.solver_constant = CoptConstant
@@ -67,6 +67,10 @@ class NetworkColumnGenerationSlim(object):
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
         self.columns = {}  # Dict[customer, List[tuple(x, y, p)]]
+        self.columns_status = (
+            {}
+        )  # Dict[customer, List[0/1]], 1 for active, 0 for inactive
+        self.columns_to_del = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.obj = dict()
         self.columns_helpers = {}  # Dict[customer, List[tuple(x, y, p)]]
         self.oracles: Dict[Customer, Optional[ray.actor.ActorHandle, Pricing]] = {}
@@ -107,6 +111,16 @@ class NetworkColumnGenerationSlim(object):
             self._logger.info("initializing ray")
             ray.init(num_cpus=num_cpus)
         self.skip_customers = set()
+
+        self.col_weight_history = {cus.idx: {} for cus in self.customer_list}
+
+        # parameters for deleting columns
+        self.if_del_col = self.arg.if_del_col
+        self.del_col_freq = self.arg.del_col_freq
+        self.del_col_stra = self.arg.del_col_stra
+        print(
+            f"if_del_col: {self.if_del_col}, del_col_freq: {self.del_col_freq}, del_col_stra: {self.del_col_stra}"
+        )
 
     def get_subgraph(self):
         """
@@ -289,6 +303,26 @@ class NetworkColumnGenerationSlim(object):
                 )
         return backlogged_demand_cost
 
+    def update_col_status(self):
+
+        if self.del_col_stra == 1:
+            # delete columns getting a 0 weight in any iteration
+            for customer in self.customer_list:
+                # for number in range(self.iter - 1):
+                self.columns_to_del[customer] = []
+                for number in range(self.iter):
+                    if self.columns_status[customer][number] == 1:
+                        lambda_c_n = self.solver.getVarValue(
+                            self.rmp_oracle.variables["column_weights"][
+                                customer, number
+                            ]
+                        )
+                        if lambda_c_n < 1e-6:
+                            self.columns_status[customer][number] = 0
+                            self.columns_to_del[customer].append(number)
+        else:
+            raise NotImplementedError
+
     def run(self):
         """
         The main loop of column generation algorithm
@@ -327,6 +361,7 @@ class NetworkColumnGenerationSlim(object):
                 init_col = self.init_column(customer, var_keys[i])
                 self.columns[customer] = []
                 self.columns[customer].append(init_col)
+                self.columns_status[customer] = [1]
 
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_rmp()
@@ -336,12 +371,20 @@ class NetworkColumnGenerationSlim(object):
             try:
                 bool_early_stop = False
                 with utils.TimerContext(self.iter, f"update_rmp"):
+                    if (
+                        self.if_del_col
+                        and self.iter % self.del_col_freq == 0
+                        and self.iter >= 1
+                    ):
+                        self.update_col_status()
                     self.update_rmp_by_cols()
 
-                with utils.TimerContext(self.iter, f"solve_rmp"):
-                    self.rmp_model.write(
-                        f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
-                    )
+                with utils.TimerContext(
+                    self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"
+                ):
+                    # self.rmp_model.write(
+                    #     f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
+                    # )
                     self.solve_rmp()
                     self._logger.info(
                         f"rmp solving finished: {self.rmp_model.status}@{self.iter}"
@@ -350,7 +393,7 @@ class NetworkColumnGenerationSlim(object):
                 eps_fixed_point = abs(_obj_last_iterate - self.rmp_model.objval)
                 # if self.rmp_model.status != self.solver_constant.OPTIMAL:
                 #     print(self.rmp_model.status, iter)
-                if self.rmp_model.status == self.solver_constant.INFEASIBLE:
+                if self.rmp_status == self.solver_constant.INFEASIBLE:
                     self._logger.info("RMP is infeasible")
                     self.rmp_model.write(
                         f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.lp"
@@ -366,13 +409,11 @@ class NetworkColumnGenerationSlim(object):
                     )
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    dual_packs = (
-                        sla.fetch_dual_info(self) if self.iter >= 1 else None
-                    )
+                    dual_packs = sla.fetch_dual_info(self) if self.iter >= 1 else None
 
                 improved = (
                     eps_fixed_point / (abs(self.rmp_model.objval) + 1e-3)
-                ) > 1e-2
+                ) > self.arg.terminate_condition
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -474,7 +515,12 @@ class NetworkColumnGenerationSlim(object):
                         #     for cc in ray.get(worker.query_all_columns.remote())
                         # ]
                         # correct version, about 2x faster
-                        all_new_cols = ray.get([worker.query_all_columns.remote() for worker in self.worker_list])
+                        all_new_cols = ray.get(
+                            [
+                                worker.query_all_columns.remote()
+                                for worker in self.worker_list
+                            ]
+                        )
                         new_cols = [col for new_col in all_new_cols for col in new_col]
                     else:
                         new_cols = [
@@ -495,6 +541,7 @@ class NetworkColumnGenerationSlim(object):
                         ) or added
                         new_col = new_cols[col_ind]
                         self.columns[customer].append(new_col)
+                        self.columns_status[customer].append(1)
 
                         if _status == self.solver_constant.INTERRUPTED:
                             bool_early_stop = True
@@ -514,7 +561,8 @@ class NetworkColumnGenerationSlim(object):
                     (not improved) or (not added) or self.iter >= self.max_iter
                 )
 
-                if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
+                # if self.arg.cg_mip_recover and not self.rmp_oracle.bool_is_lp:
+                if self.arg.cg_mip_recover:
                     if (int(self.iter) % self.arg.cg_rmp_mip_iter == 0) or (
                         bool_terminate
                     ):
@@ -534,6 +582,10 @@ class NetworkColumnGenerationSlim(object):
                                     _this_log_line
                                     + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
                                 )
+
+                # for debugging
+                # self.get_col_weight("./out/", self.iter)
+                self.get_col_weight_his()
 
                 if self.arg.check_cost_cg:
                     # cost checker
@@ -655,9 +707,12 @@ class NetworkColumnGenerationSlim(object):
                     cus_col_value.loc[number, customer.idx] = self.columns[customer][
                         number
                     ]["beta"]
-                    cus_col_weights.loc[number, customer.idx] = self.solver.getVarValue(
-                        self.variables["column_weights"][customer, number]
-                    )
+                    if self.columns_status[customer][number] == 1:
+                        cus_col_weights.loc[number, customer.idx] = (
+                            self.solver.getVarValue(
+                                self.variables["column_weights"][customer, number]
+                            )
+                        )
                 else:
                     cus_col_value.loc[number, customer.idx] = 0
                     cus_col_weights.loc[number, customer.idx] = 0
@@ -682,6 +737,68 @@ class NetworkColumnGenerationSlim(object):
                 for col in self.columns[customer]:
                     f.write(json.dumps(col, skipkeys=True))
                     f.write("\n")
+
+    def get_col_weight(self, data_dir: str = "./", iter: int = 0):
+        self.variables["column_weights"] = self.rmp_oracle.variables["column_weights"]
+        cus_col_weights = pd.DataFrame(
+            index=range(self.iter + 1), columns=[c.idx for c in self.customer_list]
+        )
+
+        for customer in self.customer_list:
+            # for number in range(self.num_cols):
+            for number in range(self.iter - 1):
+                number = number + 1
+                if self.columns[customer][number] != {}:
+                    if self.columns_status[customer][number] == 1:
+                        cus_col_weights.loc[number, customer.idx] = (
+                            self.solver.getVarValue(
+                                self.variables["column_weights"][customer, number]
+                            )
+                        )
+                else:
+                    cus_col_weights.loc[number, customer.idx] = 0
+        num_cus = len(self.customer_list)
+        cus_col_weights.to_csv(
+            os.path.join(
+                data_dir,
+                "cus" + str(num_cus) + "_col_weight_iter_" + str(iter) + ".csv",
+            ),
+            index=False,
+        )
+
+    def get_col_weight_his(self):
+        """
+        I have an assumption that columns may have preference level between each other
+        Specifically, those columns set as 0 weight may not be used in the future,
+        i.e. with 0 weight, or at least not high weight
+        So I want to check the columns' weight to see if it is true
+        """
+        for customer in self.customer_list:
+            # for number in range(self.num_cols):
+            for number in range(self.iter - 1):
+                # number = number + 1
+                if number not in self.col_weight_history[customer.idx]:
+                    self.col_weight_history[customer.idx][number] = []
+                if self.columns_status[customer][number] == 1:
+                    self.col_weight_history[customer.idx][number].append(
+                        self.solver.getVarValue(
+                            self.rmp_oracle.variables["column_weights"][
+                                customer, number
+                            ]
+                        )
+                    )
+
+    def watch_col_weight(self):
+
+        zero_weight_col_used = {cus.idx: 0 for cus in self.customer_list}
+        for cus in self.customer_list:
+            for col_idx, col_weight in self.col_weight_history[cus.idx].items():
+                if np.mean(col_weight) > 0 and np.min(col_weight) == 0:
+                    zero_weight_col_used[cus.idx] += 1
+
+        # write zero_weight_col_used to csv file
+        df = pd.DataFrame(zero_weight_col_used, index=[0])
+        df.to_csv("./out/zero_weight_col_used.csv", index=False)
 
 
 if __name__ == "__main__":

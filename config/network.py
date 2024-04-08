@@ -10,7 +10,7 @@ from entity import SKU, Customer, Edge, Node, Plant, Warehouse
 
 
 def construct_network(
-    nodes: List[Node], edges: List[Edge], SKUs: List[SKU]
+        nodes: List[Node], edges: List[Edge], SKUs: List[SKU]
 ) -> nx.DiGraph:
     """
     construct a graph from given nodes and edges

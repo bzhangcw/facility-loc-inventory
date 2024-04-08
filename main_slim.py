@@ -1,4 +1,5 @@
 import json
+import os
 
 import gurobipy as gp
 import numpy as np
@@ -23,7 +24,64 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
 if __name__ == "__main__":
     param = Param()
     arg = param.arg
+    # arg.conf_label = 1
+    # arg.pick_instance = 12
+    # arg.backorder = 0
+    arg.T = 7
+    arg.add_cardinality = 0
+    arg.add_distance = 0
+    arg.add_in_upper = 1
+    arg.backend = "gurobi"
+    arg.backorder = 0
+    arg.backorder_sku_unit_cost = 20
+    arg.bool_use_ncg = 1
+    arg.capacity = 1
+    arg.capacity_node_ratio = 1
+    arg.capacity_ratio = 1
+    arg.cardinality = 1
+    arg.cardinality_limit = 2
+    arg.cg_itermax = 10
+    arg.cg_method_mip_heuristic = -1
+    arg.cg_mip_recover = 1
+    arg.cg_rmp_mip_iter = 10
+    arg.check_cost_cg = 0
+    arg.conf_label = 7
+    arg.covering = 1
+    arg.cus_num = 4
+    arg.demand_type = 1
+    arg.distance = 0
+    arg.distance_limit = 1000
+    arg.edge_lb = 1
+    arg.fixed_cost = 1
+    arg.holding_sku_unit_cost = 1
+    arg.in_upper_ratio = 0.54
+    arg.lb_end_ratio = 1
+    arg.lb_inter_ratio = 1
+    arg.new_data = 1
+    arg.node_lb = 0
+    arg.node_lb_ratio = 1
+    arg.num_periods = 30
+    arg.num_skus = 500
+    arg.pick_instance = 8
+    arg.plant_fixed_cost = 200
+    arg.pricing_relaxation = 0
+    arg.production_sku_unit_cost = 1.5
+    arg.terminate_condition = 0.01
+    arg.total_cus_num = 472
+    arg.transportation_sku_unit_cost = 0.01
+    arg.unfulfill_sku_unit_cost = 500
+    arg.use_ray = 1
+    arg.warehouse_fixed_cost = 500
     utils.configuration(arg.conf_label, arg)
+    arg.fpath = 'data/cases/data_0inv/'
+
+    # arg.fpath = "data/data_generate/"
+    # arg.fpath = "data/cases/data_1219/"
+    # arg.fpath = "data/cases/data_1118/"
+    # arg.fpath = "data/data_0inv/"
+    # arg.fpath = 'data/_history_/'
+    # arg.fpath = 'data/_history_/data_0401_0inv.xlsx'
+
     datapath = arg.fpath
 
     print(
@@ -33,6 +91,12 @@ if __name__ == "__main__":
             sort_keys=True,
         )
     )
+    if "history" in datapath:
+        arg.new_data = 0
+        dnp_mps_name = f"history_{datapath.split('/')[-1].split('.')[0]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
+    else:
+        arg.new_data = 1
+        dnp_mps_name = f"new_guro_V5_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.mps"
     (
         sku_list,
         plant_list,
@@ -45,13 +109,32 @@ if __name__ == "__main__":
     ) = utils.scale(arg.pick_instance, datapath, arg)
     utils.add_attr(edge_list, node_list, arg, const)
     network = construct_network(node_list, edge_list, sku_list)
-
+    # pickle.dump(network, open(f"data_{datapath.split('/')[1]}_{arg.T}_{arg.conf_label}@{arg.pick_instance}@{arg.backorder}.pickle", 'wb'))
     solver = arg.backend.upper()
+    print("----------DNP Model------------")
+
+    arg.DNP = 1
+    arg.sku_list = sku_list
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 7200)
+    model.model.setParam("LpMethod", 2)
+    model.model.setParam("Crossover", 0)
+    print(f"save mps name {dnp_mps_name}")
+    model.model.write(dnp_mps_name)
+    # model.model.solve()
+    # print('holding_cost',model.obj['holding_cost'][0].getExpr().getValue())
+    # print('transportation_cost',model.obj['transportation_cost'][0].getExpr().getValue())
+    # print('unfulfilled_demand_cost',model.obj['unfulfilled_demand_cost'][0].getExpr().getValue())
     print("----------NCS------------")
-    # init_ray = arg.use_ray
     init_ray = True
-    num_workers = 22
-    num_cpus = 22
+    num_workers = min(os.cpu_count(), 24)
+    num_cpus = min(os.cpu_count(), 24)
+    utils.logger.info(f"detecting up to {os.cpu_count()} cores")
+    utils.logger.info(f"using     up to {num_cpus} cores")
+    arg.DNP = 0
     np_cg = NCS(
         arg,
         network,

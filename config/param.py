@@ -18,6 +18,10 @@ class Param:
             "Dynamic Network Problem",
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
+        parser.add_argument(
+            "--template_choose",
+            type=str,
+        )
 
         parser.add_argument(
             "--fpath",
@@ -31,6 +35,11 @@ class Param:
             type=int,
             default=1,
         )
+        parser.add_argument(
+            "--new_data",
+            type=bool,
+            default=True,
+        )
 
         parser.add_argument(
             "--sku_list",
@@ -40,11 +49,12 @@ class Param:
         )
 
         parser.add_argument(
-            "--T",
-            type=int,
-            default=7,
-            help='time horizon'
+            "--terminate_condition",
+            type=float,
+            default=1e-2,
+            # required=True,
         )
+        parser.add_argument("--T", type=int, default=7, help="time horizon")
 
         parser.add_argument(
             "--backend",
@@ -105,7 +115,7 @@ class Param:
             help="""
             for debugging only, 
                 check the cost functions of CG
-            """
+            """,
         )
 
         ##############################
@@ -120,7 +130,7 @@ class Param:
              - a config that specify
              - using the same config you can choose different size by
                 `pick_instance` 
-            """
+            """,
         )
 
         parser.add_argument(
@@ -139,7 +149,6 @@ class Param:
                 in principle, pricing should be solved as MIP only.
             """,
         )
-
 
         ##############################
         # 2. fixed cost
@@ -185,7 +194,7 @@ class Param:
         parser.add_argument(
             "--backorder_sku_unit_cost",
             type=float,
-            default=20,
+            default=200,
         )
         ##############################
         # 3. geometric restrictions
@@ -282,6 +291,73 @@ class Param:
             "--cus_num",
             type=int,
             default=4,
+        )
+
+        parser.add_argument(
+            "--num_skus",
+            type=int,
+            default=500,
+        )
+
+        parser.add_argument(
+            "--num_periods",
+            type=int,
+            default=30,
+        )
+
+        parser.add_argument(
+            "--demand_type",
+            type=int,
+            default=1,
+        )
+
+        parser.add_argument(
+            "--capacity_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--capacity_node_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--node_lb_ratio",
+            type=int,
+            default=0.1,
+        )
+
+        parser.add_argument(
+            "--lb_end_ratio",
+            type=int,
+            default=10,
+        )
+
+        parser.add_argument(
+            "--lb_inter_ratio",
+            type=int,
+            default=100,
+        )
+
+        # control deleteing columns
+        parser.add_argument(
+            "--if_del_col",
+            type=bool,
+            default=False,
+        )
+
+        parser.add_argument(
+            "--del_col_freq",
+            type=int,
+            # default=3,
+        )
+
+        parser.add_argument(
+            "--del_col_stra",
+            type=int,
+            # default=1,
         )
 
         return parser

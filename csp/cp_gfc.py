@@ -145,7 +145,7 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
     for idx, j in enumerate(N1):
         temp_x, temp_y = replace_x_y(x, y, t, j, model, version=1)
         e1 += (temp_x + (up1[idx] - lbd) * (1 - temp_y)) * alph[idx] + (
-            lp1[idx] - lbd + ml1[idx] * temp_y
+                lp1[idx] - lbd + ml1[idx] * temp_y
         ) * beta[idx]
     for idx, j in enumerate(N2):
         temp_x, temp_y = replace_x_y(x, y, t, j, model, version=2)
@@ -202,11 +202,11 @@ def eval_cut_c3(model, x, y, t, d, *subsets, **kwargs):
     # 用Corollary 3的有效不等式加进去
     C1dR, C1iR, C2dR, C2iR, L2dR, L2iR, ow, *_ = subsets
     lbd = lbdc = (
-        sum(j.variable_lb for j in C1iR)
-        + sum(j.capacity for j in C1dR)
-        - sum(j.capacity for j in C2iR)
-        - sum(j.variable_lb for j in C2dR)
-        - d
+            sum(j.variable_lb for j in C1iR)
+            + sum(j.capacity for j in C1dR)
+            - sum(j.capacity for j in C2iR)
+            - sum(j.variable_lb for j in C2dR)
+            - d
     )
     if kwargs.get("lbdv") is not None:
         if not (abs(lbdc - kwargs.get("lbdv")) < 1e-1):
