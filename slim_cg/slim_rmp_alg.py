@@ -19,6 +19,7 @@ class RMPAlg(IntEnum):
     ALM = 1
     CPM = 2
     ProxALM = 3
+    Sketchy = 4
 
 
 class ALMConf(object):
@@ -48,25 +49,29 @@ def cleanup(self):
     if vv is not None:
         self.rmp_model.remove(vv)
         self.rmp_oracle.variables["cg_temporary"] = None
-        self._logger.info(f"removed initial skeleton")
+        self._logger.info(f"removed initial simplex constraint for each customer")
 
     if CG_RMP_METHOD != RMPAlg.Direct:
         # relax the cg bindings constraints
-        self._logger.info(f"remove the binding blocks in RMP LP blocks")
+        self._logger.info(f"remove the binding blocks in RMP LP blocks\n relaxing...")
         for k, v in self.rmp_oracle.cg_binding_constrs.items():
             self.rmp_model.remove(v)
 
-    # if CG_RMP_METHOD == RMPAlg.CPM:
-    #     # remove cg bindings constraints
-    #     self._logger.info(f"remove the binding blocks in RMP LP blocks")
-    #     for k, v in self.rmp_oracle.cg_binding_constrs.items():
-    #         self.rmp_model.remove(v)
+    self._logger.info(f"removed initial skeleton")
 
     self.bool_rmp_update_initialized = True
     return None
 
 
 def solve(self):
+    if self.iter == 0:
+        self._logger.info(
+            f"""
+        =======================================================
+        using RMP method: {CG_RMP_METHOD}
+        =======================================================
+"""
+        )
     if CG_RMP_METHOD == RMPAlg.Direct:
         solve_direct(self)
         self.rmp_status = self.rmp_model.status
@@ -78,6 +83,9 @@ def solve(self):
         self.rmp_status = 2
     elif CG_RMP_METHOD == RMPAlg.ProxALM:
         solve_prox_alm(self)
+        self.rmp_status = 2
+    elif CG_RMP_METHOD == RMPAlg.Sketchy:
+        solve_sketchy(self)
         self.rmp_status = 2
     else:
         raise ValueError(f"unknown choice {CG_RMP_METHOD}")
@@ -92,6 +100,8 @@ def update(self):
         update_cpm(self)
     elif CG_RMP_METHOD in {RMPAlg.ProxALM}:
         update_prox_alm(self)
+    elif CG_RMP_METHOD in {RMPAlg.Sketchy}:
+        update_sketchy(self)
     else:
         raise ValueError(f"unknown choice {CG_RMP_METHOD}")
 
@@ -119,6 +129,50 @@ def fetch_dual_info(self):
         return fetch_dual_info_direct(self.rmp_oracle)
     else:
         return fetch_dual_info_matrix_mode(self)
+
+
+def fetch_dual_info_direct(lp_oracle):
+    if lp_oracle.arg.backend.upper() == "COPT":
+        node_dual = {
+            k: v.pi if v is not None else 0
+            for k, v in lp_oracle.cg_binding_constrs.items()
+        }
+        # the dual of weight sum = 1
+        ws_dual = {
+            k: v.pi if v is not None else 0
+            for k, v in lp_oracle.cg_binding_constrs_ws.items()
+        }
+    else:
+        node_dual = {
+            k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
+            for k, v in lp_oracle.cg_binding_constrs.items()
+        }
+        # the dual of weight sum = 1
+        ws_dual = {
+            k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
+            for k, v in lp_oracle.cg_binding_constrs_ws.items()
+        }
+
+    node_vals = np.array(list(node_dual.values()))
+
+    for cc, ccols in lp_oracle.dual_cols.items():
+        lp_oracle.dual_vals[cc] = lp_oracle.broadcast_matrix[ccols, :] @ node_vals
+    return (
+        node_vals,
+        ws_dual,
+        set(lp_oracle.dual_keys.keys()),
+    )
+
+
+def fetch_dual_info_matrix_mode(self):
+    lp_oracle = self.rmp_oracle
+    for cc, ccols in lp_oracle.dual_cols.items():
+        lp_oracle.dual_vals[cc] = lp_oracle.broadcast_matrix[ccols, :] @ self.eta
+    return (
+        self.eta,
+        self.eta_ws,
+        set(lp_oracle.dual_keys.keys()),
+    )
 
 
 #############################################################################################
@@ -233,37 +287,117 @@ def update_direct(self):
             raise e
 
 
-def fetch_dual_info_direct(lp_oracle):
-    if lp_oracle.arg.backend.upper() == "COPT":
-        node_dual = {
-            k: v.pi if v is not None else 0
-            for k, v in lp_oracle.cg_binding_constrs.items()
-        }
-        # the dual of weight sum = 1
-        ws_dual = {
-            k: v.pi if v is not None else 0
-            for k, v in lp_oracle.cg_binding_constrs_ws.items()
-        }
+#############################################################################################
+# sketchy (sketching methods),
+# dimension-reduction on the cross-section z >= Xλ
+#############################################################################################
+def update_sketchy(self):
+    """
+    update the sketchy mode with new columns
+    """
+    update_coefficients(self)
+    if self.iter == 0:
+        self.X = []
+        self.beta = []
+        self.nu = {c: 0 for c in self.customer_list}
+        # size of binding
+        self.m = self.rmp_oracle.cg_binding_constrs_keys.__len__()
+        # dual variable
+        self.eta = None
+        # vectorized z
+        self.z = MVar.fromlist(
+            [
+                self.rmp_oracle.variables["sku_delivery"][t, node, k]
+                for node, k, t in self.rmp_oracle.cg_binding_constrs
+            ]
+        )
+        self.fk = 1e20
+        # solution keeper for z
+        self.zk = np.zeros_like(self.z)
+        # objective coefficient for z
+        self.f = [v.obj for v in self.z]
+        # keep a k-1 th iterate.
+        self.etaz = np.zeros((self.m, 1))
+        # current columns
+        self.lmbd = None
+        self.rmp_model.Params.InfUnbdInfo = 1
+
+    for idb, c in enumerate(self.customer_list):
+        _newcol = np.zeros(self.m)
+        _newcol[self.delievery_cons_rows[c]] = self.delievery_cons_coef[c]
+        if self.iter == 0:
+            self.X.append(scisp.csr_matrix(-_newcol))
+            self.beta.append([self.columns[c][-1]["beta"]])
+        else:
+            self.X[idb] = scisp.vstack([self.X[idb], -_newcol.reshape(1, -1)])
+            self.beta[idb].append(self.columns[c][-1]["beta"])
+
+
+def solve_sketchy(self):
+    # using cutting plane methods to solve rmp
+    # basic
+    _card = self.customer_list.__len__()
+    clst = list(range(_card))
+
+    lp_model = self.rmp_model
+    lp_oracle = self.rmp_oracle
+
+    # alias
+    X = self.X
+    z = self.z
+    f = np.array(self.f)
+    # cost for the columns
+    beta = [np.array(bb) for bb in self.beta]
+
+    # generate a random positive low-rank matrix
+    r = self.m // 10
+    R = scisp.random(r, self.m, 0.005, format="csr")
+    ##################################
+    # declare a sketchy model
+    ##################################
+    _card = self.customer_list.__len__()
+    clst = list(range(_card))
+
+    self._logger.info(f"solving startd, using sketchy mode: {R.shape}")
+    self.var_lmbda = {}
+    self.con_lmbda = {}
+    for idb in clst:
+        Xc = X[idb]
+        self.var_lmbda[idb] = lp_model.addMVar(
+            Xc.shape[0], ub=1.0, obj=beta[idb], name=f"lmbd-{idb}"
+        )
+        # subject to unit simplex
+        self.con_lmbda[idb] = lp_model.addConstr(self.var_lmbda[idb].sum() == 1)
+
+    # calculate the bindings
+    _var_Xl = [self.var_lmbda[idb] @ X[idb] @ R.T for idb in clst]
+    _var_Xls = sum(_var_Xl)
+    self.zsurro_constrs = lp_model.addConstr(R @ z - _var_Xls >= 0)
+
+    _redcost = np.min(self.red_cost[self.iter - 1, :]) if self.iter > 1 else 0
+    if _redcost > -CG_RMP_USE_WS_TOL:
+        print(f"using ws aggressively (last c': {_redcost:.1e})")
+        lp_model.setParam("LPWarmStart", 2)
     else:
-        node_dual = {
-            k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-            for k, v in lp_oracle.cg_binding_constrs.items()
-        }
-        # the dual of weight sum = 1
-        ws_dual = {
-            k: v.getAttr(GRB.Attr.Pi) if v is not None else 0
-            for k, v in lp_oracle.cg_binding_constrs_ws.items()
-        }
+        print(f"using ws as default (last c': {_redcost:.1e})")
+        lp_model.setParam("LPWarmStart", 1)
 
-    node_vals = np.array(list(node_dual.values()))
+    lp_model.optimize()
+    lmbd = [self.var_lmbda[ibd].x for ibd in clst]
+    eta = np.array([v.Pi for v in self.zsurro_constrs])
+    self.rmp_objval = lp_model.objval
+    self.eta_ws = {
+        c: self.con_lmbda[ibd].pi.tolist() for ibd, c in enumerate(self.customer_list)
+    }
+    self.etaz = self.eta
+    self.eta = eta @ R
+    self.lmbd = lmbd
 
-    for cc, ccols in lp_oracle.dual_cols.items():
-        lp_oracle.dual_vals[cc] = lp_oracle.broadcast_matrix[ccols, :] @ node_vals
-    return (
-        node_vals,
-        ws_dual,
-        set(lp_oracle.dual_keys.keys()),
-    )
+    lp_model.remove(self.zsurro_constrs)
+    for idb in clst:
+        lp_model.remove(self.var_lmbda[idb])
+        lp_model.remove(self.con_lmbda[idb])
+    self._logger.info(f"solving finished, using sketchy mode: {R.shape}")
 
 
 #############################################################################################
@@ -409,17 +543,6 @@ def solve_alm(self):
     self.eta = eta
     self.zk = zk
     self.lmbd = lmbd
-
-
-def fetch_dual_info_matrix_mode(self):
-    lp_oracle = self.rmp_oracle
-    for cc, ccols in lp_oracle.dual_cols.items():
-        lp_oracle.dual_vals[cc] = lp_oracle.broadcast_matrix[ccols, :] @ self.eta
-    return (
-        self.eta,
-        self.eta_ws,
-        set(lp_oracle.dual_keys.keys()),
-    )
 
 
 #############################################################################################

@@ -603,7 +603,7 @@ class NetworkColumnGenerationSlim(object):
 
                 # for debugging
                 # self.get_col_weight("./out/", self.iter)
-                self.get_col_weight_his()
+                # self.get_col_weight_his()
 
                 if self.arg.check_cost_cg:
                     # cost checker
