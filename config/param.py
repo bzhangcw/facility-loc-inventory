@@ -8,7 +8,8 @@ class Param:
 
     def __init__(self) -> None:
         parser = self.init_parser()
-        self.arg = parser.parse_args()
+        # self.arg = parser.parse_args()
+        self.arg, unknown = parser.parse_known_args()
 
     def init_parser(self):
         """
@@ -24,7 +25,7 @@ class Param:
         )
 
         parser.add_argument(
-            "--fpath",
+            "--path",
             type=str,
             help="data path",
             default="data/data_0401_0inv.xlsx",
@@ -261,6 +262,13 @@ class Param:
         )
 
         parser.add_argument(
+            "--in_upper_qty",
+            type=int,
+            default=0,
+        )
+    
+
+        parser.add_argument(
             "--edge_lb",
             type=int,
             default=0,
@@ -273,7 +281,7 @@ class Param:
         )
 
         parser.add_argument(
-            "--fixed_cost",
+            "--if_fixed_cost",
             type=int,
             default=0,
         )
@@ -330,6 +338,12 @@ class Param:
         )
 
         parser.add_argument(
+            "--d",
+            type=int,
+            default=150,
+        )
+
+        parser.add_argument(
             "--lb_end_ratio",
             type=int,
             default=10,
@@ -359,6 +373,8 @@ class Param:
             type=int,
             default=1,
         )
+        # parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
+
 
         return parser
 

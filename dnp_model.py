@@ -185,7 +185,7 @@ class DNP:
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
-        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_fixed_cost = self.arg.if_fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
@@ -831,9 +831,13 @@ class DNP:
             if node.type == const.WAREHOUSE:
                 in_edges = get_in_edges(self.network, node)
                 inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
+                # self.constrs["in_upper"][(t, node)] = self.model.addConstr(
+                #     inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
+                # )
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
+                    inbound_sum <= self.arg.in_upper_qty
                 )
+                print('add_in_uppper',node,node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio)
                 self.dual_index_for_RMP["in_upper"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -1071,7 +1075,11 @@ class DNP:
                 transportation_sku_unit_cost = (
                     self.arg.transportation_sku_unit_cost
                 )
-            transportation_cost += transportation_sku_unit_cost* v
+            if edge.distance is not None:
+                transportation_cost += transportation_sku_unit_cost* v * edge.distance
+                print("Edge Cost", edge,transportation_sku_unit_cost*edge.distance)
+            else:
+                transportation_cost += transportation_sku_unit_cost * v
         self.obj["transportation_cost"] = transportation_cost
 
         return transportation_cost

@@ -175,31 +175,47 @@ def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
     # print('Write mps')
     C1dR = {e for idx, e in enumerate(N1) if round(alph[idx].x) == 1}
     C1iR = {e for idx, e in enumerate(N1) if round(beta[idx].x) == 1}
-    C2dR = {e for idx, e in enumerate(N2) if round(gamm[idx].x) == 1}
-    C2iR = {e for idx, e in enumerate(N2) if round(delt[idx].x) == 1}
-    L2C = {idx for idx, e in enumerate(N2) if (gamm[idx].x + delt[idx].x) == 0}
-    l2values = np.array([[v1[idx].x, v2[idx].x, v3[idx].x] for idx, e in enumerate(N2)])
-    vals = l2values.argmin(axis=1)
+    # C2dR = {e for idx, e in enumerate(N2) if round(gamm[idx].x) == 1}
+    # C2iR = {e for idx, e in enumerate(N2) if round(delt[idx].x) == 1}
+    # L2C = {idx for idx, e in enumerate(N2) if (gamm[idx].x + delt[idx].x) == 0}
+    # l2values = np.array([[v1[idx].x, v2[idx].x, v3[idx].x] for idx, e in enumerate(N2)])
+    # vals = l2values.argmin()
+    C2dR = set()
+    C2iR = set() 
     L2iR = set()
     L2dR = set()
     ow = set()
-    for idx, e in enumerate(N2):
-        if idx in L2C:
-            if l2values[idx][0] == l2values[idx][1]:
-                L2iR.add(e)
-            elif vals[idx] == 0:
-                L2dR.add(e)
-            elif vals[idx] == 1:
-                L2iR.add(e)
-            elif vals[idx] == 2:
-                ow.add(e)
+    # for idx, e in enumerate(N2):
+    #     if idx in L2C:
+    #         if l2values[idx][0] == l2values[idx][1]:
+    #             L2iR.add(e)
+    #         elif vals[idx] == 0:
+    #             L2dR.add(e)
+    #         elif vals[idx] == 1:
+    #             L2iR.add(e)
+    #         elif vals[idx] == 2:
+    #             ow.add(e)
     subsets = (C1dR, C1iR, C2dR, C2iR, L2dR, L2iR, ow)
     return md.objval, lbd.x, subsets
 
-
+# def seperation_gcf(model, x, y, t, N1, N2, d, dump=False, verbose=False):
+#     C1dR = {e for idx, e in enumerate(N1) if round(alph[idx].x) == 1}
+#     C1iR = {e for idx, e in enumerate(N1) if round(beta[idx].x) == 1}
+#     # C2dR = {e for idx, e in enumerate(N2) if round(gamm[idx].x) == 1}
+#     # C2iR = {e for idx, e in enumerate(N2) if round(delt[idx].x) == 1}
+#     # L2C = {idx for idx, e in enumerate(N2) if (gamm[idx].x + delt[idx].x) == 0}
+#     # l2values = np.array([[v1[idx].x, v2[idx].x, v3[idx].x] for idx, e in enumerate(N2)])
+#     # vals = l2values.argmin()
+#     C2dR = set()
+#     C2iR = set() 
+#     L2iR = set()
+#     L2dR = set()
+#     ow = set()
+#     subsets = (C1dR, C1iR, C2dR, C2iR, L2dR, L2iR, ow)\
+#     lbd = 0
+#     return lbd, subsets
 # get corollary 3 type flow
 def eval_cut_c3(model, x, y, t, d, *subsets, **kwargs):
-    # 用Corollary 3的有效不等式加进去
     C1dR, C1iR, C2dR, C2iR, L2dR, L2iR, ow, *_ = subsets
     lbd = lbdc = (
             sum(j.variable_lb for j in C1iR)
@@ -216,61 +232,43 @@ def eval_cut_c3(model, x, y, t, d, *subsets, **kwargs):
     if lbd > 0:
         e1 = 0
         for j in C1dR:
-            x_var, y_var = replace_variable(x, y, t, j, model, version=1)
-            # e1 += x.sum(t, j, "*") + max(j.capacity - lbd, 0) * (1 - y[t, j])
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # x_var, y_var = replace_variable(x, y, t, j, model, version=1)
+            # in_edges = get_in_edges(model.network, j.end)
             e1 += x_var + max(j.capacity - lbd, 0) * (1 - y_var)
-
-        # e1 = (
-        #     x.sum(t, C1dR, "*")
-        #     + sum(max(j.capacity - lbd, 0) * (1 - y[t, j])
-        #           for j in C1dR)
-        # )
         e2 = 0
         for j in C1iR:
-            _, y_var = replace_variable(x, y, t, j, model, version=1)
-            # e2 += max(j.variable_lb - lbd, 0) + min(j.variable_lb, lbd) * y_var
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # _, y_var = replace_variable(x, y, t, j, model, version=1)
             l = max(j.variable_lb - lbd, 0)
             m = min(j.variable_lb, lbd) * y_var
             e2 += l + m
-        # e2 = (
-        #     sum((max(j.variable_lb - lbd, 0) + min(j.variable_lb, lbd) * y[t, j])
-        #
-        #         for j in C1iR)
-        #
-        # )
-
-        # e3, e4, e5 = 0 if set R = universe
         e3 = 0
         for j in C2dR:
-            x_var, y_var = replace_variable(x, y, t, j, model, version=1)
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # x_var, y_var = replace_variable(x, y, t, j, model, version=1)
             e3 += x_var + j.variable_lb * (1 - y_var)
-        # e3 = (
-        #    x.sum(t, C2dR, "*")
-        #     + sum(j.variable_lb * (1 - y[t, j]) for j in C2dR)
-        # )
-
         e4 = sum(j.capacity for j in C2iR)
         e5 = 0
         for j in L2dR:
-            x_var, y_var = replace_variable(x, y, t, j, model, version=2)
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # x_var, y_var = replace_variable(x, y, t, j, model, version=2)
             e5 += x_var + max(j.variable_lb - lbd, 0) * y_var
-        # e5 = (
-        #     x.sum(t, L2dR, "*")
-        #     - sum(max(j.variable_lb - lbd, 0) * y[t, j] for j in L2dR)
-        # )
         e6 = 0
         for j in L2iR:
-            _, y_var = replace_variable(x, y, t, j, model, version=2)
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # _, y_var = replace_variable(x, y, t, j, model, version=2)
             e6 += min(j.capacity, lbd) * y_var
-        # e6 = (
-        #     sum(min(j.capacity, lbd) * y[t, j] for j in L2iR)
-        # )
-        # e7 = (
-        #     x.sum(t, ow, "*")
-        # )
         e7 = 0
         for j in ow:
-            x_var, _ = replace_variable(x, y, t, j, model, version=2)
+            x_var = model.variables["sku_flow"].sum(t, j, "*")
+            y_var = model.variables["select_edge"][t, j]
+            # x_var, _ = replace_variable(x, y, t, j, model, version=2)
             e7 += x_var
         expr = e1 + e2 - e3 - e4 - e5 - e6 - e7 - d
         try:
@@ -278,6 +276,5 @@ def eval_cut_c3(model, x, y, t, d, *subsets, **kwargs):
         except:
             cut_value = 0
         bool_voilate = cut_value > 0
-        # print(e3)
         return expr, cut_value, lbd, bool_voilate
     return 0, 0, 0, False

@@ -336,11 +336,16 @@ def update_sketchy(self):
 def solve_sketchy(self):
     # using cutting plane methods to solve rmp
     # basic
+
     _card = self.customer_list.__len__()
     clst = list(range(_card))
 
     lp_model = self.rmp_model
     lp_oracle = self.rmp_oracle
+
+    # turn off crossover
+    lp_model.Params.Crossover = 0
+    lp_model.Params.Method = 2
 
     # alias
     X = self.X
@@ -351,7 +356,9 @@ def solve_sketchy(self):
 
     # generate a random positive low-rank matrix
     r = self.m // 10
-    R = scisp.random(r, self.m, 0.005, format="csr")
+    # Z >= Xλ: m - constraint -> m - dual variable η -> m 
+    # - random matrix R (r x m)
+    R = scisp.random(r, self.m, 5/self.m, format="csr")
     ##################################
     # declare a sketchy model
     ##################################

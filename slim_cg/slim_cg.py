@@ -20,7 +20,7 @@ from solver_wrapper.GurobiConstant import GurobiConstant
 import utils
 
 CG_EXTRA_VERBOSITY = int(os.environ.get("CG_EXTRA_VERBOSITY", 0))
-CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 1))
+CG_EXTRA_DEBUGGING = int(os.environ.get("CG_EXTRA_DEBUGGING", 0))
 
 
 class NetworkColumnGenerationSlim(object):
@@ -388,7 +388,8 @@ class NetworkColumnGenerationSlim(object):
                     # update the rmp by columns
                     # !!!`self.update_rmp_by_cols()` is contained,
                     # do not invoke again
-                    slc.add_extra_columns(self)
+                    # slc.add_extra_columns(self)
+                    pass
 
                 with utils.TimerContext(
                     self.iter, f"solve_rmp_{sla.RMPAlg(sla.CG_RMP_METHOD).name.lower()}"

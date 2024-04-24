@@ -34,13 +34,13 @@ if __name__ == "__main__":
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
-    arg.terminate_condition = 1e-4
+    arg.terminate_condition = 1e-5
     arg.new_data = 1
     arg.num_periods = 20
-    arg.fpath = 'data/sechina_202403151136/'
-    arg.cg_mip_recover = True
-    arg.cg_rmp_mip_iter = 20
-    arg.cg_method_mip_heuristic = 0
+    # arg.fpath = 'data/us_generate_202403151725/'
+    # arg.cg_mip_recover = True
+    # arg.cg_rmp_mip_iter = 20
+    # arg.cg_method_mip_heuristic = 0
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(

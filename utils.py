@@ -80,7 +80,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 0
+        arg.if_fixed_cost = 0
     elif conf_label == 2:
         # Consider the capacity constraint and the edge lower bound constraint
         # 1. Basic constraints
@@ -95,7 +95,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 0
+        arg.if_fixed_cost = 0
     elif conf_label == 3:
         # Consider the capacity constraint, the edge lower bound constraint, add_in_upper constraint
         # 1. Basic constraints
@@ -110,7 +110,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 0
+        arg.if_fixed_cost = 0
     elif conf_label == 4:
         # 1. Basic constraints
         arg.covering = 1
@@ -124,7 +124,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 0
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 0
+        arg.if_fixed_cost = 0
     elif conf_label == 5:
         # 1. Basic constraints
         arg.covering = 1
@@ -138,7 +138,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 0
+        arg.if_fixed_cost = 0
     elif conf_label == 6:
         # 1. Basic constraints
         arg.covering = 1
@@ -152,7 +152,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 1
+        arg.if_fixed_cost = 1
     elif conf_label == 7:
         # 1. Basic constraints
         arg.covering = 1
@@ -166,7 +166,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 0
-        arg.fixed_cost = 1
+        arg.if_fixed_cost = 1
     elif conf_label == 8:
         # 1. Basic constraints
         arg.covering = 1
@@ -180,7 +180,7 @@ def configuration(conf_label, arg):
         arg.cardinality = 1
         # 4. Node and cost
         arg.node_lb = 1
-        arg.fixed_cost = 1
+        arg.if_fixed_cost = 1
 
 
 def scale(pick_instance, datapath, arg):
@@ -458,7 +458,7 @@ def scale(pick_instance, datapath, arg):
 
 def add_attr(edge_list, node_list, arg, const):
     if arg.new_data:
-        data_dir = arg.fpath
+        data_dir = arg.path
     else:
         data_dir = "data/_history_/"
     for e in edge_list:

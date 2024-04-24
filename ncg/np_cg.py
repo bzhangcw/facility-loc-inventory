@@ -5,14 +5,14 @@ import os
 import pickle
 from typing import *
 from typing import List
-import coptpy
-import coptpy as cp
+# import coptpy
+# import coptpy as cp
 import networkx as nx
 import numpy as np
 import pandas as pd
 import ray
-from coptpy import COPT
-from gurobipy import GRB
+# from coptpy import COPT
+# from gurobipy import GRB
 from tqdm import tqdm
 import const as const
 import dnp_model
