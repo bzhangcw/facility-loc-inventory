@@ -214,7 +214,7 @@ def solve_direct(self):
         # set the modified basis status back to the model
         self.rmp_model.setAttr("VBasis", self.rmp_model.getVars(), _ws_v)
         self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
-        self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
+        # self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
 
     self.rmp_model.setParam(self.solver_constant.Param.LpMethod, 4)
 
@@ -276,11 +276,18 @@ def update_direct(self):
                 column=new_col,
             )
             # by ljs
-            if self.if_del_col and self.iter % 3 == 0 and self.iter >= 1:
-                for num in self.columns_to_del[c]:
-                    self.rmp_model.remove(
-                        self.rmp_oracle.variables["column_weights"][c, num]
-                    )
+            # if self.if_del_col and self.iter % 5 == 0 and self.iter >= 1:
+            #     for num in self.columns_to_del[c]:
+            #         self.rmp_model.remove(
+            #             self.rmp_oracle.variables["column_weights"][c, num]
+            #         )
+            
+            if self.if_del_col and self.iter >= 1:
+                if self.columns_to_del != {}:
+                    for num in self.columns_to_del[c]:
+                        self.rmp_model.remove(
+                            self.rmp_oracle.variables["column_weights"][c, num]
+                        )
 
         except Exception as e:
             print(f"failed at {c}\n\t{col_idxs}")

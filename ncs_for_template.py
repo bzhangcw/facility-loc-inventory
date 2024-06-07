@@ -30,17 +30,24 @@ if __name__ == "__main__":
     arg.node_lb_ratio = 1
     arg.unfulfill_sku_unit_cost = 5000
     arg.conf_label = 7
-    arg.pick_instance = 8
+    arg.pick_instance = 2
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
     arg.terminate_condition = 1e-5
     arg.new_data = 1
-    arg.num_periods = 20
-    # arg.fpath = 'data/us_generate_202403151725/'
+    arg.num_periods = 10
+    arg.fpath = 'data/us_generate_202403151725/'
     # arg.cg_mip_recover = True
     # arg.cg_rmp_mip_iter = 20
     # arg.cg_method_mip_heuristic = 0
+    arg.if_del_col = 1
+    arg.del_col_freq = 3
+    arg.del_col_stra = 1
+    # determine the column deletion algorithm
+    arg.del_col_alg = 4
+    arg.check_number = 3
+    arg.column_pool_len = 20
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(
@@ -83,3 +90,4 @@ if __name__ == "__main__":
     )
     with utils.TimerContext(0, "column generation main routine"):
         np_cg.run()
+        np_cg.get_solution('data/')

@@ -83,7 +83,7 @@ class DNPSlim(DNP):
         self.variables = dict()  # variables
         self.constrs = dict()  # constraints
         self.obj = dict()  # objective
-        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_fixed_cost = self.arg.if_fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper

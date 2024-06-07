@@ -1,0 +1,36 @@
+{"sku_flow": {}, "unfulfilled_demand_cost": {"0": 35180000.0, "1": 9240000.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0}, "beta": 44420000.0, "transportation_cost": 0, "reduced_cost": 44420000.0}
+{"beta": 683.3283763338085, "objval": 683.3283763338085, "status": 2, "sku_flow": {}, "reduced_cost": 683.3283763338085}
+{"beta": 708.1318439926808, "objval": -44419136.4180532, "status": 2, "sku_flow": {}, "reduced_cost": -44419136.4180532}
+{"beta": 709.831105574332, "objval": -14.632208222644067, "status": 2, "sku_flow": {}, "reduced_cost": -14.632208222644067}
+{"beta": 689.1684229158611, "objval": -8.297075640814796, "status": 2, "sku_flow": {}, "reduced_cost": -8.297075640814796}
+{"beta": 684.2562177468795, "objval": -4.315935066687075, "status": 2, "sku_flow": {}, "reduced_cost": -4.315935066687075}
+{"beta": 689.029507034619, "objval": -4.118380913197939, "status": 2, "sku_flow": {}, "reduced_cost": -4.118380913197939}
+{"beta": 698.8988689500077, "objval": -2.9784716878039035, "status": 2, "sku_flow": {}, "reduced_cost": -2.9784716878039035}
+{"beta": 691.1835696015295, "objval": -2.047892137262693, "status": 2, "sku_flow": {}, "reduced_cost": -2.047892137262693}
+{"sku_flow": {}, "unfulfilled_demand_cost": {"0": 37295000.0, "1": 13430000.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0}, "beta": 50725000.0, "transportation_cost": 0, "reduced_cost": 50725000.0}
+{"beta": 1071.957598564242, "objval": 1071.957598564242, "status": 2, "sku_flow": {}, "reduced_cost": 1071.957598564242}
+{"beta": 1160.2268306518708, "objval": -50723695.87609714, "status": 2, "sku_flow": {}, "reduced_cost": -50723695.87609714}
+{"beta": 1147.6564991812381, "objval": -49.34757441464512, "status": 2, "sku_flow": {}, "reduced_cost": -49.34757441464512}
+{"beta": 1120.487200556118, "objval": -20.7700246691129, "status": 2, "sku_flow": {}, "reduced_cost": -20.7700246691129}
+{"beta": 1102.7666978860764, "objval": -30.72820171338344, "status": 2, "sku_flow": {}, "reduced_cost": -30.72820171338344}
+{"beta": 1139.2942856183595, "objval": -9.29326667241321, "status": 2, "sku_flow": {}, "reduced_cost": -9.29326667241321}
+{"beta": 1152.386544338001, "objval": -9.852905016368368, "status": 2, "sku_flow": {}, "reduced_cost": -9.852905016368368}
+{"beta": 1134.7411819738036, "objval": -8.812961215906853, "status": 2, "sku_flow": {}, "reduced_cost": -8.812961215906853}
+{"sku_flow": {}, "unfulfilled_demand_cost": {"0": 34455000.0, "1": 8650000.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0}, "beta": 43105000.0, "transportation_cost": 0, "reduced_cost": 43105000.0}
+{"beta": 542.1787265593482, "objval": 542.1787265593482, "status": 2, "sku_flow": {}, "reduced_cost": 542.1787265593482}
+{"beta": 558.0806450743422, "objval": -43104262.3686856, "status": 2, "sku_flow": {}, "reduced_cost": -43104262.3686856}
+{"beta": 545.125656093989, "objval": -19.4972207334348, "status": 2, "sku_flow": {}, "reduced_cost": -19.4972207334348}
+{"beta": 546.8103624852341, "objval": -9.739550076036153, "status": 2, "sku_flow": {}, "reduced_cost": -9.739550076036153}
+{"beta": 548.4879486786934, "objval": -1.5033576126206754, "status": 2, "sku_flow": {}, "reduced_cost": -1.5033576126206754}
+{"beta": 546.2732193341988, "objval": -1.2520790815270857, "status": 2, "sku_flow": {}, "reduced_cost": -1.2520790815270857}
+{"beta": 546.2732193341988, "objval": -1.854274205470574e-05, "status": 2, "sku_flow": {}, "reduced_cost": -1.854274205470574e-05}
+{"beta": 546.2732193341988, "objval": -1.5565667695227603e-05, "status": 2, "sku_flow": {}, "reduced_cost": -1.5565667695227603e-05}
+{"sku_flow": {}, "unfulfilled_demand_cost": {"0": 27665000.0, "1": 11520000.0, "2": 0.0, "3": 0.0, "4": 0.0, "5": 0.0, "6": 0.0}, "beta": 39185000.0, "transportation_cost": 0, "reduced_cost": 39185000.0}
+{"beta": 254.7887760334023, "objval": 254.78877603340237, "status": 2, "sku_flow": {}, "reduced_cost": 254.78877603340237}
+{"beta": 303.6600166031076, "objval": -39184555.68613074, "status": 2, "sku_flow": {}, "reduced_cost": -39184555.68613074}
+{"beta": 291.6650993592665, "objval": -22.373906565822438, "status": 2, "sku_flow": {}, "reduced_cost": -22.373906565822438}
+{"beta": 294.18850370246355, "objval": -6.02903984533225, "status": 2, "sku_flow": {}, "reduced_cost": -6.02903984533225}
+{"beta": 289.94171685664935, "objval": -8.355840188127331, "status": 2, "sku_flow": {}, "reduced_cost": -8.355840188127331}
+{"beta": 287.1027192683988, "objval": -7.668509367594027, "status": 2, "sku_flow": {}, "reduced_cost": -7.668509367594027}
+{"beta": 284.3804641095353, "objval": -5.433271549687731, "status": 2, "sku_flow": {}, "reduced_cost": -5.433271549687731}
+{"beta": 287.59683116973116, "objval": -2.0098992086528824, "status": 2, "sku_flow": {}, "reduced_cost": -2.0098992086528824}

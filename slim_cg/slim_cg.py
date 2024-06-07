@@ -54,6 +54,8 @@ class NetworkColumnGenerationSlim(object):
             f"the CG algorithm chooses verbosity at CG_EXTRA_VERBOSITY: {CG_EXTRA_DEBUGGING}"
         )
         self.arg = arg
+        self.check_number = self.arg.check_number
+        self.del_col_alg = self.arg.del_col_alg
         self.network = network
         self.full_sku_list = (
             full_sku_list
@@ -78,7 +80,7 @@ class NetworkColumnGenerationSlim(object):
         self.vars_basis, self.cons_basis = None, None
         self.bool_edge_lb = self.arg.edge_lb
         self.bool_node_lb = self.arg.node_lb
-        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_fixed_cost = self.arg.if_fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
@@ -109,6 +111,7 @@ class NetworkColumnGenerationSlim(object):
             self._logger.info("initializing ray")
             ray.init(num_cpus=num_cpus)
         self.skip_customers = set()
+        self.column_weights_rmp = {}
 
         self.col_weight_history = {cus.idx: {} for cus in self.customer_list}
 
@@ -116,6 +119,7 @@ class NetworkColumnGenerationSlim(object):
         self.if_del_col = self.arg.if_del_col
         self.del_col_freq = self.arg.del_col_freq
         self.del_col_stra = self.arg.del_col_stra
+        self.column_pool_len = self.arg.column_pool_len
         self._logger.info(
             f"if_del_col: {self.if_del_col}, del_col_freq: {self.del_col_freq}, del_col_stra: {self.del_col_stra}"
         )
@@ -301,8 +305,26 @@ class NetworkColumnGenerationSlim(object):
                 )
         return backlogged_demand_cost
 
+    # 初始化一个字典来记录每个customer和number在前n次iter中的值
+    def filter_customers(self):
+        # 初始化一个字典来记录每个customer和number在前n次iter中的值
+        result = {}
+        # 遍历前n次iter
+        for iter in range(self.iter-self.arg.check_number,self.iter):
+            for customer, numbers in self.column_weights_rmp.get(iter, {}).items():
+                for number, value in numbers.items():
+                    if (customer, number) not in result:
+                        result[(customer, number)] = []
+                    result[(customer, number)].append(value)
+
+        # 筛选出所有前n次iter值都为0的customer和number
+        filtered_result = [(customer, number) for (customer, number), values in result.items() if all(v < 1e-6 for v in values)]
+
+        return filtered_result
+
     def update_col_status(self):
         if self.del_col_stra == 1:
+            self.column_weights_rmp = {}
             # delete columns getting a 0 weight in any iteration
             for customer in self.customer_list:
                 # for number in range(self.iter - 1):
@@ -319,7 +341,55 @@ class NetworkColumnGenerationSlim(object):
                             self.columns_to_del[customer].append(number)
         else:
             raise NotImplementedError
+        
 
+    def update_col_status_2(self):
+        if self.del_col_stra == 1:
+            for customer in self.customer_list:
+                # for number in range(self.iter - 1):
+                self.columns_to_del[customer] = []
+            filtered_result = self.filter_customers()
+            print(filtered_result)
+            for customer,number in filtered_result:
+                self.columns_status[customer][number] = 0
+                self.columns_to_del[customer].append(number)
+        else:
+            raise NotImplementedError
+       
+    def update_col_status_3(self):
+        if self.del_col_stra == 1:
+            for customer in self.customer_list:
+                # for number in range(self.iter - 1):
+                self.columns_to_del[customer] = []
+            mean = self.red_cost[self.iter-1,:].mean()
+            for customer in self.customer_list:
+                for number in range(self.iter):
+                    if self.columns[customer][number]['reduced_cost'] > mean:
+                        self.columns_status[customer][number] = 0
+                        self.columns_to_del[customer].append(number)
+        else:
+            raise NotImplementedError
+
+    def update_col_status_4(self):
+        if self.del_col_stra == 1:
+            for customer in self.customer_list:
+                # for number in range(self.iter - 1):
+                self.columns_to_del[customer] = []
+            # 收集所有 (customer, number, reduced_cost) 组合
+            all_combinations = []
+            for customer, numbers in self.columns.items():
+                for number, values in numbers.items():
+                    all_combinations.append((customer, number, values['reduced_cost']))
+            # 按 reduced_cost 排序
+            sorted_combinations = sorted(all_combinations, key=lambda x: x[2])
+            filtered_combinations = sorted_combinations[self.arg.column_pool_len:]
+            filtered_result = [(customer, number) for customer, number, reduced_cost in filtered_combinations]
+            for customer, number in filtered_result:
+                self.columns_status[customer][number] = 0
+                self.columns_to_del[customer].append(number)
+        else:
+            raise NotImplementedError
+        
     def run(self):
         """
         The main loop of column generation algorithm
@@ -357,6 +427,7 @@ class NetworkColumnGenerationSlim(object):
             for customer, i in zip(self.customer_list, range(self.cus_num)):
                 init_col = self.init_column(customer, var_keys[i])
                 self.columns[customer] = []
+                init_col['reduced_cost'] = init_col['beta']
                 self.columns[customer].append(init_col)
                 self.columns_status[customer] = [1]
 
@@ -371,13 +442,22 @@ class NetworkColumnGenerationSlim(object):
                 with utils.TimerContext(self.iter, f"update_rmp"):
                     # this is the block to update rmp after
                     #   pricing problems in the end of each iterate.
-                    if (
+                    if self.del_col_alg == 4 and len(self.columns)>=self.arg.column_pool_len:
+                        self.update_col_status_4()
+                    elif (
                         self.if_del_col
                         and self.iter % self.del_col_freq == 0
                         and self.iter >= 1
                     ):
                         # update column status if deleting is used
-                        self.update_col_status()
+                        if self.del_col_alg == 1:
+                            self.update_col_status()
+                        elif self.del_col_alg == 2:
+                            self.update_col_status_2()
+                        elif self.del_col_alg == 3:
+                            self.update_col_status_3()
+
+                        # self.update_col_status()
                     # update the rmp by columns
                     self.update_rmp_by_cols()
 
@@ -399,6 +479,18 @@ class NetworkColumnGenerationSlim(object):
                             f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mps"
                         )
                     self.solve_rmp()
+                    # add recording for weights in the rmp
+                    if self.del_col_alg == 2:
+                        self.column_weights_rmp[self.iter] = {}
+                        for customer in self.customer_list:
+                            self.column_weights_rmp[self.iter][customer] = {}
+                            for number in range(self.iter):
+                                if self.columns_status[customer][number] == 1:
+                                    self.column_weights_rmp[self.iter][customer][number] = self.solver.getVarValue(
+                                        self.rmp_oracle.variables["column_weights"][
+                                            customer, number
+                                        ]
+                                    )
                     self._logger.info(
                         f"rmp solving finished: {self.rmp_model.status} @ iteration:{self.iter}"
                     )
@@ -554,6 +646,7 @@ class NetworkColumnGenerationSlim(object):
                             or dual_packs is None
                         ) or added
                         new_col = new_cols[col_ind]
+                        new_col['reduced_cost'] = _redcost 
                         self.columns[customer].append(new_col)
                         self.columns_status[customer].append(1)
 

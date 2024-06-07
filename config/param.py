@@ -373,6 +373,18 @@ class Param:
             type=int,
             default=1,
         )
+
+        parser.add_argument(
+            "--check_number",
+            type=int,
+            default=3,
+        )
+
+        parser.add_argument(
+            "--del_col_alg",
+            type=int,
+            default=3,
+        )
         # parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
 
 

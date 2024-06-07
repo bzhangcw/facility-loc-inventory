@@ -458,7 +458,7 @@ def scale(pick_instance, datapath, arg):
 
 def add_attr(edge_list, node_list, arg, const):
     if arg.new_data:
-        data_dir = arg.path
+        data_dir = arg.fpath
     else:
         data_dir = "data/_history_/"
     for e in edge_list:

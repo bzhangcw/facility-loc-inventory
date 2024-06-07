@@ -229,7 +229,7 @@ class Pricing(object):
         # self.bool_capacity = bool_capacity
         # self.bool_fixed_cost = bool_fixed_cost
         # self.bool_covering = bool_covering
-        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_fixed_cost = self.arg.if_fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
