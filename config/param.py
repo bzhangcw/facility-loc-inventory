@@ -385,9 +385,19 @@ class Param:
             type=int,
             default=3,
         )
+        parser.add_argument(
+            "--column_pool_len",
+            type=int,
+            default=3,
+        )
+        
         # parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
 
-
+        parser.add_argument(
+            "--rounding_heuristic",
+            type=bool,
+            default=False,
+        )
         return parser
 
 

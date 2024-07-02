@@ -249,6 +249,18 @@ class DNPSlim(DNP):
         else:
             for node in self.network.nodes:
                 yield node
+    
+    def _iterate_edges(self):
+        for e in self.network.edges:
+            edge = self.network.edges[e]["object"]
+            if edge.end.type == const.CUSTOMER:
+                yield edge
+
+    # 更改点1 iterate node约束
+    def _iterate_nodes(self):
+        for n in self.network.nodes:
+            if n.type != const.CUSTOMER:
+                yield n
 
     def add_vars(self):
         """
@@ -319,7 +331,36 @@ class DNPSlim(DNP):
                 "nameprefix": "yk",
                 "index": "(t, plant, k)",
             }
-
+        
+        if self.arg.rounding_heuristic:
+            self.var_types["rounding_slack_edge"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "se",
+                "index": "(t, edge)",
+                        }
+            self.var_types["rounding_slack_edge_k"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "sek",
+                "index": "(t, edge,k)",
+                        }
+            self.var_types["rounding_slack_node"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "sn",
+                "index": "(t, node)",
+                }
+            self.var_types["rounding_slack_node_k"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "snk",
+                "index": "(t, node,k)",
+                }
         # generate index tuple
         idx = dict()
         for vt in self.var_types.keys():
@@ -331,9 +372,7 @@ class DNPSlim(DNP):
                 # select edge (i,j) at t
                 if self.bool_covering:
                     idx["select_edge"].append((t, edge))
-
                 sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
-
                 for k in sku_list:
                     # sku k select edge (i,j) at t
                     if self.bool_covering:
@@ -346,6 +385,8 @@ class DNPSlim(DNP):
                 # open node i at t
                 if self.bool_covering:
                     idx["open"].append((t, node))
+                # if self.arg.rounding_heuristic:
+                #     idx["rounding_slack_node"].append((t, node))
 
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
 
@@ -354,6 +395,8 @@ class DNPSlim(DNP):
                         # sku k produced on node i at t
                         if self.bool_covering:
                             idx["sku_open"].append((t, node, k))
+                        # if self.arg.rounding_heuristic:
+                        #     idx["rounding_slack_node_k"].append((t, node,k))
                         # amount of sku k produced on node i at t
                         idx["sku_production"].append((t, node, k))
 
@@ -361,6 +404,17 @@ class DNPSlim(DNP):
                         # amount of sku k stored on node i at t
                         idx["sku_inventory"].append((t, node, k))
                         idx["sku_delivery"].append((t, node, k))
+            if self.arg.rounding_heuristic: 
+                for edge in self._iterate_edges():
+                    idx["rounding_slack_edge"].append((t, edge))
+                    for k in self.full_sku_list:
+                        idx["rounding_slack_edge_k"].append((t, edge,k))                    
+
+                for node in self._iterate_nodes():
+                    idx["rounding_slack_node"].append((t, node))
+                    # sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                    # for k in sku_list:
+                    #     idx["rounding_slack_edge_k"].append((t, edge,k))                    
 
         # for initializaiton in CG
         self.var_idx = {}
@@ -436,6 +490,115 @@ class DNPSlim(DNP):
                 if v.varname.startswith("lambda"):
                     v.setAttr(GRB.Attr.VType, self.solver_constant.CONTINUOUS)
 
+    def rounding_method(self,columns,customer_list,iter_num):
+        # for t in range(self.arg.T):
+            ### Step 1. add constraints(或许考虑customer的也应该加上去)
+        self.add_rounding_constraints(columns,customer_list,iter_num)
+        # Step 2. 改变目标函数 加惩罚项
+        self.rounding_objective()
+        return
+    
+    def rounding_objective(self):
+        # obj = self.original_obj + self.rounding_penalty_objective()
+        # self.original_obj = self.get_original_objective()
+        # obj = self.original_obj 
+
+        # obj = self.get_model_objval() # 这样得到的是原来的obj
+        obj = self.get_model_objval() + self.rounding_penalty_objective()
+        # self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+        self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+
+    def rounding_penalty_objective(self):
+        obj = 0.0
+        p1,p2,p3 = 10,20,15
+        for t in range(self.arg.T):
+            # for e, edge in self._iterate_no_c_edges():
+            #     obj += np.random.uniform(0, p1)*self.variables["rounding_slack_edge"][t, edge]*(1-self.variables["rounding_slack_edge"][t, edge])
+            #     sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+            #     for k in sku_list:
+            #         obj += np.random.uniform(0, p2)*self.variables["rounding_slack_edge_k"][t, edge, k]*(1-self.variables["rounding_slack_edge_k"][t, edge, k])
+            # for node in self._iterate_no_c_nodes():
+            #     obj += np.random.uniform(0, p3)*self.variables["rounding_slack_node"][t, node]*(1-self.variables["rounding_slack_node"][t, node])
+            #     sku_list = node.get_node_sku_list(t, self.full_sku_list)
+            #     if node.type == const.PLANT: 
+            #         for k in sku_list:
+            #             obj += np.random.uniform(0, p4)*self.variables["rounding_slack_node_k"][t, node, k]*(1-self.variables["rounding_slack_node_k"][t, node,k])
+            for edge in self._iterate_edges():
+                obj += np.random.uniform(0, p1)*self.variables["rounding_slack_edge"][t, edge]
+                sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+                for k in sku_list:
+                    obj += np.random.uniform(0, p2)*self.variables["rounding_slack_edge_k"][t, edge, k]
+            for node in self._iterate_nodes():
+                obj += np.random.uniform(0, p3)*self.variables["rounding_slack_node"][t, node]              
+        return obj
+
+    def add_rounding_constraints(self,columns,customer_list,iter_num):
+        # 对pricing问题的edge加
+        for customer in customer_list:
+            for number in range(iter_num-1):
+                for (key,value) in columns[customer][number]["select_edge"].items():
+                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_edge"][key] == 1)
+                    self.constrs["rounding_relationship"]["slack_edge"][
+                    key
+                    ] = constr
+                for (key,value) in columns[customer][number]["sku_select_edge"].items():
+                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_edge_k"][key] == 1)
+                    self.constrs["rounding_relationship"]["slack_edge_k"][
+                    key
+                    ] = constr
+                for (key,value) in columns[customer][number]["open"].items():
+                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_node"][key] == 1)
+                    self.constrs["rounding_relationship"]["slack_node"][
+                    key
+                    ] = constr
+        # for edge in self._iterate_edges():
+        #     sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+
+        #     constr = self.solver.addConstr(
+        #         self.variables["select_edge"][t, edge] + self.variables["rounding_slack_edge"][t, edge]
+        #         == 1
+        #     )
+        #     self.constrs["rounding_relationship"]["slack_edge"][
+        #             (t, edge)
+        #         ] = constr
+
+        #     for k in sku_list:
+        #         constr = self.solver.addConstr(
+        #             self.variables["sku_select_edge"][t, edge, k] + self.variables["rounding_slack_edge_k"][t, edge,k]
+        #             == 1
+        #         )
+        #         self.constrs["rounding_relationship"]["slack_edge_k"][
+        #             (t, edge, k)
+        #         ] = constr
+
+        # for node in self._iterate_no_c_nodes():
+        #     sku_list = node.get_node_sku_list(t, self.full_sku_list)
+        #     constr = self.solver.addConstr(
+        #             self.variables["open"][t, node] + self.variables["rounding_slack_node"][t, node] == 1
+        #         )
+        #     self.constrs["rounding_relationship"]["slack_node"][(t, node)] = constr
+        #     if node.type == const.PLANT: 
+        #         for k in sku_list:
+        #             constr = self.solver.addConstr(
+        #                     self.variables["sku_open"][t, node, k] + self.variables["rounding_slack_node_k"][t, node,k] == 1
+        #                 )
+        #             self.constrs["rounding_relationship"]["slack_node_k"][(t, node, k)] = constr
+
+    def reset_to_origin(self):
+        # Step 1. remove constraints
+        to_remove = [
+            "slack_edge",
+            "slack_edge_k",
+            "slack_node",
+            "slack_node_k"
+        ]
+        for k in to_remove:
+            for cc in self.constrs["rounding_relationship"][k].values():
+                self.model.remove(cc)
+        # Step 2. reset the constraints
+        self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+
+        return 
     def add_constraints(self):
         if self.bool_capacity:
             self.constr_types = {
@@ -464,12 +627,23 @@ class DNPSlim(DNP):
             self.constr_types["holding_variable_lb"] = {"index": "(t, node)"}
         if self.add_in_upper:
             self.constr_types["in_upper"] = {"index": "(t, node)"}
+        if self.arg.rounding_heuristic:
+            rounding_constr_types = {
+                "slack_edge": {"index": "(t, edge)"},
+                "slack_edge_k": {"index": "(t, edge, k)"},
+                "slack_node": {"index": "(t, node)"},
+                "slack_node_k": {"index": "(t, node, k)"}
+            }
+            self.constr_types["rounding_relationship"] = rounding_constr_types
 
         for constr in self.constr_types.keys():
             self.constrs[constr] = dict()
         if self.bool_covering:
             for constr in self.constr_types["open_relationship"].keys():
                 self.constrs["open_relationship"][constr] = dict()
+        if self.arg.rounding_heuristic:
+            for constr in self.constr_types["rounding_relationship"].keys():
+                self.constrs["rounding_relationship"][constr] = dict()
 
         # for t in tqdm(range(self.T)):
         for t in range(self.T):

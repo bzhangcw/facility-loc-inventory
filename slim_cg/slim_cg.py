@@ -259,9 +259,12 @@ class NetworkColumnGenerationSlim(object):
     #     _vals["sku_flow"] = {
     #         k: 0.0 for k, v in self.oracles[customer].variables["sku_flow"].items()
     #     }
-    def init_column(self, customer, sku_flow_keys):
+    def init_column(self, customer, sku_flow_keys, select_edge_keys, sku_select_edge_keys, open_keys):
         _vals = {}
         _vals["sku_flow"] = {k: 0.0 for k in sku_flow_keys}
+        _vals["select_edge"] = {k: 0.0 for k in select_edge_keys}
+        _vals["sku_select_edge"] = {k: 0.0 for k in sku_select_edge_keys}
+        _vals["open"] = {k: 0.0 for k in open_keys}
         unfulfilled_cost = 0.0
         _vals["unfulfilled_demand_cost"] = {t: 0.0 for t in range(self.arg.T)}
         for t in range(self.arg.T):
@@ -424,8 +427,23 @@ class NetworkColumnGenerationSlim(object):
                     self.oracles[customer] = self.construct_oracle(customer)
                     var_keys.append(self.oracles[customer].get_var_keys("sku_flow"))
 
+                select_keys = []
+                for customer in tqdm(self.customer_list):
+                    self.oracles[customer] = self.construct_oracle(customer)
+                    select_keys.append(self.oracles[customer].get_var_keys("select_edge"))
+
+                sku_select_keys = []
+                for customer in tqdm(self.customer_list):
+                    self.oracles[customer] = self.construct_oracle(customer)
+                    sku_select_keys.append(self.oracles[customer].get_var_keys("sku_select_edge"))
+
+                open_keys = []
+                for customer in tqdm(self.customer_list):
+                    self.oracles[customer] = self.construct_oracle(customer)
+                    open_keys.append(self.oracles[customer].get_var_keys("open"))
+
             for customer, i in zip(self.customer_list, range(self.cus_num)):
-                init_col = self.init_column(customer, var_keys[i])
+                init_col = self.init_column(customer, var_keys[i],select_keys[i],sku_select_keys[i],open_keys[i])
                 self.columns[customer] = []
                 init_col['reduced_cost'] = init_col['beta']
                 self.columns[customer].append(init_col)
@@ -645,10 +663,11 @@ class NetworkColumnGenerationSlim(object):
                             (_redcost / (new_cols[col_ind]["beta"] + 1e-1) < -1e-2)
                             or dual_packs is None
                         ) or added
-                        new_col = new_cols[col_ind]
-                        new_col['reduced_cost'] = _redcost 
-                        self.columns[customer].append(new_col)
-                        self.columns_status[customer].append(1)
+                        if added:
+                            new_col = new_cols[col_ind]
+                            new_col['reduced_cost'] = _redcost 
+                            self.columns[customer].append(new_col)
+                            self.columns_status[customer].append(1)
 
                         if _status == self.solver_constant.INTERRUPTED:
                             bool_early_stop = True
@@ -694,7 +713,75 @@ class NetworkColumnGenerationSlim(object):
                                     _this_log_line
                                     + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
                                 )
-
+                if bool_terminate and self.arg.rounding_heuristic:
+                    K = 20
+                    k = 0
+                    rounding_terminate = False
+                    while k < K and rounding_terminate == False :
+                        Q = []
+                        model = self.rmp_model
+                        self.rmp_oracle.rounding_method(self.columns,self.customer_list,self.iter)
+                        self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rounding_rmp@{self.iter}.mip.mps")
+                        model.optimize()
+                        mip_objective = model.objval
+                        variables = model.getVars()
+                        # Step 4. 根据最优解获取Q（fractional column）
+                        for v in variables:
+                            if self.arg.backend.upper() == 'GUROBI':
+                                # if v.VarName.startswith("s") and v.x != 0 and v.x != 1:
+                                #     Q.append((v.VarName,v.x))
+                                if v.VarName.startswith("s"):
+                                    # print(v.VarName,v.x)
+                                    if v.x != 0 and v.x != 1:
+                                        Q.append((v.VarName,v.x))
+                            else:
+                                if v.getName().startswith("s") and v.x != 0 and v.x != 1:
+                                    Q.append((v.getName(),v.x))
+                        if len(Q) == 0:
+                            rounding_terminate = True
+                        print('-------Rounding Heuristic')
+                        print(k,Q)
+                        self.rmp_oracle.reset_to_origin()
+                        self._logger.info("rounding rmp reset over")
+                        with utils.TimerContext(
+                                 k,
+                                "rounding_heuristic",
+                            ):
+                                self._logger.info(
+                                        _this_log_line
+                                        + f" f_mip: {mip_objective:.6e}, eps_int: {mip_objective - lp_objective:.4e}/{(mip_objective - lp_objective) / lp_objective * 1e2:.2f}%"
+                                    )
+                        k = k + 1
+                    # K = 20
+                    # k = 0
+                    # bool_terminate = False
+                    # while k < K and bool_terminate == False :
+                    #     Q = []
+                    #     model = self.rmp_model
+                    #     variables = model.getVars()
+                    #     # for v in variables:
+                    #     #     if v.getName().startswith("open"):
+                    #     #         v.setType(self.solver_constant.BINARY)
+                    #     # K = 20
+                    #     self.rmp_oracle.rounding_method()
+                    #     for t in range(self.arg.T):
+                    #         ### Step 1. add constraints(或许考虑customer的也应该加上去)
+                    #         self.add_rounding_constraints(t)
+                    #     # Step 2. 改变目标函数 加惩罚项
+                    #     self.rounding_objective()
+                    #     model.optimize()
+                    #     # Step 3. 获取最优解
+                    #     variables = model.getVars()
+                    #     for v in variables:
+                    #         if v.getName().startswith("open") and (v.x == 0 or v.x == 1):
+                    #             Q.append((v.getName(),v.x))
+                    #     if len(Q) == 0:
+                    #         bool_terminate = True
+                    #     print('-------Rounding Heuristic')
+                    #     print(k,Q)
+                    #     # Step 4. 根据最优解获取Q（fractional column）
+                    #     k = k + 1
+                    
                 # for debugging
                 # self.get_col_weight("./out/", self.iter)
                 # self.get_col_weight_his()
@@ -720,7 +807,61 @@ class NetworkColumnGenerationSlim(object):
         # todo
         # self.get_solution(utils.CONF.DEFAULT_SOL_PATH)
 
-    # def init_rmp_by_cols(self):
+    # def rounding_objective(self):
+    #     obj = self.original_obj + self.rounding_penalty_objective()
+
+    #     # self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+    #     self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+
+    # def rounding_penalty_objective(self):
+    #     obj = 0.0
+    #     p1,p2,p3,p4 = 10,20,15,25
+    #     for t in range(self.arg.T):
+    #         sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+    #         for e, edge in self._iterate_no_c_edges():
+    #             obj += np.random.uniform(0, p1)*self.variables["rounding_slack_edge"][t, edge]*(1-self.variables["rounding_slack_edge"][t, edge])
+    #             for k in sku_list:
+    #                 obj += np.random.uniform(0, p2)*self.variables["rounding_slack_edge_k"][t, edge, k]*(1-self.variables["rounding_slack_edge_k"][t, edge, k])
+    #         for node in self._iterate_no_c_nodes():
+    #             obj += np.random.uniform(0, p3)*self.variables["rounding_slack_node"][t, node]*(1-self.variables["rounding_slack_node"][t, node])
+    #             for k in sku_list:
+    #                 obj += np.random.uniform(0, p4)*self.variables["rounding_slack_node_k"][t, node, k]*(1-self.variables["rounding_slack_node_k"][t, node,k])
+    #     return obj
+
+    # def add_rounding_constraints(self,t):
+    #     for e, edge in self._iterate_no_c_edges():
+    #         sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
+
+    #         constr = self.solver.addConstr(
+    #             self.variables["select_edge"][t, edge] + self.variables["rounding_slack_edge"][t, edge]
+    #             == 1
+    #         )
+    #         self.constrs["rounding_relationship"]["slack_edge"][
+    #                 (t, edge)
+    #             ] = constr
+
+    #         for k in sku_list:
+    #             constr = self.solver.addConstr(
+    #                 self.variables["sku_select_edge"][t, edge, k] + self.variables["rounding_slack_edge_k"][t, edge,k]
+    #                 == 1
+    #             )
+    #             self.constrs["rounding_relationship"]["slack_edge_k"][
+    #                 (t, edge, k)
+    #             ] = constr
+
+    #     for node in self._iterate_no_c_nodes():
+    #         sku_list = node.get_node_sku_list(t, self.full_sku_list)
+    #         constr = self.solver.addConstr(
+    #                 self.variables["open"][t, node] + self.variables["rounding_slack_node"][t, node] == 1
+    #             )
+    #         self.constrs["rounding_relationship"]["slack_node"][(t, node)] = constr
+    #         for k in sku_list:
+    #             constr = self.solver.addConstr(
+    #                     self.variables["sku_open"][t, node, k] + self.variables["rounding_slack_node_k"][t, node,k] == 1
+    #                 )
+    #             self.constrs["rounding_relationship"]["slack_node_k"][(t, node, k)] = constr
+
+# def init_rmp_by_cols(self):
     #     """
     #     update the RMP with new columns
     #     """

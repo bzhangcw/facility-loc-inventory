@@ -39,15 +39,17 @@ if __name__ == "__main__":
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
     arg.T = 7
+    arg.rounding_heuristic = 1
     # arg.terminate_condition = 1e-5
     arg.terminate_condition = 0.0
     arg.new_data = 1
     arg.num_periods = 20
+    arg.cg_mip_recover = False
     # arg.cg_mip_recover = True
     # arg.cg_rmp_mip_iter = 20
     # arg.cg_method_mip_heuristic = 0
     # arg.pick_instance = 3 #run about 1 min for debugging
-    arg.pick_instance = 8
+    arg.pick_instance =8
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(
@@ -89,7 +91,9 @@ if __name__ == "__main__":
     # model.solve()
     print("----------NCS------------")
     arg.DNP = 0
-    init_ray = True
+    # init_ray = True
+    init_ray = False
+
     num_workers = min(os.cpu_count(), 24)
     num_cpus = min(os.cpu_count(), 24)
     utils.logger.info(f"detecting up to {os.cpu_count()} cores")
