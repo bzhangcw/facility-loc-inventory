@@ -356,8 +356,6 @@ class NetworkColumnGenerationSlim(object):
                 self.columns_to_del[customer] = []
                 for number in range(self.iter):
                     if self.columns_status[customer][number] == 1:
-                        # print('debug',self.iter,customer,number)
-                        # print(self.rmp_oracle.variables["column_weights"])
                         lambda_c_n = self.solver.getVarValue(
                             self.rmp_oracle.variables["column_weights"][
                                 customer, number
@@ -387,8 +385,8 @@ class NetworkColumnGenerationSlim(object):
             for customer in self.customer_list:
                 # for number in range(self.iter - 1):
                 self.columns_to_del[customer] = []
-            for col_ind, customer in enumerate(self.customer_list):
-                mean = self.red_cost[:,col_ind].mean()
+            mean = self.red_cost[self.iter-1,:].mean()
+            for customer in self.customer_list:
                 for number in range(self.iter):
                     if self.columns[customer][number]['reduced_cost'] > mean:
                         self.columns_status[customer][number] = 0
@@ -841,20 +839,19 @@ class NetworkColumnGenerationSlim(object):
                 
                 
                 if bool_terminate and self.arg.rounding_heuristic_2:
+                    with utils.TimerContext(self.iter, f"rounding_heuristic_2"):
                     ### Method 2: 对\lambda加penalty
-                    print("Before Rounding Start")
-                    # print('---------Original RMP Result---------')                    
-                    # self.rmp_oracle.print_rmp_result()    
-                    # print('---------Original Pricing Result---------')
-                    # self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
-                    Q = self.rmp_oracle.cal_rmp_weight(self.customer_list,self.iter)
-                    K = 20
-                    k = 0
-                    self.rmp_oracle.switch_to_milp_without_lambda()
-                    if k == 0 and set(Q.values()).issubset({0, 1}):
-                        print("------Integer Optimal------")
-                    with utils.TimerContext(k, f"rounding_heuristic_2"):
-                        improved = True
+                        print("Before Rounding Start")
+                        print('---------Original RMP Result---------')                    
+                        self.rmp_oracle.print_rmp_result()    
+                        print('---------Original Pricing Result---------')
+                        self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
+                        Q = self.rmp_oracle.cal_rmp_weight(self.customer_list,self.iter)
+                        K = 5
+                        k = 0
+                        self.rmp_oracle.switch_to_milp_without_lambda()
+                        if k == 0 and set(Q.values()).issubset({0, 1}):
+                            print("------Integer Optimal------")
                         while k < K and (not set(Q.values()).issubset({0, 1})):
                             if k > 0 :
                                 self.rmp_oracle.reset_to_origin()
@@ -866,150 +863,68 @@ class NetworkColumnGenerationSlim(object):
                             model = self.rmp_oracle.model
                             model.optimize()
                             Q = self.rmp_oracle.cal_rmp_weight(self.customer_list,self.iter)
+                            print(k,Q)
                             mip_objective = model.objval
-
                             ### 恢复到去掉penalty到解
                             mip_objective_recovery =  self.rmp_oracle.cal_mip_solution(self.customer_list,self.iter,self.columns,mip_objective)
 
-                            if k > 0:
-                                eps_fixed_point = abs(_obj_last_iterate - mip_objective_recovery)
-                                improved = (
-                                eps_fixed_point / (abs(mip_objective_recovery) + 1e-3)
-                                ) > self.arg.terminate_condition
                             self._logger.info(
                                 _this_log_line
                                 + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
                             )
-                            _obj_last_iterate = mip_objective_recovery
                             k = k + 1
-                        print(k,Q)
+
                         self._logger.info(
                                 "Rounding End"
                             )
-                        # print('---------RMP Result---------')
-                        # self.rmp_oracle.print_rmp_result()    
-                        # print('---------Pricing Result---------')
-                        # self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
+                        print('---------RMP Result---------')
+                        self.rmp_oracle.print_rmp_result()    
+                        print('---------Pricing Result---------')
+                        self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
+                
                 if bool_terminate and self.arg.rounding_heuristic_3:
+                    with utils.TimerContext(self.iter, f"rounding_heuristic_3"):
                     ### Method 2: 对\lambda加penalty
-                    print("Before Rounding Start")
-                    # print('---------Original RMP Result---------')                    
-                    # self.rmp_oracle.print_rmp_result()    
-                    # print('---------Original Pricing Result---------')
-                    # self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
-                    Q,_ = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter,self.columns_status)
-                    K = 20
-                    k = 0
-                    self.rmp_oracle.switch_to_milp_without_lambda()
-                    if k == 0 and len(Q) == 0:
-                        print("------Integer Optimal------")
-                    with utils.TimerContext(k, f"rounding_heuristic_3"):
-                        improved = True
-                        while k < K and len(Q) > 0 and improved:
+                        print("Before Rounding Start")
+                        print('---------Original RMP Result---------')                    
+                        self.rmp_oracle.print_rmp_result()    
+                        print('---------Original Pricing Result---------')
+                        self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
+                        Q = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter)
+                        K = 5
+                        k = 0
+                        self.rmp_oracle.switch_to_milp_without_lambda()
+                        if k == 0 and len(Q) == 0:
+                            print("------Integer Optimal------")
+                        while k < K and len(Q) > 0:
                             if k > 0 :
                                 self.rmp_oracle.reset_to_origin()
                                 self._logger.info("rounding rmp reset over")
-
                             self._logger.info(
                                 f"Rounding_Heuristic_Method_2 at iteration number {k}"
                             )
                             self.rmp_oracle.rounding_method_3(Q,self.columns)
                             model = self.rmp_oracle.model
                             model.optimize()
+                            Q = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter)
+                            print(k,Q)
                             mip_objective = model.objval
                             ### 恢复到去掉penalty到解
-                            mip_objective_recovery = self.rmp_oracle.cal_mip_solution_Q(Q,self.columns,mip_objective)
-                            Q,_ = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter,self.columns_status)
-                            print(k,Q)
-                            if k > 0:
-                                eps_fixed_point = abs(_obj_last_iterate - mip_objective_recovery)
-                                improved = (
-                                eps_fixed_point / (abs(mip_objective_recovery) + 1e-3)
-                                ) > self.arg.terminate_condition
+                            mip_objective_recovery =  self.rmp_oracle.cal_mip_solution_Q(Q,self.columns,mip_objective)
 
                             self._logger.info(
                                 _this_log_line
                                 + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
                             )
-
-                            _obj_last_iterate = mip_objective_recovery
                             k = k + 1
+
                         self._logger.info(
                                 "Rounding End"
                             )
-                if bool_terminate and self.arg.rounding_heuristic_4:
-                    print("Before Rounding Start")
-                    Q,M = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter,self.columns_status)
-                    K = 4
-                    k = 0
-                    self.rmp_oracle.switch_to_milp_without_lambda()
-                    if k == 0 and len(Q) == 0:
-                        print("------Integer Optimal------")
-                    with utils.TimerContext(k, f"rounding_heuristic_4"):
-                        improved = True
-                        if len(Q) > 0:
-                            self.rmp_oracle.add_rounding_variables_3(Q)
-                            self.rmp_oracle.add_rounding_constraints_3(Q)
-                            Co = self.rmp_oracle.rounding_objective_3(Q,self.columns)
-                            Q_intialize = Q 
-                            M_intialize = M
-                        while k < K and len(Q) > 0:
-                            self._logger.info(
-                                f"Rounding_Heuristic_Method_4 at iteration number {k}"
-                            )
-                            self.rmp_oracle.fix_integer_solution(M)
-                            model = self.rmp_oracle.model
-                            model.optimize()
-                            mip_objective = model.objval
-                            mip_objective_recovery = self.rmp_oracle.cal_mip_solution_Q(Q_intialize,self.columns,mip_objective, Co)
-                            Q,M = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter,self.columns_status)
-                            self._logger.info("rounding rmp reset over")
-                            self._logger.info(
-                                _this_log_line
-                                + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
-                            )
-
-                            _obj_last_iterate = mip_objective_recovery
-                            k = k + 1
-                        if k == K and len(Q) > 0:
-                            print('Rounding Heuristic 4 is not convergent')
-                            print('Start Recovery')
-                            self.rmp_oracle.reset_to_origin_Q(Q_intialize,self.columns,Co)
-                            self.rmp_oracle.rounding_recovery(M_intialize)
-                            model = self.rmp_oracle.model
-                            model.setParam("TimeLimit", 200)
-                            model.optimize()
-                            mip_objective_recovery = model.objval
-                            self._logger.info(
-                                    _this_log_line
-                                    + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
-                                )
-                            # self.rmp_oracle.fix_binary_solution(M)
-                            # self.rmp_oracle.fix_binary_solution(Q)
-                            # model = self.rmp_oracle.model
-                            # model.optimize()
-                            # if model.status == self.solver_constant.INFEASIBLE:
-                            #     self._logger.info("MIP Model is infeasible")
-                            #     self.rmp_oracle.reset_to_origin_Q(Q_intialize,self.columns,Co)
-                            #     self.rmp_oracle.rounding_recovery()
-                            #     model = self.rmp_oracle.model
-                            #     model.optimize()
-                            #     mip_objective_recovery = model.objval
-                            #     self._logger.info(
-                            #             _this_log_line
-                            #             + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
-                            #         )
-                            # else:
-                            #     mip_objective_recovery = self.rmp_oracle.cal_mip_solution_Q(Q_intialize,self.columns,mip_objective, Co)
-                            #     self._logger.info(
-                            #             _this_log_line
-                            #             + f" f_mip: {mip_objective_recovery:.6e}, eps_int: {mip_objective_recovery - lp_objective:.4e}/{(mip_objective_recovery - lp_objective) / lp_objective * 1e2:.2f}%"
-                            #         )
-                            # Q,M = self.rmp_oracle.rmp_weight_continuous(self.customer_list,self.iter,self.columns_status)
-                            # print(Q,M)
-                        self._logger.info(
-                                "Rounding End"
-                            )
+                        print('---------RMP Result---------')
+                        self.rmp_oracle.print_rmp_result()    
+                        print('---------Pricing Result---------')
+                        self.rmp_oracle.print_pricing_result(self.columns,self.customer_list,self.iter)
 
                 if self.arg.check_cost_cg:
                     # cost checker

@@ -35,28 +35,40 @@ if __name__ == "__main__":
     arg.lb_inter_ratio = 1
     arg.node_lb_ratio = 1
     arg.unfulfill_sku_unit_cost = 5000
-    arg.conf_label = 8
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
-    arg.T = 7
-    arg.rounding_heuristic = False
-    arg.rounding_heuristic_1 = False
-    arg.rounding_heuristic_2 = False
-    arg.rounding_heuristic_3 = True
-
-    # arg.terminate_condition = 1e-5
-    arg.terminate_condition = 1e-5
     arg.new_data = 1
     arg.num_periods = 40
-    arg.cg_mip_recover = False
-    arg.pricing_network = False
-    arg.if_del_col = False
-    arg.cg_mip_recover = False
-    # arg.cg_rmp_mip_iter = 20
-    # arg.cg_method_mip_heuristic = 0
-    # arg.pick_instance = 3 #run about 1 min for debugging
-    arg.pick_instance = 5
-    arg.pricing_network = True
+
+    # Data Scale
+    arg.conf_label = 7
+    arg.T = 7
+    # 3: customer 100； 7: customer 200
+    arg.pick_instance = 8
+
+    # Termination Condition
+    arg.terminate_condition = 1e-5
+
+    # # Rounding Heuristic
+    # arg.rounding_heuristic = False
+    # arg.rounding_heuristic_1 = False
+    # arg.rounding_heuristic_2 = False
+    # arg.rounding_heuristic_3 = True
+
+    # RMP Algorithm
+    # arg.if_del_col = True
+    # arg.del_col_alg = 4
+    # arg.column_pool_len = 2
+
+    # arg.if_del_col = 1
+    # arg.del_col_alg = 1
+    # arg.del_col_freq = 3
+
+    # MIP Algorithm
+    arg.cg_mip_recover = True
+    arg.cg_rmp_mip_iter = 10
+    arg.cg_method_mip_heuristic = 0
+
     utils.configuration(arg.conf_label, arg)
     print(
         json.dumps(
@@ -65,9 +77,17 @@ if __name__ == "__main__":
             sort_keys=True,
         )
     )
-    arg.fpath = "data/us_generate_202403122342/"  # easy
+    
+    # arg.fpath = "data/us_generate_202403122342/"  # easy
     # arg.fpath = "data/us_generate_202403151725/"  # hard
     # arg.fpath = "data/small_instance_generate_single_period/"
+    # arg.fpath = 'data/sechina_202403130301/'
+    # 测试rounding
+    # arg.fpath = 'data/sechina_202403130110/'
+    # 测试RMP
+    # arg.fpath = 'data/sechina_202403152133/'
+    # arg.fpath = 'data/sechina_202403152155/'
+    # arg.fpath = 'data/us_generate_202403152049/'
     (
         sku_list,
         plant_list,
@@ -96,7 +116,7 @@ if __name__ == "__main__":
         customer_list,
         sku_list,
         # max_iter=arg.cg_itermax,
-        max_iter=20,
+        max_iter=10,
         init_ray=init_ray,
         num_workers=num_workers,
         num_cpus=num_cpus,
@@ -104,20 +124,6 @@ if __name__ == "__main__":
     )
     with utils.TimerContext(0, "column generation main routine"):
         np_cg.run()
-        np_cg.get_solution(data_dir="facility-loc-inventory/out")
-        # np_cg.watch_col_weight()
-    print("----------DNP Model------------")
-    arg.DNP = 1
-    arg.sku_list = sku_list
-    model = DNP(arg, network)
-    model.modeling()
-    model.model.setParam("Logging", 1)
-    model.model.setParam("Threads", 8)
-    model.model.setParam("TimeLimit", 7200)
-    model.model.setParam("LpMethod", 2)
-    model.model.setParam("Crossover", 0)
-    # print(f"save mps name {dnp_mps_name}")
-    # model.model.write(dnp_mps_name)
-    model.solve()
-    print("----------DNP Result------------")
-    model.print_result()
+        # np_cg.get_solution(data_dir="facility-loc-inventory/out")
+        # np_cg.watch_col_weight() 
+    

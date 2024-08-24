@@ -7,7 +7,7 @@ from gurobipy import *
 import utils
 from slim_cg.slim_rmp_model import *
 
-CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 1))
+CG_RMP_USE_WS = int(os.environ.get("CG_RMP_USE_WS", 0))
 CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 0))
 CG_RMP_USE_WS_TOL = int(os.environ.get("CG_RMP_USE_WS_TOL", 1e8))
@@ -219,6 +219,10 @@ def solve_direct(self):
     self.rmp_model.setParam(self.solver_constant.Param.LpMethod, 4)
 
     self.solver.solve()
+    print("RMP_ALG_STATUS", self.rmp_model.status)
+    if self.rmp_model.status == 3:
+        self.rmp_model.computeIIS()
+        self.rmp_model.write("oracle{}.ilp".format(self.rmp_model.status))
     self.rmp_objval = self.rmp_model.objval
     if CG_RMP_USE_PROMOTE:
         if self.iter <= 1:
@@ -281,7 +285,7 @@ def update_direct(self):
             #         self.rmp_model.remove(
             #             self.rmp_oracle.variables["column_weights"][c, num]
             #         )
-            
+
             if self.if_del_col and self.iter >= 1:
                 if self.columns_to_del != {}:
                     for num in self.columns_to_del[c]:
@@ -363,9 +367,9 @@ def solve_sketchy(self):
 
     # generate a random positive low-rank matrix
     r = self.m // 10
-    # Z >= Xλ: m - constraint -> m - dual variable η -> m 
+    # Z >= Xλ: m - constraint -> m - dual variable η -> m
     # - random matrix R (r x m)
-    R = scisp.random(r, self.m, 5/self.m, format="csr")
+    R = scisp.random(r, self.m, 5 / self.m, format="csr")
     ##################################
     # declare a sketchy model
     ##################################

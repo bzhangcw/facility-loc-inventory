@@ -188,9 +188,9 @@ def scale(pick_instance, datapath, arg):
     if pick_instance == 0:
         cfg = dict(
             data_dir=datapath,
-            sku_num=20,
-            plant_num=20,
-            warehouse_num=10,
+            sku_num=1,
+            plant_num=1,
+            warehouse_num=2,
             customer_num=1,
             one_period=(True if arg.T == 1 else False),
         )

@@ -5,14 +5,14 @@ import os
 import pickle
 from typing import *
 from typing import List
-# import coptpy
-# import coptpy as cp
+import coptpy
+import coptpy as cp
 import networkx as nx
 import numpy as np
 import pandas as pd
 import ray
-# from coptpy import COPT
-# from gurobipy import GRB
+from coptpy import COPT
+import gurobipy as gp
 from tqdm import tqdm
 import const as const
 import dnp_model
@@ -59,6 +59,10 @@ class NetworkColumnGeneration:
         )
 
         self.RMP_env = cp.Envr("RMP_env")
+        # self.RMP_env = gp.Env("RMP_env")
+        # self.RMP_model = gp.Model("RMP",self.RMP_env)
+        # self.solver = 'Gurobi'
+        # self.RMP_env = self.solver.ENVR
         self.RMP_model = self.RMP_env.createModel("RMP")
         self.customer_list = customer_list  # List[Customer]
         self.cus_num = len(self.customer_list)
@@ -73,7 +77,7 @@ class NetworkColumnGeneration:
         self.vars_basis, self.cons_basis = None, None
         self.bool_edge_lb = self.arg.edge_lb
         self.bool_node_lb = self.arg.node_lb
-        self.bool_fixed_cost = self.arg.fixed_cost
+        self.bool_fixed_cost = self.arg.if_fixed_cost
         self.bool_covering = self.arg.covering
         self.bool_capacity = self.arg.capacity
         self.add_in_upper = self.arg.add_in_upper
@@ -522,6 +526,10 @@ class NetworkColumnGeneration:
                 [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
                 [*capacity_cons_coef, 1.0],
             )
+            # new_col = gp.Column(
+            #     [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
+            #     [*capacity_cons_coef, 1.0],
+            # )
 
             self.vars["column_weights"][
                 customer, self.columns[customer].__len__() - 1

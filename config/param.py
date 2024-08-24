@@ -31,6 +31,14 @@ class Param:
             default="data/data_0401_0inv.xlsx",
             # required=True,
         )
+
+        parser.add_argument(
+            "--fpath",
+            type=str,
+            help="data path",
+            default="data/data_0401_0inv.xlsx",
+            # required=True,
+        )
         parser.add_argument(
             "--bool_use_ncg",
             type=int,
@@ -395,6 +403,41 @@ class Param:
 
         parser.add_argument(
             "--rounding_heuristic",
+            type=bool,
+            default=False,
+        )
+
+        parser.add_argument(
+            "--rounding_heuristic_1",
+            type=bool,
+            default=False,
+        )
+
+
+        parser.add_argument(
+            "--rounding_heuristic_2",
+            type=bool,
+            default=False,
+        )
+
+        parser.add_argument(
+            "--rounding_heuristic_3",
+            type=bool,
+            default=False,
+        )
+        parser.add_argument(
+            "--rounding_heuristic_4",
+            type=bool,
+            default=False,
+        )
+        parser.add_argument(
+            "--print_solution",
+            type=bool,
+            default=False,
+        )
+
+        parser.add_argument(
+            "--pricing_network",
             type=bool,
             default=False,
         )

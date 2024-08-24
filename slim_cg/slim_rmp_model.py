@@ -331,8 +331,36 @@ class DNPSlim(DNP):
                 "nameprefix": "yk",
                 "index": "(t, plant, k)",
             }
-        
-        if self.arg.rounding_heuristic:
+        if self.arg.pricing_network:
+            self.var_types["pricing_sku_flow"] = {
+                "lb": 0,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "rw",
+                "index": "(t, edge, k)",
+            }
+            self.var_types["pricing_select_edge"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "rp",
+                "index": "(t, edge)",
+            }
+            self.var_types["pricing_open"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "ry",
+                "index": "(t, node)",
+            }
+            self.var_types["pricing_sku_select_edge"] = {
+                "lb": 0,
+                "ub": 1,
+                "vtype": self.solver_constant.CONTINUOUS,
+                "nameprefix": "rpk",
+                "index": "(t, edge, k)",
+            }
+
+        if self.arg.rounding_heuristic_1:
             self.var_types["rounding_slack_edge"] = {
                 "lb": 0,
                 "ub": 1,
@@ -361,6 +389,14 @@ class DNPSlim(DNP):
                 "nameprefix": "snk",
                 "index": "(t, node,k)",
                 }
+        # if self.arg.rounding_heuristic_2:
+        #     self.var_types["rounding_slack_lambda"] = {
+        #         "lb": 0,
+        #         "ub": 1,
+        #         "vtype": self.solver_constant.CONTINUOUS,
+        #         "nameprefix": "sl",
+        #         "index": "(customer, number)",
+        #                 }
         # generate index tuple
         idx = dict()
         for vt in self.var_types.keys():
@@ -404,7 +440,8 @@ class DNPSlim(DNP):
                         # amount of sku k stored on node i at t
                         idx["sku_inventory"].append((t, node, k))
                         idx["sku_delivery"].append((t, node, k))
-            if self.arg.rounding_heuristic: 
+           
+            if self.arg.rounding_heuristic_1: 
                 for edge in self._iterate_edges():
                     idx["rounding_slack_edge"].append((t, edge))
                     for k in self.full_sku_list:
@@ -414,8 +451,18 @@ class DNPSlim(DNP):
                     idx["rounding_slack_node"].append((t, node))
                     # sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
                     # for k in sku_list:
-                    #     idx["rounding_slack_edge_k"].append((t, edge,k))                    
+                    #     idx["rounding_slack_edge_k"].append((t, edge,k))        
+            
+            if self.arg.pricing_network: 
+                for edge in self._iterate_edges():
+                    idx["pricing_select_edge"].append((t, edge))
+                    for k in self.full_sku_list:
+                        idx["pricing_sku_flow"].append((t, edge,k)) 
+                        idx["pricing_sku_select_edge"].append((t, edge,k)) 
+                for node in self._iterate_nodes():
+                    idx["pricing_open"].append((t, node))
 
+                                   
         # for initializaiton in CG
         self.var_idx = {}
         for var in idx.keys():
@@ -474,6 +521,15 @@ class DNPSlim(DNP):
                 if v.varname.startswith("lambda"):
                     v.setAttr(GRB.Attr.VType, self.solver_constant.BINARY)
 
+    def switch_to_milp_without_lambda(self):
+        if self.arg.backend.upper() == "COPT":
+            for v in self.binaries:
+                v.setType(self.solver_constant.BINARY)
+            variables = self.model.getVars()
+        else:
+            for v in self.binaries:
+                v.setAttr(GRB.Attr.VType, self.solver_constant.BINARY)        
+
     def switch_to_lp(self):
         if self.arg.backend.upper() == "COPT":
             for v in self.binaries:
@@ -490,39 +546,20 @@ class DNPSlim(DNP):
                 if v.varname.startswith("lambda"):
                     v.setAttr(GRB.Attr.VType, self.solver_constant.CONTINUOUS)
 
-    def rounding_method(self,columns,customer_list,iter_num):
-        # for t in range(self.arg.T):
-            ### Step 1. add constraints(或许考虑customer的也应该加上去)
-        self.add_rounding_constraints(columns,customer_list,iter_num)
+    def rounding_method_1(self,columns,customer_list,iter_num):
+        self.add_rounding_constraints_1(columns,customer_list,iter_num)
         # Step 2. 改变目标函数 加惩罚项
-        self.rounding_objective()
+        self.rounding_objective_1()
         return
     
-    def rounding_objective(self):
-        # obj = self.original_obj + self.rounding_penalty_objective()
-        # self.original_obj = self.get_original_objective()
-        # obj = self.original_obj 
-
-        # obj = self.get_model_objval() # 这样得到的是原来的obj
-        obj = self.get_model_objval() + self.rounding_penalty_objective()
-        # self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+    def rounding_objective_1(self):
+        obj = self.model.getObjective() + self.rounding_penalty_objective_1()
         self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
 
-    def rounding_penalty_objective(self):
+    def rounding_penalty_objective_1(self):
         obj = 0.0
         p1,p2,p3 = 10,20,15
         for t in range(self.arg.T):
-            # for e, edge in self._iterate_no_c_edges():
-            #     obj += np.random.uniform(0, p1)*self.variables["rounding_slack_edge"][t, edge]*(1-self.variables["rounding_slack_edge"][t, edge])
-            #     sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
-            #     for k in sku_list:
-            #         obj += np.random.uniform(0, p2)*self.variables["rounding_slack_edge_k"][t, edge, k]*(1-self.variables["rounding_slack_edge_k"][t, edge, k])
-            # for node in self._iterate_no_c_nodes():
-            #     obj += np.random.uniform(0, p3)*self.variables["rounding_slack_node"][t, node]*(1-self.variables["rounding_slack_node"][t, node])
-            #     sku_list = node.get_node_sku_list(t, self.full_sku_list)
-            #     if node.type == const.PLANT: 
-            #         for k in sku_list:
-            #             obj += np.random.uniform(0, p4)*self.variables["rounding_slack_node_k"][t, node, k]*(1-self.variables["rounding_slack_node_k"][t, node,k])
             for edge in self._iterate_edges():
                 obj += np.random.uniform(0, p1)*self.variables["rounding_slack_edge"][t, edge]
                 sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
@@ -532,25 +569,228 @@ class DNPSlim(DNP):
                 obj += np.random.uniform(0, p3)*self.variables["rounding_slack_node"][t, node]              
         return obj
 
-    def add_rounding_constraints(self,columns,customer_list,iter_num):
-        # 对pricing问题的edge加
+    def add_rounding_constraints_1(self,columns,customer_list,iter_num):
+        for t in range(self.arg.T):
+            for edge in self._iterate_edges():
+                temp_select_edge = 0
+                customer = edge.end
+                for number in range(iter_num):
+                    temp_select_edge = temp_select_edge + self.variables["column_weights"][(customer,number)]*columns[customer][number]["select_edge"][(t, edge)]
+                constr = self.solver.addConstr(temp_select_edge + self.variables["rounding_slack_edge"][(t, edge)] == 1)
+                self.constrs["rounding_relationship"]["slack_edge"][(t, edge)] = constr
+                for k in self.full_sku_list:
+                    temp_sku_select_edge = 0
+                    for number in range(iter_num):
+                        temp_sku_select_edge = temp_sku_select_edge + self.variables["column_weights"][(customer,number)]*columns[customer][number]["sku_select_edge"][(t, edge,k)] 
+                    constr_1 = self.solver.addConstr(temp_sku_select_edge + self.variables["rounding_slack_edge_k"][(t, edge,k)] == 1)
+                    self.constrs["rounding_relationship"]["slack_edge_k"][(t, edge,k)] = constr_1
+
+            for node in self._iterate_nodes():
+                if node.type == const.WAREHOUSE:
+                    temp_open = 0
+                    for customer in customer_list:
+                        for number in range(iter_num):
+                            if str(node) in str(columns[customer][number]["open"].keys()):
+                                temp_open = temp_open + self.variables["column_weights"][(customer,number)]*columns[customer][number]["open"][(t,node)]
+                    constr = self.solver.addConstr(temp_open + self.variables["rounding_slack_node"][(t,node)] == 1)
+                    self.constrs["rounding_relationship"]["slack_node"][(t, node)] = constr
+
+    def rounding_method_2(self,customer_list,iter_num,columns):
+        self.add_rounding_variables(customer_list,iter_num)
+        self.add_rounding_constraints_2(customer_list,iter_num)
+        self.rounding_objective_2(customer_list,iter_num,columns)
+        return
+    
+    def add_rounding_variables(self,customer_list,iter_num):
+        self.variables["rounding_column_weights"] = {}
         for customer in customer_list:
-            for number in range(iter_num-1):
-                for (key,value) in columns[customer][number]["select_edge"].items():
-                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_edge"][key] == 1)
-                    self.constrs["rounding_relationship"]["slack_edge"][
-                    key
-                    ] = constr
-                for (key,value) in columns[customer][number]["sku_select_edge"].items():
-                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_edge_k"][key] == 1)
-                    self.constrs["rounding_relationship"]["slack_edge_k"][
-                    key
-                    ] = constr
-                for (key,value) in columns[customer][number]["open"].items():
-                    constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value + self.variables["rounding_slack_node"][key] == 1)
-                    self.constrs["rounding_relationship"]["slack_node"][
-                    key
-                    ] = constr
+            for number in range(iter_num):
+                self.variables["rounding_column_weights"][
+                        customer,number
+                    ] = self.solver.addVar(
+                        name=f"rounding_lambda_{customer.idx}_{number}",
+                        lb=0.0,
+                        ub=1.0,
+                        vtype=self.solver_constant.CONTINUOUS,
+                    )
+        return
+    
+    def add_rounding_constraints_2(self,customer_list,iter_num):
+        for customer in customer_list:
+            for number in range(iter_num):
+                constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)] + self.variables["rounding_column_weights"][(customer,number)] == 1)
+                self.constrs["rounding_slack"][(customer,number)] = constr
+
+    def rounding_objective_2(self,customer_list,iter_num,columns):
+        obj = self.model.getObjective() + self.rounding_penalty_objective_2(customer_list,iter_num,columns)
+        self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+
+
+    def rounding_recovery(self,M):
+        if self.arg.backend.upper() == "COPT":
+            variables = self.model.getVars()
+            for v in variables:
+                if v.getName().startswith("lambda"):
+                    v.setType(self.solver_constant.BINARY)
+                    v.set("LB",0)
+                    v.set("UB",1)
+        else:
+            variables = self.model.getVars()
+            for v in variables:
+                if v.varname.startswith("lambda"):
+                    v.setAttr(GRB.Attr.VType, self.solver_constant.BINARY)
+                    v.setAttr("ub", 1)
+                    v.setAttr("lb", 0)
+        for (customer, number) in M.keys():
+            self.variables["column_weights"][(customer,number)].lb = self.variables["column_weights"][(customer,number)].X
+            self.variables["column_weights"][(customer,number)].ub = self.variables["column_weights"][(customer,number)].X
+
+        return
+    
+    def rounding_penalty_objective_2(self,customer_list,iter_num,columns):
+        obj = 0.0
+        # p1 = 10
+        for customer in customer_list:
+            for number in range(iter_num):
+                obj += (columns[customer][number]["beta"]/1000)* self.variables["rounding_column_weights"][(customer,number)]
+        return obj
+    
+    def fix_integer_solution(self,M):
+        for (customer, number) in M.keys():
+            self.variables["column_weights"][(customer,number)].lb = self.variables["column_weights"][(customer,number)].X
+            self.variables["column_weights"][(customer,number)].ub = self.variables["column_weights"][(customer,number)].X
+        return
+    
+    def fix_binary_solution(self,Q):
+        for (customer, number) in Q.keys():
+            self.variables["column_weights"][(customer,number)].vtype = self.solver_constant.BINARY
+        return
+
+    def rounding_method_3(self, Q, columns):
+        self.add_rounding_variables_3(Q)
+        self.add_rounding_constraints_3(Q)
+        Co = self.rounding_objective_3(Q,columns)
+        return Co
+    
+    def add_rounding_variables_3(self,Q):
+        self.variables["rounding_column_weights"] = {}
+        for (customer,number) in Q.keys():
+            self.variables["rounding_column_weights"][
+                    customer,number
+                ] = self.solver.addVar(
+                    name=f"rounding_lambda_{customer.idx}_{number}",
+                    lb=0.0,
+                    ub=1.0,
+                    vtype=self.solver_constant.CONTINUOUS,
+                )
+        return
+    
+    def add_rounding_constraints_3(self,Q):
+        for (customer,number) in Q.keys():
+            constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)] + self.variables["rounding_column_weights"][(customer,number)] == 1)
+            self.constrs["rounding_slack"][(customer,number)] = constr
+
+    def rounding_objective_3(self,Q,columns):
+        penalty,Co = self.rounding_penalty_objective_3(Q,columns)
+        obj = self.model.getObjective() + penalty
+        self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+        return Co
+
+
+    def rounding_penalty_objective_3(self,Q,columns):
+        penalty = 0.0
+        Co = {}
+        for (customer,number) in Q.keys():
+            p = np.random.uniform(100, 500)
+            # p = np.random.uniform(10, 100)
+            Co[(customer,number)] = p
+            penalty += (columns[customer][number]["beta"]*Co[(customer,number)])* self.variables["rounding_column_weights"][(customer,number)]
+        return penalty,Co
+
+
+    def rounding_method_4(self, Q, columns):
+        self.add_rounding_variables_3(Q)
+        self.add_rounding_constraints_3(Q)
+        Co = self.rounding_objective_3(Q,columns)
+        return Co
+
+
+    def cal_mip_solution_Q(self,Q,columns,mip_objective,Co):
+        m = 0
+        for (customer,number) in Q.keys():
+            mip_objective = mip_objective - (columns[customer][number]["beta"]*Co[(customer,number)])* self.variables["rounding_column_weights"][(customer,number)].X
+            # print('MIP Recovery', self.variables["rounding_column_weights"][(customer,number)].X, columns[customer][number]["beta"]*Co[(customer,number)])
+            m += (columns[customer][number]["beta"]*Co[(customer,number)])* self.variables["rounding_column_weights"][(customer,number)].X
+        print('MIP Recovery',m)
+        return mip_objective
+    
+    def recover_mip_solution_Q(self,Q,columns,Co):
+        obj = self.model.getObjective()
+        for (customer,number) in Q.keys():
+            obj = obj - (columns[customer][number]["beta"]*Co[(customer,number)])* self.variables["rounding_column_weights"][(customer,number)]
+            # print('MIP Recovery', self.variables["rounding_column_weights"][(customer,number)].X, columns[customer][number]["beta"]*Co[(customer,number)])
+        self.solver.setObjective(obj, sense=self.solver_constant.MINIMIZE)
+        return 
+
+    def cal_mip_solution(self,customer_list,iter_num,columns,mip_objective):
+        for customer in customer_list:
+            for number in range(iter_num):
+                mip_objective -= (columns[customer][number]["beta"]/1000)* self.variables["rounding_column_weights"][(customer,number)].X
+        return mip_objective
+
+
+    def print_pricing_result(self,columns,customer_list,iter_num):
+        for t in range(self.arg.T):
+            for edge in self._iterate_edges():
+                customer = edge.end
+                # for customer in customer_list:
+                # v = 0
+                # for number in range(iter_num):
+                #     v = v + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["select_edge"][(t, edge)]
+                # print('select_edge',t,edge,v)
+                for k in self.full_sku_list:
+                    m = 0
+                    for number in range(iter_num):
+                        m = m + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["sku_flow"][(t, edge,k)]
+                    print('sku_flow',t,edge,k,m)
+        for customer in customer_list:
+            for number in range(iter_num):
+                print('lambda',customer,number,self.variables["column_weights"][(customer,number)].X)
+                  
+                    
+            # for node in self._iterate_nodes():
+            #     if node.type == const.WAREHOUSE:
+            #         temp_open = 0
+            #         for customer in customer_list:
+            #             if str(node) in str(columns[customer][number]["open"].keys()):
+            #                 for number in range(iter_num):
+            #                     temp_open = temp_open + self.variables["column_weights"][(customer,number)]*columns[customer][number]["open"][(t,node)]
+            #         constr = self.solver.addConstr(temp_open == self.variables["pricing_open"][(t, node)])
+            #         self.constrs["pricing_relationship"]["pricing_open"][(t, node)] = constr
+        # constraint = {}
+        # for customer in customer_list:
+        #     for number in range(iter_num):
+        #         for (key,value) in columns[customer][number]["select_edge"].items():
+        #             constraint[key] = 
+        #             constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value == self.variables["pricing_select_edge"][key])
+        #             self.constrs["pricing_relationship"]["pricing_select_edge"][
+        #             key
+        #             ] = constr
+        #         for (key,value) in columns[customer][number]["sku_select_edge"].items():
+        #             constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value == self.variables["pricing_sku_select_edge"][key])
+        #             self.constrs["pricing_relationship"]["pricing_sku_select_edge"][
+        #             key
+        #             ] = constr
+        #         for (key,value) in columns[customer][number]["open"].items():
+        #             constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value == self.variables["pricing_open"][key])
+        #             self.constrs["pricing_relationship"]["pricing_open"][
+        #             key
+        #             ] = constr
+        #         for (key,value) in columns[customer][number]["sku_flow"].items():
+        #             constr = self.solver.addConstr(self.variables["column_weights"][(customer,number)]*value == self.variables["pricing_sku_flow"][key])
+        #             self.constrs["pricing_relationship"]["pricing_sku_flow"][
+        #             key
+        #             ] = constr
         # for edge in self._iterate_edges():
         #     sku_list = edge.get_edge_sku_list(t, self.full_sku_list)
 
@@ -586,19 +826,70 @@ class DNPSlim(DNP):
 
     def reset_to_origin(self):
         # Step 1. remove constraints
-        to_remove = [
-            "slack_edge",
-            "slack_edge_k",
-            "slack_node",
-            "slack_node_k"
-        ]
-        for k in to_remove:
-            for cc in self.constrs["rounding_relationship"][k].values():
+        if self.arg.rounding_heuristic_1:
+            to_remove = [
+                "slack_edge",
+                "slack_edge_k",
+                "slack_node",
+                "slack_node_k"
+            ]
+            for k in to_remove:
+                for cc in self.constrs["rounding_relationship"][k].values():
+                    self.model.remove(cc)
+        if self.arg.rounding_heuristic_2 or self.arg.rounding_heuristic_3:
+            for cc in self.constrs["rounding_slack"].values():
                 self.model.remove(cc)
         # Step 2. reset the constraints
-        self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+        # self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+        self.solver.setObjective(self.model.getObjective(), sense=self.solver_constant.MINIMIZE)
+        print(self.model.getObjective())
 
         return 
+    
+    def reset_to_origin_Q(self,Q,columns,Co):
+        # Step 1. remove constraints
+        if self.arg.rounding_heuristic_1:
+            to_remove = [
+                "slack_edge",
+                "slack_edge_k",
+                "slack_node",
+                "slack_node_k"
+            ]
+            for k in to_remove:
+                for cc in self.constrs["rounding_relationship"][k].values():
+                    self.model.remove(cc)
+        if self.arg.rounding_heuristic_2 or self.arg.rounding_heuristic_3 or self.arg.rounding_heuristic_4:
+            for cc in self.constrs["rounding_slack"].values():
+                self.model.remove(cc)
+        self.recover_mip_solution_Q(Q,columns,Co)
+        if self.arg.rounding_heuristic_4:
+            for cc in self.variables["rounding_column_weights"].values():
+                self.model.remove(cc)
+        # Step 2. reset the constraints
+        # self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
+        # self.recover_mip_solution_Q(Q,columns,Co)
+        # self.solver.setObjective(self.model.getObjective(), sense=self.solver_constant.MINIMIZE)
+        return 
+    
+    # def reset_to_origin_2(self):
+    #     for cc in self.constrs["rounding_slack"].values():
+    #         self.model.remove(cc)
+    #     # Step 2. reset the constraints
+    #     self.solver.setObjective(self.model.getObjective(), sense=self.solver_constant.MINIMIZE)
+    #     return 
+    
+    def del_pricing_constraints(self):
+        # Step 1. remove constraints
+        to_remove = [
+        "pricing_select_edge",
+        "pricing_sku_select_edge",
+        "pricing_open",
+        "pricing_sku_flow"
+        ]
+        for k in to_remove:
+            for cc in self.constrs["pricing_relationship"][k].values():
+                self.model.remove(cc)
+        self.solver.setObjective(self.original_obj, sense=self.solver_constant.MINIMIZE)
     def add_constraints(self):
         if self.bool_capacity:
             self.constr_types = {
@@ -611,6 +902,7 @@ class DNPSlim(DNP):
             self.constr_types = {
                 "flow_conservation": {"index": "(t, node, k)"},
             }
+
         if self.bool_covering:
             covering_constr_types = {
                 "select_edge": {"index": "(t, edge, node)"},
@@ -620,6 +912,7 @@ class DNPSlim(DNP):
                 "sku_flow_select": {"index": "(t, edge, k)"},
             }
             self.constr_types["open_relationship"] = covering_constr_types
+            
         if self.bool_edge_lb:
             self.constr_types["transportation_variable_lb"] = {"index": "(t, edge)"}
         if self.bool_node_lb:
@@ -627,7 +920,7 @@ class DNPSlim(DNP):
             self.constr_types["holding_variable_lb"] = {"index": "(t, node)"}
         if self.add_in_upper:
             self.constr_types["in_upper"] = {"index": "(t, node)"}
-        if self.arg.rounding_heuristic:
+        if self.arg.rounding_heuristic_1:
             rounding_constr_types = {
                 "slack_edge": {"index": "(t, edge)"},
                 "slack_edge_k": {"index": "(t, edge, k)"},
@@ -635,15 +928,32 @@ class DNPSlim(DNP):
                 "slack_node_k": {"index": "(t, node, k)"}
             }
             self.constr_types["rounding_relationship"] = rounding_constr_types
+        
+        if self.arg.rounding_heuristic_2 or self.arg.rounding_heuristic_3 or self.arg.rounding_heuristic_4:
+            self.constr_types["rounding_slack"]= {"index": "(customer,number)"}
+        
+
+        if self.arg.pricing_network:
+            pricing_constr_types = {
+                "pricing_select_edge": {"index": "(t, edge)"},
+                "pricing_sku_select_edge": {"index": "(t, edge, k)"},
+                "pricing_open": {"index": "(t, node)"},
+                "pricing_sku_flow": {"index": "(t, node, k)"}
+            }
+            self.constr_types["pricing_relationship"] = pricing_constr_types
+
 
         for constr in self.constr_types.keys():
             self.constrs[constr] = dict()
         if self.bool_covering:
             for constr in self.constr_types["open_relationship"].keys():
                 self.constrs["open_relationship"][constr] = dict()
-        if self.arg.rounding_heuristic:
+        if self.arg.rounding_heuristic_1:
             for constr in self.constr_types["rounding_relationship"].keys():
                 self.constrs["rounding_relationship"][constr] = dict()
+        if self.arg.pricing_network:
+            for constr in self.constr_types["pricing_relationship"].keys():
+                self.constrs["pricing_relationship"][constr] = dict()
 
         # for t in tqdm(range(self.T)):
         for t in range(self.T):
@@ -1027,7 +1337,7 @@ class DNPSlim(DNP):
                 sku_list = node.get_node_sku_list(t, self.full_sku_list)
                 node_holding_cost = 0.0
                 for k in sku_list:
-                    if node.holding_sku_unit_cost is not None:
+                    if node.holding_sku_unit_cost is not None and len(node.holding_sku_unit_cost) != 0:
                         holding_sku_unit_cost = node.holding_sku_unit_cost[k]
                     else:
                         holding_sku_unit_cost = self.arg.holding_sku_unit_cost
@@ -1161,6 +1471,104 @@ class DNPSlim(DNP):
         self._generate_broadcasting_matrix()
         return
 
+    def print_rmp_result(self):
+        variables = self.model.getVars()
+        for v in variables:
+            if self.arg.backend.upper() == 'GUROBI':
+                if v.x > 0:
+                    if v.VarName.startswith("w"):
+                        print("sku_flow", v.VarName, v.X)
+                    elif v.VarName.startswith("x"):
+                        print("sku_production", v.VarName, v.X)
+                    elif v.VarName.startswith("I"):
+                        print("sku_inventory", v.VarName, v.X)
+                    elif v.VarName.startswith("s"):
+                        print("sku_demand_slack", v.VarName, v.X)
+                    elif v.VarName.startswith("p"):
+                        print("select_edge", v.VarName, v.X)
+                    elif v.VarName.startswith("pk"):
+                        print("sku_select_edge", v.VarName, v.X)
+                    elif v.VarName.startswith("y"):
+                        print("open", v.VarName, v.X)
+                    elif v.VarName.startswith("yk"):
+                        print("sku_open", v.VarName, v.X)
+                    # if self.arg.pricing_network:
+                    #     if v.VarName.startswith("rw"):
+                    #         print("pricing_sku_flow", v.VarName, v.X)
+                    #     if v.VarName.startswith("rp"):
+                    #         print("pricing_select_edge", v.VarName, v.X)
+                    #     if v.VarName.startswith("ry"):
+                    #         print("pricing_open", v.VarName, v.X)
+                    #     if v.VarName.startswith("rpk"):
+                    #         print("pricing_sku_select_edge", v.VarName, v.X)
+                    
+            else:
+                if v.getName().startswith("rw"):
+                    print("pricing_sku_flow", v.getName(), v.x)
+                elif v.getName().startswith("rp"):
+                    print("pricing_select_edge", v.getName(), v.X)
+                elif v.getName().startswith("ry"):
+                    print("pricing_open", v.getName(), v.X)
+                elif v.getName().startswith("rpk"):
+                    print("pricing_sku_select_edge", v.getName(), v.X)
+                # TODO: 补充
+            
+
+        
+    def calculate_pricing_result(self,columns,customer_list,iter_num):
+        Q = {}
+        for t in range(self.arg.T):
+            for edge in self._iterate_edges():
+                temp_select_edge = 0
+                customer = edge.end
+                # for customer in customer_list:
+                for number in range(iter_num):
+                    temp_select_edge = temp_select_edge + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["select_edge"][(t, edge)]
+                    Q[(t, edge)] = temp_select_edge
+                if temp_select_edge > 0 and self.arg.print_solution:
+                    print("pricing_select_edge",t,edge,temp_select_edge)
+                for k in self.full_sku_list:
+                    temp_sku_select_edge = 0
+                    temp_sku_flow = 0
+                    for number in range(iter_num):
+                        temp_sku_select_edge = temp_sku_select_edge + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["sku_select_edge"][(t, edge,k)]
+                        Q[(t, edge,k)] = temp_select_edge
+                        temp_sku_flow = temp_sku_flow + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["sku_flow"][(t, edge,k)]
+                    # print("pricing_sku_select_edge",t,edge,k,temp_select_edge)
+                    if temp_sku_select_edge > 0 and self.arg.print_solution: 
+                        print("pricing_sku_flow",t,edge,k,temp_sku_flow)
+                        
+            for node in self._iterate_nodes():
+                if node.type == const.WAREHOUSE:
+                    temp_open = 0
+                    for customer in customer_list:
+                        for number in range(iter_num):
+                            if str(node) in str(columns[customer][number]["open"].keys()):
+                                temp_open = temp_open + self.variables["column_weights"][(customer,number)].X*columns[customer][number]["open"][(t,node)]
+                    if temp_open > 0 and self.arg.print_solution:
+                        print("pricing_open",t,node,temp_open)
+                    Q[(t,node)] = temp_open
+        return Q
+                
+    def cal_rmp_weight(self, customer_list,iter_num):
+        Q = {}
+        for customer in customer_list:
+            for number in range(iter_num):
+                Q[(customer, number)] = self.variables["column_weights"][(customer,number)].X
+        return Q
+
+    def rmp_weight_continuous(self, customer_list,iter_num,columns_status):
+        Q = {}
+        W = {}
+        for customer in customer_list:
+            for number in range(iter_num):
+                if columns_status[customer][number] == 1:
+                    if self.variables["column_weights"][(customer,number)].X != 0 and self.variables["column_weights"][(customer,number)].X != 1:
+                        Q[(customer, number)] = self.variables["column_weights"][(customer,number)].X
+                    else:
+                        W[(customer, number)] = self.variables["column_weights"][(customer,number)].X
+        return Q,W
+    
     def get_solution(self, data_dir: str = "./", preserve_zeros: bool = False):
         super().get_solution(data_dir, preserve_zeros)
 

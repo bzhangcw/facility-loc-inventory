@@ -329,7 +329,10 @@ class Edge:
 
     def cal_distance(self):
         # return np.linalg.norm(self.start.location - self.end.location)
-        return geodesic(self.start.location, self.end.location).km
+        if True in np.isnan(self.start.location) or True in np.isnan(self.end.location):
+            return None
+        else:
+            return geodesic(self.start.location, self.end.location).km
 
     def cal_performance(self):
         return self.transportation_sku_unit_cost.sum()

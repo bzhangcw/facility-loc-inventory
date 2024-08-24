@@ -28,7 +28,9 @@ class PrimalMethod(IntEnum):
 def milp_direct(self):
     model = self.rmp_model
     self.rmp_oracle.switch_to_milp()
-    self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.mps")
+    self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.mip.lp")
+    print('Save RMP MIP',utils.CONF.DEFAULT_SOL_PATH)
+    model.setParam("TimeLimit", 2000)
     model.optimize()
     mip_objective = model.objval
     # reset back to LP

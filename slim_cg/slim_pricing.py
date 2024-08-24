@@ -856,20 +856,20 @@ class Pricing(object):
             self.sku_flow_keys = [v.index for k, v in tmp.items()]
             self.sku_flow_vars = [v for k, v in tmp.items()]
 
-        if self.select_edge_keys is None:
-            tmp = dict(self.variables["select_edge"])
-            self.select_edge_keys = [v.index for k, v in tmp.items()]
-            self.select_edge_vars = [v for k, v in tmp.items()]
+        # if self.select_edge_keys is None:
+        #     tmp = dict(self.variables["select_edge"])
+        #     self.select_edge_keys = [v.index for k, v in tmp.items()]
+        #     self.select_edge_vars = [v for k, v in tmp.items()]
         
-        if self.sku_select_edge_keys is None:
-            tmp = dict(self.variables["sku_select_edge"])
-            self.sku_select_edge_keys = [v.index for k, v in tmp.items()]
-            self.sku_select_edge_vars = [v for k, v in tmp.items()]
+        # if self.sku_select_edge_keys is None:
+        #     tmp = dict(self.variables["sku_select_edge"])
+        #     self.sku_select_edge_keys = [v.index for k, v in tmp.items()]
+        #     self.sku_select_edge_vars = [v for k, v in tmp.items()]
 
-        if self.open_keys is None:
-            tmp = dict(self.variables["open"])
-            self.open_keys = [v.index for k, v in tmp.items()]
-            self.open_vars = [v for k, v in tmp.items()]
+        # if self.open_keys is None:
+        #     tmp = dict(self.variables["open"])
+        #     self.open_keys = [v.index for k, v in tmp.items()]
+        #     self.open_vars = [v for k, v in tmp.items()]
 
     def write(self, name):
         # self.model.write(name)
@@ -909,36 +909,36 @@ class Pricing(object):
                     self.model.getAttr(GRB.Attr.X, self.variables["sku_flow"])
                 )
         
-        _vals["select_edge"] = {}
-        if len(self.select_edge_keys) > 0:
-            if self.arg.backend.upper() == "COPT":
-                _vals["select_edge"] = dict(
-                    self.model.getInfo(COPT.Info.Value, self.variables["select_edge"])
-                )
-            else:
-                _vals["select_edge"] = dict(
-                    self.model.getAttr(GRB.Attr.X, self.variables["select_edge"])
-                )
-        _vals["sku_select_edge"] = {}
-        if len(self.sku_select_edge_keys) > 0:
-            if self.arg.backend.upper() == "COPT":
-                _vals["sku_select_edge"] = dict(
-                    self.model.getInfo(COPT.Info.Value, self.variables["sku_select_edge"])
-                )
-            else:
-                _vals["sku_select_edge"] = dict(
-                    self.model.getAttr(GRB.Attr.X, self.variables["sku_select_edge"])
-                )
-        _vals["open"] = {}
-        if len(self.open_keys) > 0:
-            if self.arg.backend.upper() == "COPT":
-                _vals["open"] = dict(
-                    self.model.getInfo(COPT.Info.Value, self.variables["open"])
-                )
-            else:
-                _vals["open"] = dict(
-                    self.model.getAttr(GRB.Attr.X, self.variables["open"])
-                )
+        # _vals["select_edge"] = {}
+        # if len(self.select_edge_keys) > 0:
+        #     if self.arg.backend.upper() == "COPT":
+        #         _vals["select_edge"] = dict(
+        #             self.model.getInfo(COPT.Info.Value, self.variables["select_edge"])
+        #         )
+        #     else:
+        #         _vals["select_edge"] = dict(
+        #             self.model.getAttr(GRB.Attr.X, self.variables["select_edge"])
+        #         )
+        # _vals["sku_select_edge"] = {}
+        # if len(self.sku_select_edge_keys) > 0:
+        #     if self.arg.backend.upper() == "COPT":
+        #         _vals["sku_select_edge"] = dict(
+        #             self.model.getInfo(COPT.Info.Value, self.variables["sku_select_edge"])
+        #         )
+        #     else:
+        #         _vals["sku_select_edge"] = dict(
+        #             self.model.getAttr(GRB.Attr.X, self.variables["sku_select_edge"])
+        #         )
+        # _vals["open"] = {}
+        # if len(self.open_keys) > 0:
+        #     if self.arg.backend.upper() == "COPT":
+        #         _vals["open"] = dict(
+        #             self.model.getInfo(COPT.Info.Value, self.variables["open"])
+        #         )
+        #     else:
+        #         _vals["open"] = dict(
+        #             self.model.getAttr(GRB.Attr.X, self.variables["open"])
+        #         )
         # _vals["sku_open"] = {}
         # if len(self.sku_flow_keys) > 0:
         #     if self.arg.backend.upper() == "COPT":

@@ -785,7 +785,7 @@ class DNP:
             node_sum = self.variables["sku_production"].sum(t, node, "*")
             # capacity constraint
             if node.production_capacity < np.inf:
-                left_capacity = node.production_capacity*self.arg.capacity_node_ratio - self.used_plant_capacity.get(
+                left_capacity = node.production_capacity* self.arg.capacity_node_ratio - self.used_plant_capacity.get(
                     node, 0
                 )
                 bound = self.variables["open"][t, node] if self.bool_covering else 1.0
@@ -831,9 +831,13 @@ class DNP:
             if node.type == const.WAREHOUSE:
                 in_edges = get_in_edges(self.network, node)
                 inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
+                # self.constrs["in_upper"][(t, node)] = self.model.addConstr(
+                #     inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
+                # )
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio
+                    inbound_sum <= self.arg.in_upper_qty
                 )
+                print('add_in_uppper',node,node.inventory_capacity*self.arg.capacity_node_ratio * self.arg.in_upper_ratio)
                 self.dual_index_for_RMP["in_upper"][(t, node)] = self.index_for_dual_var
                 self.index_for_dual_var += 1
         return
@@ -1071,7 +1075,11 @@ class DNP:
                 transportation_sku_unit_cost = (
                     self.arg.transportation_sku_unit_cost
                 )
-            transportation_cost += transportation_sku_unit_cost* v
+            if edge.distance is not None:
+                transportation_cost += transportation_sku_unit_cost* v * edge.distance
+                print("Edge Cost", edge,transportation_sku_unit_cost*edge.distance)
+            else:
+                transportation_cost += transportation_sku_unit_cost * v
         self.obj["transportation_cost"] = transportation_cost
 
         return transportation_cost
@@ -1157,21 +1165,6 @@ class DNP:
 
         return fixed_edge_cost
 
-    def print_result(self):
-        for t in range(self.T):
-            for e in self.network.edges:
-                edge = self.network.edges[e]["object"]
-                if 'select_edge' in self.variables.keys():
-                    if self.variables['select_edge'][t,edge].x > 0:
-                        print("select_edge", t,edge,self.variables['select_edge'][t,edge].x)
-                for k in self.full_sku_list:
-                    if self.variables['sku_flow'][t,edge,k].x:
-                        print("sku_flow", t,edge,k,self.variables['sku_flow'][t,edge,k].x)
-            for node in self.network.nodes:
-                if 'node' in self.variables.keys():
-                    if self.variables['open'][t,node].x > 0:
-                        print("open", t,node,self.variables['open'][t,node].x)
-               
     def solve(self):
         self.model.solve()
 
@@ -1211,7 +1204,7 @@ class DNP:
                 "id",
                 "start",
                 "end",
-                # "sku",
+                "sku",
                 "t",
                 "y",
                 "qty",
@@ -1314,9 +1307,9 @@ class DNP:
                             "id": edge.idx,
                             "start": edge.start.idx,
                             "end": edge.end.idx,
-                            # "sku": k.idx,
+                            "sku": k.idx,
                             "t": t,
-                            "qty":self.variables["sku_flow"].sum(t, edge, "*").getValue(),
+                            "qty": self.variables["sku_flow"][(t, edge, k)].x,
                             "y": self.variables["select_edge"][(t, edge)].x
                             if self.bool_covering
                             else 1,
@@ -1473,7 +1466,6 @@ class DNP:
         )
         logger.info("saving finished")
         return edge_sku_t_flow
-
 
 
 if __name__ == "__main__":

@@ -29,11 +29,11 @@ if __name__ == "__main__":
     arg.lb_inter_ratio = 1
     arg.node_lb_ratio = 1
     arg.unfulfill_sku_unit_cost = 5000
-    arg.conf_label = 7
+    arg.conf_label = 1
     arg.pick_instance = 2
     arg.backorder = 0
     arg.transportation_sku_unit_cost = 1
-    arg.T = 7
+    arg.T = 1
     arg.terminate_condition = 1e-5
     arg.new_data = 1
     arg.num_periods = 10
