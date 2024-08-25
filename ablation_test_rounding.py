@@ -4,6 +4,7 @@ import os
 # import gurobipy as gp
 # import numpy as np
 import pandas as pd
+
 # from coptpy import COPT
 # from gurobipy import GRB
 from template_generate import *
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     # arg.rounding_heuristic = False
     # arg.rounding_heuristic_1 = False
     # arg.rounding_heuristic_2 = False
-    arg.rounding_heuristic_4= True
+    arg.rounding_heuristic_4 = True
 
     # RMP Algorithm
     # arg.if_del_col = True
@@ -126,8 +127,8 @@ if __name__ == "__main__":
     # )
     # with utils.TimerContext(0, "column generation main routine"):
     #     np_cg.run()
-        # np_cg.get_solution(data_dir="facility-loc-inventory/out")
-        # np_cg.watch_col_weight() 
+    # np_cg.get_solution(data_dir="facility-loc-inventory/out")
+    # np_cg.watch_col_weight()
     # print("----------DNP Model------------")
     # arg.DNP = 1
     # arg.sku_list = sku_list
@@ -143,6 +144,11 @@ if __name__ == "__main__":
     # model.solve()
     # # print("----------DNP Result------------")
     # # model.print_result()
+
+    arg.bool_covering = False
+    arg.bool_capacity = False
+    arg.bool_edge_lb = False
+    arg.bool_node_lb = False
 
     print("----------NCG------------")
     max_iter = 20

@@ -1,6 +1,7 @@
 """
 utilities for initialize first columns in CG framework
 """
+
 import time
 from typing import Any, Dict, Tuple
 
@@ -103,9 +104,17 @@ def primal_sweeping_method(self, sort_method=sorted):
         # for t in range(oracle.T):
         for t in range(self.arg.T):
             if self.init_ray:
-                ray.get(oracle.add_constr_holding_capacity.remote(t))
-                ray.get(oracle.add_constr_production_capacity.remote(t))
-                ray.get(oracle.add_constr_transportation_capacity.remote(t))
+                # ray.get(oracle.add_constr_holding_capacity.remote(t))
+                ray.get(oracle.add_constr_holding_capacity.remote(_this_customer, t))
+
+                # ray.get(oracle.add_constr_production_capacity.remote(t))
+                ray.get(oracle.add_constr_production_capacity.remote(_this_customer, t))
+
+                # ray.get(oracle.add_constr_transportation_capacity.remote(t))
+                ray.get(
+                    oracle.add_constr_transportation_capacity.remote(_this_customer, t)
+                )
+
                 # ray.get(oracle.add_constr_transportation_capacity.remote(t, True))
 
             else:
@@ -128,8 +137,12 @@ def primal_sweeping_method(self, sort_method=sorted):
         # then reset column constraints
 
         if self.init_ray:
-            ray.get(oracle.del_constr_capacity.remote())
-            ray.get(oracle.update_constr_capacity.remote(reset, reset, reset))
+            ray.get(oracle.del_constr_capacity.remote(_this_customer))
+            ray.get(
+                oracle.update_constr_capacity.remote(
+                    _this_customer, reset, reset, reset
+                )
+            )
         else:
             oracle.del_constr_capacity()
 
@@ -143,9 +156,11 @@ def primal_sweeping_method(self, sort_method=sorted):
 
         for t in range(self.arg.T):
             if self.init_ray:
-                ray.get(oracle.add_constr_holding_capacity.remote(t))
-                ray.get(oracle.add_constr_production_capacity.remote(t))
-                ray.get(oracle.add_constr_transportation_capacity.remote(t))
+                ray.get(oracle.add_constr_holding_capacity.remote(_this_customer, t))
+                ray.get(oracle.add_constr_production_capacity.remote(_this_customer, t))
+                ray.get(
+                    oracle.add_constr_transportation_capacity.remote(_this_customer, t)
+                )
             else:
                 oracle.add_constr_holding_capacity(t)
                 oracle.add_constr_production_capacity(t)
