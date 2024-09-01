@@ -4,7 +4,7 @@ import os
 # import gurobipy as gp
 # import numpy as np
 import pandas as pd
-
+import ray
 # from coptpy import COPT
 # from gurobipy import GRB
 from template_generate import *
@@ -41,14 +41,20 @@ if __name__ == "__main__":
     arg.new_data = 1
     arg.num_periods = 40
 
-    # Data Scale
-    arg.conf_label = 1
-    arg.T = 1
+    # # Data Scale
+    arg.conf_label = 9
+    arg.T = 7
     # 3: customer 100； 7: customer 200
-    arg.pick_instance = 1
+    arg.pick_instance = 3
+
+    # Data Scale
+    # arg.conf_label = 1
+    # arg.T = 1
+    # # 3: customer 100； 7: customer 200
+    # arg.pick_instance = 1
 
     # Termination Condition
-    arg.terminate_condition = 1e-5
+    # arg.terminate_condition = 1e-5
 
     # # Rounding Heuristic
     # arg.rounding_heuristic = False
@@ -61,11 +67,11 @@ if __name__ == "__main__":
     # arg.del_col_alg = 4
     # arg.column_pool_len = 2
 
-    arg.if_del_col = 1
-    arg.del_col_alg = 1
-    arg.del_col_freq = 3
+    # arg.if_del_col = 1
+    # arg.del_col_alg = 1
+    # arg.del_col_freq = 3
 
-    # MIP Algorithm
+    # # MIP Algorithm
     # arg.cg_mip_recover = True
     # arg.cg_rmp_mip_iter = 10
     # arg.cg_method_mip_heuristic = 0
@@ -81,10 +87,14 @@ if __name__ == "__main__":
     # arg.fpath = "data/data_0inv/"
     # arg.fpath = "data/data_1219/"
 
-    arg.fpath = "data/us_generate_202403122342/"  # easy
+    # arg.fpath = "data/us_generate_202403122342/"  # easy
     # arg.fpath = "data/us_generate_202403151725/"  # hard
     # arg.fpath = "data/small_instance_generate_single_period/"
-    # arg.fpath = 'data/sechina_202403130301/'
+# The line `# arg.fpath = 'data/sechina_202403130301/'` is a commented-out line of code in the Python
+# script. This line is assigning a specific file path to the variable `arg.fpath`. By commenting it
+# out with a `#` at the beginning of the line, this assignment is effectively disabled and not
+# executed when the script runs.
+    arg.fpath = 'data/sechina_202403142326/'
     # 测试rounding
     # arg.fpath = 'data/sechina_202403130110/'
     # 测试RMP
@@ -105,67 +115,71 @@ if __name__ == "__main__":
     network = construct_network(node_list, edge_list, sku_list)
     solver = arg.backend.upper()
 
-    # print("----------NCS------------")
-    # init_ray = True
-    # # init_ray = False
-    # num_workers = min(os.cpu_count(), 24)
-    # num_cpus = min(os.cpu_count(), 24)
-    # utils.logger.info(f"detecting up to {os.cpu_count()} cores")
-    # utils.logger.info(f"using up to {num_cpus} cores")
-    # arg.DNP = 0
-    # np_cg = NCS(
-    #     arg,
-    #     network,
-    #     customer_list,
-    #     sku_list,
-    #     # max_iter=arg.cg_itermax,
-    #     max_iter=10,
-    #     init_ray=init_ray,
-    #     num_workers=num_workers,
-    #     num_cpus=num_cpus,
-    #     solver=solver,
-    # )
-    # with utils.TimerContext(0, "column generation main routine"):
-    #     np_cg.run()
-    # np_cg.get_solution(data_dir="facility-loc-inventory/out")
-    # np_cg.watch_col_weight()
-    # print("----------DNP Model------------")
-    # arg.DNP = 1
-    # arg.sku_list = sku_list
-    # model = DNP(arg, network)
-    # model.modeling()
-    # model.model.setParam("Logging", 1)
-    # model.model.setParam("Threads", 8)
-    # model.model.setParam("TimeLimit", 7200)
-    # model.model.setParam("LpMethod", 2)
-    # model.model.setParam("Crossover", 0)
-    # # print(f"save mps name {dnp_mps_name}")
-    # # model.model.write(dnp_mps_name)
-    # model.solve()
-    # # print("----------DNP Result------------")
-    # # model.print_result()
+    
+   # The commented-out code block you provided is related to the DNP (Deterministic Network Design)
+   # model. Here is a breakdown of what each line is doing:
+    print("----------DNP Model------------")
+    arg.DNP = 1
+    arg.sku_list = sku_list
+    model = DNP(arg, network)
+    model.modeling()
+    model.model.setParam("Logging", 1)
+    model.model.setParam("Threads", 8)
+    model.model.setParam("TimeLimit", 7200)
+    model.model.setParam("LpMethod", 2)
+    model.model.setParam("Crossover", 0)
+    # print(f"save mps name {dnp_mps_name}")
+    # model.model.write(dnp_mps_name)
+    model.solve()
+    # print("----------DNP Result------------")
+    # model.print_result()
 
-    arg.bool_covering = False
-    arg.bool_capacity = False
-    arg.bool_edge_lb = False
-    arg.bool_node_lb = False
-
-    print("----------NCG------------")
-    max_iter = 20
-    init_primal = None
-    init_dual = None  # 'dual'
-    init_sweeping = True
-    np_cg = NetworkColumnGeneration(
+    print("----------NCS------------")
+    init_ray = True
+    # init_ray = False
+    num_workers = min(os.cpu_count(), 24)
+    num_cpus = min(os.cpu_count(), 24)
+    utils.logger.info(f"detecting up to {os.cpu_count()} cores")
+    utils.logger.info(f"using up to {num_cpus} cores")
+    arg.DNP = 0
+    np_cs = NCS(
         arg,
         network,
         customer_list,
         sku_list,
-        max_iter=max_iter,
-        init_primal=init_primal,
-        init_dual=init_dual,
-        init_sweeping=init_sweeping,
-        init_ray=True,
+        # max_iter=arg.cg_itermax,
+        max_iter=10,
+        init_ray=init_ray,
+        num_workers=num_workers,
+        num_cpus=num_cpus,
+        solver=solver,
     )
+    
+    with utils.TimerContext(0, "column generation main routine"):
+        np_cs.run()
+    # np_cs.get_solution(data_dir="facility-loc-inventory/out")
+    # np_cs.watch_col_weight()
 
-    np_cg.run()
-    # np_cg.get_solution("new_sol_1/")
+    # print("----------NCG------------")
+    # arg.bool_covering = False
+    # arg.bool_capacity = False
+    # arg.bool_edge_lb = False
+    # arg.bool_node_lb = False
+    # max_iter = 10
+    # init_primal = None
+    # init_dual = None  # 'dual'
+    # init_sweeping = True
+    # np_cg = NetworkColumnGeneration(
+    #     arg,
+    #     network,
+    #     customer_list,
+    #     sku_list,
+    #     max_iter=max_iter,
+    #     init_primal=init_primal,
+    #     init_dual=init_dual,
+    #     init_sweeping=init_sweeping,
+    #     init_ray=True,
+    # )
+
+    # np_cg.run()
+    # # np_cg.get_solution("new_sol_1/")

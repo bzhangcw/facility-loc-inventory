@@ -109,7 +109,7 @@ class NetworkColumnGenerationSlim(object):
             if ray.is_initialized():
                 ray.shutdown()
             self._logger.info("initializing ray")
-            ray.init(num_cpus=num_cpus)
+            ray.init(num_cpus=num_cpus,_temp_dir="/data/tmp_ray")
         self.skip_customers = set()
         self.column_weights_rmp = {}
 
@@ -979,6 +979,11 @@ class NetworkColumnGenerationSlim(object):
                             model = self.rmp_oracle.model
                             model.setParam("TimeLimit", 200)
                             model.optimize()
+                            if model.status == self.solver_constant.INFEASIBLE:
+                                self._logger.info("MIP Model is infeasible")
+                                self.rmp_oracle.recovery_mip_iis(M_intialize)
+                                model.setParam("TimeLimit", 200)
+                                model.optimize()
                             mip_objective_recovery = model.objval
                             self._logger.info(
                                     _this_log_line

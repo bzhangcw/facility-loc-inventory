@@ -11,8 +11,9 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import ray
-from coptpy import COPT
+# from coptpy import GUROBI
 import gurobipy as gp
+from gurobipy import GRB
 from tqdm import tqdm
 import const as const
 import dnp_model
@@ -58,12 +59,12 @@ class NetworkColumnGeneration:
             else self.network.graph["sku_list"]
         )
 
-        self.RMP_env = cp.Envr("RMP_env")
-        # self.RMP_env = gp.Env("RMP_env")
-        # self.RMP_model = gp.Model("RMP",self.RMP_env)
+        # self.RMP_env = cp.Envr("RMP_env")
+        self.RMP_env = gp.Env("RMP_env")
+        self.RMP_model = gp.Model("RMP",self.RMP_env)
         # self.solver = 'Gurobi'
         # self.RMP_env = self.solver.ENVR
-        self.RMP_model = self.RMP_env.createModel("RMP")
+        # self.RMP_model = self.RMP_env.createModel("RMP")
         self.customer_list = customer_list  # List[Customer]
         self.cus_num = len(self.customer_list)
         self.subgraph = {}  # Dict[customer, nx.DiGraph]
@@ -105,7 +106,7 @@ class NetworkColumnGeneration:
         if self.init_ray:
             if ray.is_initialized():
                 ray.shutdown()
-            ray.init(num_cpus=num_cpus,_temp_dir="/data/tmp_ray")
+            ray.init(num_cpus=num_cpus)
 
     def get_subgraph(self):
         """
@@ -234,9 +235,9 @@ class NetworkColumnGeneration:
         vars = full_lp_relaxation.model.getVars()
         binary_vars_index = []
         for v in vars:
-            if v.getType() == COPT.BINARY:
+            if v.getType() == GRB.BINARY:
                 binary_vars_index.append(v.getIdx())
-                v.setType(COPT.CONTINUOUS)
+                v.setType(GRB.CONTINUOUS)
         ######################
         full_lp_relaxation.model.setParam("Logging", 1)
         full_lp_relaxation.solve()
@@ -256,8 +257,8 @@ class NetworkColumnGeneration:
         # m.setParam('TimeLimit', 3600)
         # m.setParam('MIPGap', 0.01)
         # m.optimize()
-        self.RMP_model.solve()
-        self.RMP_model.setParam(COPT.Param.Logging, 0)
+        self.RMP_model.optimize()
+        # self.RMP_model.setParam(GRB.Param.Logging, 0)
 
     def subproblem(self, customer: Customer, col_ind, dual_vars=None, dual_index=None):
         """
@@ -343,7 +344,7 @@ class NetworkColumnGeneration:
         cg_init.primal_sweeping_method(self)
         with utils.TimerContext(self.iter, f"initialize_rmp"):
             self.init_RMP()
-        self.RMP_model.setParam(COPT.Param.Logging, 1)
+        # self.RMP_model.setParam(GRB.Param.Logging, 1)
 
         self._logger.info("initialization of restricted master finished")
         self._logger.info("solving the first rmp")
@@ -353,7 +354,7 @@ class NetworkColumnGeneration:
                 with utils.TimerContext(self.iter, f"solve_rmp"):
                     self.solve_RMP()
 
-                if self.RMP_model.status == COPT.INFEASIBLE:
+                if self.RMP_model.status == GRB.INFEASIBLE:
                     self._logger.info("initial column of RMP is infeasible")
                     self.RMP_model.write(f"rmp@{self.iter}.lp")
                     self.RMP_model.computeIIS()
@@ -361,7 +362,7 @@ class NetworkColumnGeneration:
                     break
                 with utils.TimerContext(self.iter, f"get_duals"):
                     ######################################
-                    rmp_dual_vars = self.RMP_model.getDuals()
+                    rmp_dual_vars = self.RMP_model.Pi
                     dual_vars = rmp_dual_vars
                     dual_index = self.dual_index
                 ######################################
@@ -432,7 +433,7 @@ class NetworkColumnGeneration:
                             # self.oracles[customer].model.status
                             # ray.get(self.oracles[customer].get_model_status.remote())
                             model_status
-                            == coptpy.COPT.INTERRUPTED
+                            == GRB.Status.INTERRUPTED
                         ):
                             bool_early_stop = True
                             self._logger.info("early terminated")
@@ -526,14 +527,15 @@ class NetworkColumnGeneration:
                             # node_capacity_cons_name.append((t, node))
             capacity_cons_coef = [*edge_capacity_cons_coef, *node_capacity_cons_coef]
             # capacity_cons_name = [*edge_capacity_cons_name, *node_capacity_cons_name]
-            new_col = cp.Column(
-                [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
-                [*capacity_cons_coef, 1.0],
-            )
-            # new_col = gp.Column(
+            # new_col = cp.Column(
             #     [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
             #     [*capacity_cons_coef, 1.0],
             # )
+            new_col = gp.Column()
+            new_col.addTerms(
+                [*self.rmp_capacity_cnstr, self.RMP_constrs["weights_sum"][customer]],
+                [*capacity_cons_coef, 1.0],
+            )
 
             self.vars["column_weights"][
                 customer, self.columns[customer].__len__() - 1
@@ -549,16 +551,16 @@ class NetworkColumnGeneration:
         """
         Initialize the RMP with initial columns
         """
-        
-        self.RMP_model.setParam(COPT.Param.Logging, 0)
+
+        # self.RMP_model.setParam(GRB.Param.Logging, 0)
 
         ################# add variables #################
         self.var_types = {
             "column_weights": {
                 "lb": 0,
                 "ub": 1,
-                "vtype": COPT.CONTINUOUS,
-                "nameprefix": "lambda",
+                "vtype": GRB.CONTINUOUS,
+                "name": "lambda",
                 "index": "(customer, number)",
             },
         }
@@ -580,7 +582,7 @@ class NetworkColumnGeneration:
                 lb=param["lb"],
                 ub=param["ub"],
                 vtype=param["vtype"],
-                nameprefix=f"{param['nameprefix']}_",
+                # name=f"{param['nameprefix']}_",
             )
 
         ################# add constraints #################
@@ -628,12 +630,12 @@ class NetworkColumnGeneration:
                 if type(transportation) == float:
                     # continue
                     transportation = 0 * self.vars["column_weights"].sum(customer, "*")
-                sumcoef = 0
-                for i in range(transportation.getSize()):
-                    sumcoef += transportation.getCoeff(i)
-                if sumcoef == 0:
-                    # continue
-                    transportation = 0 * self.vars["column_weights"].sum(customer, "*")
+                # sumcoef = 0
+                # for i in range(transportation.getSize()):
+                #     sumcoef += transportation.getCoeff(i)
+                # if sumcoef == 0:
+                #     # continue
+                #     transportation = 0 * self.vars["column_weights"].sum(customer, "*")
 
                 constr = self.RMP_model.addConstr(
                     transportation <= edge.capacity,
@@ -668,12 +670,12 @@ class NetworkColumnGeneration:
                         # continue
                         production = 0 * self.vars["column_weights"].sum(customer, "*")
 
-                    sumcoef = 0
-                    for i in range(production.getSize()):
-                        sumcoef += production.getCoeff(i)
-                    if sumcoef == 0:
-                        # continue
-                        production = 0 * self.vars["column_weights"].sum(customer, "*")
+                    # sumcoef = 0
+                    # for i in range(production.getSize()):
+                    #     sumcoef += production.getCoeff(i)
+                    # if sumcoef == 0:
+                    #     # continue
+                    #     production = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     constr = self.RMP_model.addConstr(
                         production <= node.production_capacity,
@@ -704,12 +706,12 @@ class NetworkColumnGeneration:
                         # continue
                         holding = 0 * self.vars["column_weights"].sum(customer, "*")
 
-                    sumcoef = 0
-                    for i in range(holding.getSize()):
-                        sumcoef += holding.getCoeff(i)
-                    if sumcoef == 0:
-                        # continue
-                        holding = 0 * self.vars["column_weights"].sum(customer, "*")
+                    # sumcoef = 0
+                    # for i in range(holding.getSize()):
+                    #     sumcoef += holding.getCoeff(i)
+                    # if sumcoef == 0:
+                    #     # continue
+                    #     holding = 0 * self.vars["column_weights"].sum(customer, "*")
 
                     constr = self.RMP_model.addConstr(
                         holding <= node.inventory_capacity,
@@ -744,7 +746,7 @@ class NetworkColumnGeneration:
                     * self.columns[customer][number]["beta"]
                 )
 
-        self.RMP_model.setObjective(obj, COPT.MINIMIZE)
+        self.RMP_model.setObjective(obj, GRB.MINIMIZE)
         self.rmp_capacity_cnstr = [
             *self.RMP_constrs["transportation_capacity"].values(),
             *self.RMP_constrs["node_capacity"].values(),

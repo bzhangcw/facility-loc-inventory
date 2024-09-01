@@ -181,6 +181,48 @@ def configuration(conf_label, arg):
         # 4. Node and cost
         arg.node_lb = 1
         arg.if_fixed_cost = 1
+    elif conf_label == 9:
+        # 1. Basic constraints
+        arg.covering = 1
+        arg.capacity = 0
+        # 2. Operational constraints
+        arg.edge_lb = 0
+        arg.add_in_upper = 0
+        # 3. Customization constraints
+        arg.distance = 0
+        # arg.backorder = 1
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.if_fixed_cost = 1
+    elif conf_label == 10:
+        # 1. Basic constraints
+        arg.covering = 1
+        arg.capacity = 1
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 0
+        # arg.backorder = 1
+        arg.cardinality = 0
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.if_fixed_cost = 1
+    elif conf_label == 11:
+        # 1. Basic constraints
+        arg.covering = 1
+        arg.capacity = 1
+        # 2. Operational constraints
+        arg.edge_lb = 1
+        arg.add_in_upper = 1
+        # 3. Customization constraints
+        arg.distance = 1
+        # arg.backorder = 1
+        arg.cardinality = 1
+        # 4. Node and cost
+        arg.node_lb = 0
+        arg.if_fixed_cost = 1
 
 
 def scale(pick_instance, datapath, arg):

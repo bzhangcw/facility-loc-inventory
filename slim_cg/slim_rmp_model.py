@@ -646,6 +646,13 @@ class DNPSlim(DNP):
             self.variables["column_weights"][(customer,number)].ub = self.variables["column_weights"][(customer,number)].X
 
         return
+
+    def recovery_mip_iis(self,M):
+        for (customer, number) in M.keys():
+            self.variables["column_weights"][(customer,number)].lb = 0
+            self.variables["column_weights"][(customer,number)].ub = 1
+        return
+
     
     def rounding_penalty_objective_2(self,customer_list,iter_num,columns):
         obj = 0.0
