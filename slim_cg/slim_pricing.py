@@ -693,17 +693,18 @@ class Pricing(object):
         """
         Get the original objective value
         """
-        obj = 0.0
+        obj = self.cal_sku_transportation_cost()
         for t in range(self.T):
-            obj = obj + self.cal_sku_transportation_cost(t)
+            # obj = obj + self.cal_sku_transportation_cost(t)
             if self.arg.backorder:
                 obj = obj + self.cal_sku_backlogged_demand_cost(t)
             else:
                 obj = obj + self.cal_sku_unfulfilled_demand_cost(t)
-        if self.bool_fixed_cost:
-            obj = obj + self.cal_fixed_node_cost()
-        else:
-            self.obj["fixed_node_cost"] = 0
+        # 问题2:是否要反复计算fixed cost
+        # if self.bool_fixed_cost:
+        #     obj = obj + self.cal_fixed_node_cost()
+        # else:
+        #     self.obj["fixed_node_cost"] = 0
 
         return obj
 
@@ -745,47 +746,61 @@ class Pricing(object):
 
         return
 
-    def cal_sku_transportation_cost(self, t: int):
-        transportation_cost = 0.0
-
-        for edge in self._iterate_edges():
-            edge_transportation_cost = 0.0
-
-            (
-                sku_list_with_fixed_transportation_cost,
-                sku_list_with_unit_transportation_cost,
-            ) = edge.get_edge_sku_list_with_transportation_cost(t, self.sku_list)
-            for k in sku_list_with_fixed_transportation_cost:
-                if (
-                        edge.transportation_sku_fixed_cost is not None
-                        and k in edge.transportation_sku_fixed_cost
-                ):
-                    edge_transportation_cost = (
-                            edge_transportation_cost
-                            + edge.transportation_sku_fixed_cost[k]
-                            * self.variables["sku_select_edge"].get((t, edge, k), 0)
-                    )
-
-            for k in sku_list_with_unit_transportation_cost:
-                if (
-                        edge.transportation_sku_unit_cost is not None
-                        and k in edge.transportation_sku_unit_cost
-                ):
-                    transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
-                else:
-                    transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
-
-                edge_transportation_cost = (
-                        edge_transportation_cost
-                        + transportation_sku_unit_cost
-                        * self.variables["sku_flow"].get((t, edge, k), 0)
-                )
-
-            transportation_cost = transportation_cost + edge_transportation_cost
-
-        self.obj["transportation_cost"][t] = transportation_cost
+    def cal_sku_transportation_cost(self):
+        transportation_cost = 0
+        for (t, edge, k), v in self.variables["sku_flow"].items():
+            if (
+                edge.transportation_sku_unit_cost is not None
+                and k in edge.transportation_sku_unit_cost
+            ):
+                transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
+            else:
+                transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
+            transportation_cost += transportation_sku_unit_cost * v
+        self.obj["transportation_cost"] = transportation_cost
 
         return transportation_cost
+        # 这可能也是一大问题 把sku的fixed cost计算进去了
+        # transportation_cost = 0.0
+
+        # for edge in self._iterate_edges():
+        #     edge_transportation_cost = 0.0
+
+        #     (
+        #         sku_list_with_fixed_transportation_cost,
+        #         sku_list_with_unit_transportation_cost,
+        #     ) = edge.get_edge_sku_list_with_transportation_cost(t, self.sku_list)
+        #     for k in sku_list_with_fixed_transportation_cost:
+        #         if (
+        #                 edge.transportation_sku_fixed_cost is not None
+        #                 and k in edge.transportation_sku_fixed_cost
+        #         ):
+        #             edge_transportation_cost = (
+        #                     edge_transportation_cost
+        #                     + edge.transportation_sku_fixed_cost[k]
+        #                     * self.variables["sku_select_edge"].get((t, edge, k), 0)
+        #             )
+
+        #     for k in sku_list_with_unit_transportation_cost:
+        #         if (
+        #                 edge.transportation_sku_unit_cost is not None
+        #                 and k in edge.transportation_sku_unit_cost
+        #         ):
+        #             transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
+        #         else:
+        #             transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
+
+        #         edge_transportation_cost = (
+        #                 edge_transportation_cost
+        #                 + transportation_sku_unit_cost
+        #                 * self.variables["sku_flow"].get((t, edge, k), 0)
+        #         )
+
+        #     transportation_cost = transportation_cost + edge_transportation_cost
+
+        # self.obj["transportation_cost"][t] = transportation_cost
+
+        # return transportation_cost
 
     def cal_sku_backlogged_demand_cost(self, t: int):
         backlogged_demand_cost = 0.0
@@ -804,7 +819,7 @@ class Pricing(object):
             unfulfilled_sku_unit_cost = self.arg.unfulfill_sku_unit_cost
             unfulfilled_node_cost += unfulfilled_sku_unit_cost * self.variables[
                 "sku_slack"
-            ].get((t, k), 0)
+            ][(t,k)]
         self.obj["unfulfilled_demand_cost"][t] = unfulfilled_node_cost
 
         return unfulfilled_node_cost

@@ -435,6 +435,16 @@ class Param:
             type=bool,
             default=False,
         )
+        parser.add_argument(
+            "--NCS",
+            type=int,
+            default=1,
+        )
+        parser.add_argument(
+            "--DNP",
+            type=int,
+            default=1,
+        )
 
         parser.add_argument(
             "--pricing_network",

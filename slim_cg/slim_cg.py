@@ -611,6 +611,7 @@ class NetworkColumnGenerationSlim(object):
                 improved = (
                     eps_fixed_point / (abs(self.rmp_objval) + 1e-3)
                 ) > self.arg.terminate_condition
+                # improved  = True
                 added = False
                 # pre-sort dual variables,
                 #   this should reduce to 1/|C| update time
@@ -977,12 +978,15 @@ class NetworkColumnGenerationSlim(object):
                             self.rmp_oracle.reset_to_origin_Q(Q_intialize,self.columns,Co)
                             self.rmp_oracle.rounding_recovery(M_intialize)
                             model = self.rmp_oracle.model
-                            model.setParam("TimeLimit", 200)
+                            # model.setParam("TimeLimit", 200)
+                            model.setParam("TimeLimit", 3000)
+
                             model.optimize()
                             if model.status == self.solver_constant.INFEASIBLE:
                                 self._logger.info("MIP Model is infeasible")
                                 self.rmp_oracle.recovery_mip_iis(M_intialize)
-                                model.setParam("TimeLimit", 200)
+                                # model.setParam("TimeLimit", 200)
+                                model.setParam("TimeLimit", 3000)
                                 model.optimize()
                             mip_objective_recovery = model.objval
                             self._logger.info(

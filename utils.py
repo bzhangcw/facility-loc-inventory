@@ -184,7 +184,7 @@ def configuration(conf_label, arg):
     elif conf_label == 9:
         # 1. Basic constraints
         arg.covering = 1
-        arg.capacity = 0
+        arg.capacity = 1
         # 2. Operational constraints
         arg.edge_lb = 0
         arg.add_in_upper = 0

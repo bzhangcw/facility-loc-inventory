@@ -1,7 +1,7 @@
-from ncg.np_cg import *
+# from ncg.np_cg import *
 import pandas as pd
-from coptpy import COPT
-from gurobipy import GRB
+# from coptpy import COPT
+# from gurobipy import GRB
 from instance_generator import *
 from config.param import Param
 from dnp_model import DNP

@@ -708,8 +708,12 @@ class DNPSlim(DNP):
         penalty = 0.0
         Co = {}
         for (customer,number) in Q.keys():
-            p = np.random.uniform(100, 500)
+            # rounding 2
+            # p = np.random.uniform(100, 500)
+            # rounding 1
             # p = np.random.uniform(10, 100)
+            # rounding 3
+            p = np.random.uniform(1, 20)
             Co[(customer,number)] = p
             penalty += (columns[customer][number]["beta"]*Co[(customer,number)])* self.variables["rounding_column_weights"][(customer,number)]
         return penalty,Co
@@ -1131,6 +1135,9 @@ class DNPSlim(DNP):
         for e, edge in self._iterate_no_c_edges():
             flow_sum = self.variables["sku_flow"].sum(t, edge, "*")
             if edge.capacity < np.inf:
+                # left_capacity = edge.capacity - self.used_edge_capacity.get(t).get(
+                #     edge, 0
+                # )
                 left_capacity = edge.capacity - self.used_edge_capacity.get(t).get(
                     edge, 0
                 )
@@ -1184,7 +1191,7 @@ class DNPSlim(DNP):
 
                 if node.inventory_capacity < np.inf:
                     left_capacity = (
-                        node.inventory_capacity
+                        node.inventory_capacity * self.arg.capacity_node_ratio
                         - self.used_warehouse_capacity.get(t).get(node, 0)
                     )
 
@@ -1236,7 +1243,7 @@ class DNPSlim(DNP):
                 in_edges = get_in_edges(self.network, node)
                 inbound_sum = self.variables["sku_flow"].sum(t, in_edges, "*")
                 self.constrs["in_upper"][(t, node)] = self.model.addConstr(
-                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio
+                    inbound_sum <= node.inventory_capacity * self.arg.in_upper_ratio * self.arg.capacity_node_ratio
                 )
                 self.index_for_dual_var += 1
         return
@@ -1246,11 +1253,10 @@ class DNPSlim(DNP):
         get the original objective value
         """
 
-        obj = 0.0
+        obj = self.cal_sku_transportation_cost()
         for t in range(self.T):
             obj = obj + self.cal_sku_holding_cost(t)
-            obj = obj + self.cal_sku_transportation_cost(t)
-
+        
         if self.bool_fixed_cost:
             obj += self.cal_fixed_node_cost()
 
@@ -1360,37 +1366,51 @@ class DNPSlim(DNP):
 
         return holding_cost
 
-    def cal_sku_transportation_cost(self, t: int):
-        transportation_cost = 0.0
-
-        for e, edge in self._iterate_no_c_edges():
-            edge_transportation_cost = 0.0
-
-            (
-                sku_list_with_fixed_transportation_cost,
-                sku_list_with_unit_transportation_cost,
-            ) = edge.get_edge_sku_list_with_transportation_cost(t, self.full_sku_list)
-
-            for k in sku_list_with_unit_transportation_cost:
-                if (
-                    edge.transportation_sku_unit_cost is not None
-                    and k in edge.transportation_sku_unit_cost
-                ):
-                    transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
-                else:
-                    transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
-
-                edge_transportation_cost = (
-                    edge_transportation_cost
-                    + transportation_sku_unit_cost
-                    * self.variables["sku_flow"][t, edge, k]
-                )
-
-            transportation_cost = transportation_cost + edge_transportation_cost
-
-        self.obj["transportation_cost"][t] = transportation_cost
+    def cal_sku_transportation_cost(self):
+        transportation_cost = 0
+        for (t, edge, k), v in self.variables["sku_flow"].items():
+            if (
+                edge.transportation_sku_unit_cost is not None
+                and k in edge.transportation_sku_unit_cost
+            ):
+                transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
+            else:
+                transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
+            transportation_cost += transportation_sku_unit_cost * v
+        self.obj["transportation_cost"] = transportation_cost
 
         return transportation_cost
+    
+        # transportation_cost = 0.0
+
+        # for e, edge in self._iterate_no_c_edges():
+        #     edge_transportation_cost = 0.0
+
+        #     (
+        #         sku_list_with_fixed_transportation_cost,
+        #         sku_list_with_unit_transportation_cost,
+        #     ) = edge.get_edge_sku_list_with_transportation_cost(t, self.full_sku_list)
+
+        #     for k in sku_list_with_unit_transportation_cost:
+        #         if (
+        #             edge.transportation_sku_unit_cost is not None
+        #             and k in edge.transportation_sku_unit_cost
+        #         ):
+        #             transportation_sku_unit_cost = edge.transportation_sku_unit_cost[k]
+        #         else:
+        #             transportation_sku_unit_cost = self.arg.transportation_sku_unit_cost
+
+        #         edge_transportation_cost = (
+        #             edge_transportation_cost
+        #             + transportation_sku_unit_cost
+        #             * self.variables["sku_flow"][t, edge, k]
+        #         )
+
+        #     transportation_cost = transportation_cost + edge_transportation_cost
+
+        # self.obj["transportation_cost"][t] = transportation_cost
+
+        # return transportation_cost
 
     def cal_fixed_node_cost(self):
         fixed_node_cost = 0.0
@@ -1477,7 +1497,30 @@ class DNPSlim(DNP):
 
         self._generate_broadcasting_matrix()
         return
-
+    def print_rmp_cost(self): 
+        # producing_cost = 0
+        holding_cost = 0
+        transportation_cost = 0
+        fixed_node_cost = 0
+        if type(self.obj["holding_cost"]) == dict:
+            for (key,value) in self.obj["holding_cost"].items():
+                holding_cost  = holding_cost  + self.obj["holding_cost"][key].getExpr().getValue()
+            print("holding_cost", holding_cost)
+        else:
+            print("holding_cost", self.obj["holding_cost"].getExpr().getValue())
+        if type(self.obj["transportation_cost"]) == dict:
+            for (key,value) in self.obj["transportation_cost"].items():
+                transportation_cost  = transportation_cost  + self.obj["transportation_cost"][key].getExpr().getValue()
+            print("transportation_cost", transportation_cost)
+        else:
+            print("transportation_cost", self.obj["transportation_cost"].getExpr().getValue())
+        if type(self.obj["fixed_node_cost"]) == dict:
+            for (key,value) in self.obj["fixed_node_cost"].items():
+                fixed_node_cost  = fixed_node_cost  + self.obj["fixed_node_cost"][key].getExpr().getValue()
+            print("fixed_node_cost", fixed_node_cost)
+        else:
+            print("fixed_node_cost", self.obj["fixed_node_cost"].getExpr().getValue())
+        return
     def print_rmp_result(self):
         variables = self.model.getVars()
         for v in variables:

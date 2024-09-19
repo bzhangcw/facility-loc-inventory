@@ -1188,6 +1188,57 @@ class DNP:
                     if self.variables["open"][t, node].x > 0:
                         print("open", t, node, self.variables["open"][t, node].x)
 
+    def print_cost(self): 
+        # producing_cost = 0
+        holding_cost = 0
+        transportation_cost = 0
+        unfulfilled_demand_cost = 0
+        backlogged_demand_cost = 0
+        fixed_node_cost = 0
+        # if type(self.obj["producing_cost"]) == dict:
+        #     for (key,value) in self.obj["producing_cost"].items():
+        #         producing_cost  = producing_cost  + self.obj["producing_cost"][key].getExpr().getValue()
+        #     print("producing_cost", producing_cost)
+        # else:
+        #     print("producing_cost", self.obj["producing_cost"][key].getExpr().getValue())
+        if type(self.obj["holding_cost"]) == dict:
+            for (key,value) in self.obj["holding_cost"].items():
+                holding_cost  = holding_cost  + self.obj["holding_cost"][key].getExpr().getValue()
+            print("holding_cost", holding_cost)
+        else:
+            print("holding_cost", self.obj["holding_cost"].getExpr().getValue())
+        if type(self.obj["transportation_cost"]) == dict:
+            for (key,value) in self.obj["transportation_cost"].items():
+                transportation_cost  = transportation_cost  + self.obj["transportation_cost"][key].getExpr().getValue()
+            print("transportation_cost", transportation_cost)
+        else:
+            print("transportation_cost", self.obj["transportation_cost"].getExpr().getValue())
+        if type(self.obj["unfulfilled_demand_cost"]) == dict:
+            for (key,value) in self.obj["unfulfilled_demand_cost"].items():
+                unfulfilled_demand_cost  = unfulfilled_demand_cost  + self.obj["unfulfilled_demand_cost"][key].getExpr().getValue()
+            print("unfulfilled_demand_cost", unfulfilled_demand_cost)
+        else:
+            print("unfulfilled_demand_cost", self.obj["unfulfilled_demand_cost"].getExpr().getValue())
+        if type(self.obj["backlogged_demand_cost"]) == dict:
+            for (key,value) in self.obj["backlogged_demand_cost"].items():
+                backlogged_demand_cost  = backlogged_demand_cost  + self.obj["backlogged_demand_cost"][key].getExpr().getValue()
+            print("backlogged_demand_cost", backlogged_demand_cost)
+        else:
+            print("backlogged_demand_cost", self.obj["backlogged_demand_cost"].getExpr().getValue())
+        if type(self.obj["fixed_node_cost"]) == dict:
+            for (key,value) in self.obj["fixed_node_cost"].items():
+                fixed_node_cost  = fixed_node_cost  + self.obj["fixed_node_cost"][key].getExpr().getValue()
+            print("fixed_node_cost", fixed_node_cost)
+        else:
+            print("fixed_node_cost", self.obj["fixed_node_cost"].getExpr().getValue())
+        # print("holding_cost", self.obj["holding_cost"])
+        # print(type(self.obj["holding_cost"]))
+        
+        # print("transportation_cost", self.obj["transportation_cost"])
+        # print("unfulfilled_demand_cost", self.obj["unfulfilled_demand_cost"])
+        # print("backlogged_demand_cost", self.obj["backlogged_demand_cost"])
+        # print("fixed_node_cost", self.obj["fixed_node_cost"])
+        return
     def solve(self):
         self.model.solve()
 
