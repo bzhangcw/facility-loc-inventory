@@ -12,6 +12,7 @@ CG_RMP_WS_OPTION = int(os.environ.get("CG_RMP_WS_OPTION", 1))
 CG_RMP_METHOD = int(os.environ.get("CG_RMP_METHOD", 0))
 CG_RMP_USE_WS_TOL = int(os.environ.get("CG_RMP_USE_WS_TOL", 1e8))
 CG_RMP_USE_PROMOTE = int(os.environ.get("CG_RMP_USE_PROMOTE", 0))
+CG_RMP_USE_CROSSOVER = int(os.environ.get("CG_RMP_USE_CROSSOVER", 1))
 
 
 class RMPAlg(IntEnum):
@@ -216,7 +217,12 @@ def solve_direct(self):
         self.rmp_model.setAttr("CBasis", self.rmp_model.getConstrs(), _ws_c)
         # self.rmp_model.write(f"{utils.CONF.DEFAULT_SOL_PATH}/rmp@{self.iter}.bas")
 
-    self.rmp_model.setParam(self.solver_constant.Param.LpMethod, 4)
+    if not CG_RMP_USE_CROSSOVER:
+        self.rmp_model.Params.Crossover = 0
+        self.rmp_model.Params.Method = 2
+        self.rmp_model.Params.NumericFocus = 1
+    else:
+        self.rmp_model.setParam(self.solver_constant.Param.LpMethod, 4)
 
     self.solver.solve()
     print("RMP_ALG_STATUS", self.rmp_model.status)
@@ -227,6 +233,7 @@ def solve_direct(self):
     if CG_RMP_USE_PROMOTE:
         if self.iter <= 1:
             self.rmp_objval -= val_promote * sum(v.x for _, v in dlv.items())
+
 
     if CG_RMP_USE_WS:
         self.rmp_model.setParam("LPWarmStart", 2)
